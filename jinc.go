@@ -96,13 +96,19 @@ func showAuthCACert(c *cli.Context) error {
 }
 
 func changeAuthPIN(c *cli.Context) error {
+	reader := NewReader(c)
+	if reader == nil {
+		os.Exit(1)
+	}
+	defer reader.Finalize()
+	reader.WaitForCard()
+
 	pin := c.String("pin")
 	if len(pin) == 0 {
 		fmt.Printf("認証用PIN(4桁): ")
 		input, _ := gopass.GetPasswdMasked()
 		pin = string(input)
 	}
-	bpin := []byte(strings.ToUpper(pin))
 
 	newpin := c.String("newpin")
 	if len(newpin) == 0 {
@@ -111,12 +117,14 @@ func changeAuthPIN(c *cli.Context) error {
 		newpin = string(input)
 	}
 
-	newbpin := []byte(strings.ToUpper(newpin))
-
-	/*
-	fmt.Printf("pin: % V\n", bpin)
-	fmt.Printf("newpin: % V\n", newbpin)
-*/
+	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01")
+	reader.SelectEF("00 18")
+	apdu := "00 20 00 80"
+	reader.Tx(apdu)
+	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
+	reader.Tx(apdu)
+	apdu = "00 24 01 80 " + fmt.Sprintf("%02X % X", len(newpin), newpin)
+	reader.Tx(apdu)
 	return nil
 }
 
