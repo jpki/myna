@@ -12,5 +12,9 @@ def cli(ctx, verbose):
     ctx.obj = {}
 
 @cli.command(help='show cert')
-def show_sign_cert(ctx):
+def cert(ctx):
+    pass
+
+@cli.command(help='sign')
+def sign(ctx):
     pass
