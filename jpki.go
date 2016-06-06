@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/asn1"
 	"encoding/pem"
+	"encoding/json"
 	"github.com/urfave/cli"
 	"github.com/howeyc/gopass"
 	"github.com/ebfe/go.pcsclite/scard"
@@ -93,11 +94,11 @@ func ToBytes(s string) []byte {
 func showMynumber(c *cli.Context) error {
 	pin := []byte(c.String("pin"))
 	if len(pin) == 0 {
-		fmt.Printf("PIN: ")
+		fmt.Printf("暗証番号(4桁): ")
 		pin, _ = gopass.GetPasswd()
 	}
 	if len(pin) != 4 {
-		fmt.Printf("エラー: 4桁の暗証番号を入力してください。\n")
+		fmt.Printf("エラー: 暗証番号(4桁)を入力してください。\n")
 		return nil
 	}
 	reader := NewReader()
@@ -138,12 +139,24 @@ func showMynumber(c *cli.Context) error {
 		asn1.Unmarshal(data[pos:], &attr[i])
 		pos += len(attr[i].FullBytes)
 	}
-	fmt.Printf("個人番号: %s\n", mynum.Bytes)
-	fmt.Printf("謎ヘッダ: % X\n", attr[0].Bytes)
-	fmt.Printf("氏名:     %s\n", attr[1].Bytes)
-	fmt.Printf("住所:     %s\n", attr[2].Bytes)
-	fmt.Printf("生年月日: %s\n", attr[3].Bytes)
-	fmt.Printf("性別:     %s\n", attr[4].Bytes)
+	if c.String("form") == "json" {
+		j, _ := json.MarshalIndent(map[string]string{
+			"mynumber": string(mynum.Bytes),
+			"header": fmt.Sprintf("% X", attr[0].Bytes),
+			"name": string(attr[1].Bytes),
+			"addr": string(attr[2].Bytes),
+			"birthday": string(attr[3].Bytes),
+			"sex": string(attr[4].Bytes),
+		}, "", "  ")
+		fmt.Printf("%s", j)
+	}else{
+		fmt.Printf("個人番号: %s\n", mynum.Bytes)
+		fmt.Printf("謎ヘッダ: % X\n", attr[0].Bytes)
+		fmt.Printf("氏名:     %s\n", attr[1].Bytes)
+		fmt.Printf("住所:     %s\n", attr[2].Bytes)
+		fmt.Printf("生年月日: %s\n", attr[3].Bytes)
+		fmt.Printf("性別:     %s\n", attr[4].Bytes)
+	}
 	return nil
 }
 
@@ -168,12 +181,6 @@ func readBinary(card *scard.Card, size uint16) []byte {
 		}
 		res = append(res, data...)
 		pos += uint16(len(data))
-		/*
-		fmt.Printf("l: %d\n", l)
-		fmt.Printf("pos: %d\n", pos)
-		fmt.Printf("size: %d\n", size)
-		fmt.Printf("len: %x\n", len(data))
-        */
 	}
 	return res
 }
@@ -222,7 +229,7 @@ func main() {
 			Flags: []cli.Flag {
 				cli.StringFlag {
 					Name: "pin",
-					Usage: "4桁の暗証番号",
+					Usage: "暗証番号(4桁)",
 				},
 				cli.StringFlag {
 					Name: "form",
@@ -242,7 +249,7 @@ func main() {
 			Flags: []cli.Flag {
 				cli.StringFlag {
 					Name: "pin",
-					Usage: "4桁の暗証番号",
+					Usage: "暗証番号(4桁)",
 				},
 				cli.StringFlag {
 					Name: "form",

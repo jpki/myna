@@ -2,6 +2,9 @@
 build:
 	go build -o jpki
 
+clean:
+	rm -rf jpki
+
 deps:
 	go get -u github.com/urfave/cli
 	go get -u github.com/howeyc/gopass
