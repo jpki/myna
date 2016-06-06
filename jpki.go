@@ -19,16 +19,7 @@ import (
     //"github.com/vaughan0/go-ini"
 )
 
-func showAuthCert(c *cli.Context) error {
-	pin := []byte(c.String("pin"))
-	if len(pin) == 0 {
-		fmt.Printf("認証用暗証番号(4桁数字): ")
-		pin, _ = gopass.GetPasswd()
-	}
-	if len(pin) != 4 {
-		fmt.Printf("エラー: 認証用暗証番号(4桁数字)を入力してください。\n")
-		return nil
-	}
+func showCert(c *cli.Context, efid string) error {
 	reader := NewReader()
 	if reader == nil {
 		os.Exit(1)
@@ -40,12 +31,14 @@ func showAuthCert(c *cli.Context) error {
 	aid := "D3 92 f0 00 26 01 00 00 00 01"
 	apdu := "00 A4 04 0C" + " 0A " + aid
 	tx(card, apdu)
+	/*
 	tx(card, "00 a4 02 0C 02 00 18") // PIN for AUTH
 	tx(card, "00 20 00 80")
 	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
 	tx(card, apdu)
+    */
 	//tx(card, "00 A4 02 0C 02 00 0B") // AUTH CA
-	tx(card, "00 A4 02 0C 02 00 0A") // AUTH CERT
+	tx(card, "00 A4 02 0C 02 " + efid)
 
 	data := readBinary(card, 4)
 	if len(data) != 4 {
@@ -74,6 +67,25 @@ func showAuthCert(c *cli.Context) error {
 		pem.Encode(os.Stdout, &block)
 	}
 
+	return nil
+}
+
+func showAuthCert(c *cli.Context) error {
+	pin := []byte(c.String("pin"))
+	if len(pin) == 0 {
+		fmt.Printf("認証用暗証番号(4桁数字): ")
+		pin, _ = gopass.GetPasswd()
+	}
+	if len(pin) != 4 {
+		fmt.Printf("エラー: 認証用暗証番号(4桁数字)を入力してください。\n")
+		return nil
+	}
+	showCert(c, "00 0A")
+	return nil
+}
+
+func showAuthCACert(c *cli.Context) error {
+	showCert(c, "00 0B")
 	return nil
 }
 
@@ -224,18 +236,19 @@ func main() {
 	app.Commands = []cli.Command {
 		{
 			Name: "auth_cert",
-			Usage: "利用者証明用電子証明を表示",
+			Usage: "利用者証明用電子証明書を表示",
 			Action: showAuthCert,
 			Flags: []cli.Flag {
-				cli.StringFlag {
-					Name: "pin",
-					Usage: "暗証番号(4桁)",
-				},
 				cli.StringFlag {
 					Name: "form",
 					Usage: "出力形式(pem,ssh)",
 				},
 			},
+		},
+		{
+			Name: "auth_ca_cert",
+			Usage: "利用者CA証明書を表示",
+			Action: showAuthCACert,
 		},
 		{
 			Name: "sign_cert",
