@@ -85,7 +85,7 @@ func showSignCert(c *cli.Context) error {
 	pin := c.String("pin")
 	if len(pin) == 0 {
 		fmt.Printf("署名用パスワード(6-16桁): ")
-		input, _ := gopass.GetPasswd()
+		input, _ := gopass.GetPasswdMasked()
 		pin = string(input)
 	}
 	pass := []byte(strings.ToUpper(pin))
