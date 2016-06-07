@@ -19,7 +19,7 @@ import (
     //"github.com/vaughan0/go-ini"
 )
 
-func showCert(c *cli.Context, efid string) error {
+func showCert(c *cli.Context, efid string, pin []byte) error {
 	reader := NewReader()
 	if reader == nil {
 		os.Exit(1)
@@ -31,15 +31,16 @@ func showCert(c *cli.Context, efid string) error {
 	aid := "D3 92 f0 00 26 01 00 00 00 01"
 	apdu := "00 A4 04 0C" + " 0A " + aid
 	tx(card, apdu)
-	/*
-	tx(card, "00 a4 02 0C 02 00 18") // PIN for AUTH
-	tx(card, "00 20 00 80")
-	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
-	tx(card, apdu)
-    */
-	//tx(card, "00 A4 02 0C 02 00 0B") // AUTH CA
-	tx(card, "00 A4 02 0C 02 " + efid)
 
+	if pin != nil {
+        //tx(card, "00 a4 02 0C 02 00 18") // VERIFY EF for AUTH
+		tx(card, "00 a4 02 0C 02 00 1B") // VERIFY EF for SIGN
+		tx(card, "00 20 00 80")
+		apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
+		tx(card, apdu)
+    }
+
+	tx(card, "00 A4 02 0C 02 " + efid)
 	data := readBinary(card, 4)
 	if len(data) != 4 {
 		fmt.Printf("エラー: Unkown\n")
@@ -71,25 +72,34 @@ func showCert(c *cli.Context, efid string) error {
 }
 
 func showAuthCert(c *cli.Context) error {
-	pin := []byte(c.String("pin"))
-	if len(pin) == 0 {
-		fmt.Printf("認証用暗証番号(4桁数字): ")
-		pin, _ = gopass.GetPasswd()
-	}
-	if len(pin) != 4 {
-		fmt.Printf("エラー: 認証用暗証番号(4桁数字)を入力してください。\n")
-		return nil
-	}
-	showCert(c, "00 0A")
+	showCert(c, "00 0A", nil)
 	return nil
 }
 
 func showAuthCACert(c *cli.Context) error {
-	showCert(c, "00 0B")
+	showCert(c, "00 0B", nil)
 	return nil
 }
 
 func showSignCert(c *cli.Context) error {
+	pin := c.String("pin")
+	if len(pin) == 0 {
+		fmt.Printf("署名用パスワード(6-16桁): ")
+		input, _ := gopass.GetPasswd()
+		pin = string(input)
+	}
+	pass := []byte(strings.ToUpper(pin))
+
+	if len(pin) < 6 || 16 < len(pin) {
+		fmt.Printf("エラー: 署名用パスワード(6-16桁)を入力してください。\n")
+		return nil
+	}
+	showCert(c, "00 01", pass)
+	return nil
+}
+
+func showSignCACert(c *cli.Context) error {
+	showCert(c, "00 02", nil)
 	return nil
 }
 
@@ -235,8 +245,28 @@ func main() {
 	app.Email = "hamano@osstech.co.jp"
 	app.Commands = []cli.Command {
 		{
+			Name: "sign_cert",
+			Usage: "署名用証明書を表示",
+			Action: showSignCert,
+			Flags: []cli.Flag {
+				cli.StringFlag {
+					Name: "pin",
+					Usage: "署名用パスワード(6-16桁)",
+				},
+				cli.StringFlag {
+					Name: "form",
+					Usage: "出力形式(pem,ssh)",
+				},
+			},
+		},
+		{
+			Name: "sign_ca_cert",
+			Usage: "署名用CA証明書を表示",
+			Action: showSignCACert,
+		},
+		{
 			Name: "auth_cert",
-			Usage: "利用者証明用電子証明書を表示",
+			Usage: "利用者証明用証明書を表示",
 			Action: showAuthCert,
 			Flags: []cli.Flag {
 				cli.StringFlag {
@@ -247,13 +277,8 @@ func main() {
 		},
 		{
 			Name: "auth_ca_cert",
-			Usage: "利用者CA証明書を表示",
+			Usage: "利用者証明用CA証明書を表示",
 			Action: showAuthCACert,
-		},
-		{
-			Name: "sign_cert",
-			Usage: "署名用電子証明書を表示",
-			Action: showSignCert,
 		},
 		{
 			Name: "mynumber",
