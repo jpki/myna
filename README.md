@@ -1,18 +1,18 @@
-JPKI Utility
+JINC Utility
 ------------
 
 ## Install
 
 ~~~
-% go get github.com/hamano/go-jpki
+% go get github.com/hamano/go-inc
 ~~~
 
 ## Usage
 
-See jpki --help and jpki <subcommand> --help
+See jinc --help and jinc <subcommand> --help
 
 ~~~
-% jpki --help
+% jinc --help
 
 ~~~
 

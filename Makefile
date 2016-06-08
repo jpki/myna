@@ -1,9 +1,9 @@
 
 build:
-	go build -o jpki
+	go build -o jinc
 
 clean:
-	rm -rf jpki
+	rm -rf jinc
 
 deps:
 	go get -u github.com/urfave/cli
