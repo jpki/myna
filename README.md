@@ -19,7 +19,7 @@ $ export PATH=$GOPATH/bin:$PATH
 
 ### Install jinc command
 ~~~
-% go get github.com/hamano/go-jinc
+% go get github.com/hamano/jinc
 ~~~
 
 ## Usage

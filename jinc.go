@@ -239,7 +239,7 @@ func tx(card *scard.Card, apdu string) (uint8, uint8, []byte) {
 func main() {
 	app := cli.NewApp()
 	app.Name = "jinc"
-	app.Usage = "JINC Util"
+	app.Usage = "個人番号カードユーティリティ"
 	app.Version = Version
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
