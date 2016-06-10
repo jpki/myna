@@ -19,6 +19,20 @@ import (
     //"github.com/vaughan0/go-ini"
 )
 
+func beepOff(c *cli.Context) error {
+	reader := NewReader()
+	if reader == nil {
+		os.Exit(1)
+	}
+	defer reader.Finalize()
+	card, _ := reader.ctx.Connect(
+		reader.name, scard.SHARE_EXCLUSIVE, scard.PROTOCOL_ANY)
+	status, _ := card.Status()
+	fmt.Printf("Card Status: %s\n", status)
+	tx(card, "FF 00 52 00 00")
+	return nil
+}
+
 func showCert(c *cli.Context, efid string, pin []byte) error {
 	reader := NewReader()
 	if reader == nil {
@@ -266,7 +280,7 @@ func main() {
 		},
 		{
 			Name: "auth_cert",
-			Usage: "利用者証明用証明書を表示",
+			Usage: "利用者認証用証明書を表示",
 			Action: showAuthCert,
 			Flags: []cli.Flag {
 				cli.StringFlag {
@@ -277,7 +291,7 @@ func main() {
 		},
 		{
 			Name: "auth_ca_cert",
-			Usage: "利用者証明用CA証明書を表示",
+			Usage: "利用者認証用CA証明書を表示",
 			Action: showAuthCACert,
 		},
 		{
@@ -295,6 +309,12 @@ func main() {
 				},
 			},
 		},
+		{
+			Name: "beep_off",
+			Usage: "Beep off for ACS Reader",
+			Action: beepOff,
+		},
+
 	}
 	app.Run(os.Args)
 }
