@@ -19,17 +19,7 @@ import (
     //"github.com/vaughan0/go-ini"
 )
 
-func beepOff(c *cli.Context) error {
-	reader := NewReader()
-	if reader == nil {
-		os.Exit(1)
-	}
-	defer reader.Finalize()
-	card, _ := reader.ctx.Connect(
-		reader.name, scard.SHARE_EXCLUSIVE, scard.PROTOCOL_ANY)
-	status, _ := card.Status()
-	fmt.Printf("Card Status: %s\n", status)
-	tx(card, "FF 00 52 00 00")
+func checkCard(c *cli.Context) error {
 	return nil
 }
 
@@ -298,6 +288,7 @@ func main() {
 			Name: "mynumber",
 			Usage: "券面事項入力補助AP",
 			Action: showMynumber,
+			Before: checkCard,
 			Flags: []cli.Flag {
 				cli.StringFlag {
 					Name: "pin",
@@ -310,11 +301,10 @@ func main() {
 			},
 		},
 		{
-			Name: "beep_off",
-			Usage: "Beep off for ACS Reader",
-			Action: beepOff,
+			Name: "tool",
+			Usage: "種々様々なツール",
+			Subcommands: toolCommands,
 		},
-
 	}
 	app.Run(os.Args)
 }
