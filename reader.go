@@ -4,15 +4,18 @@ import (
 	"os"
 	"fmt"
 	"time"
+	"github.com/urfave/cli"
 	"github.com/ebfe/go.pcsclite/scard"
 )
 
 type Reader struct {
 	ctx *scard.Context
+	c *cli.Context
 	name string
+	card *scard.Card
 }
 
-func NewReader() *Reader {
+func NewReader(c *cli.Context) *Reader {
 	ctx, err := scard.EstablishContext()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
@@ -31,12 +34,21 @@ func NewReader() *Reader {
 
 	reader := new(Reader)
 	reader.ctx = ctx
+	reader.c = c
 	reader.name = readers[0]
+	reader.card = nil
 	return reader
 }
 
 func (self *Reader) Finalize() {
 	self.ctx.Release()
+}
+
+func (self *Reader) GetCard() *scard.Card {
+	card, _ := self.ctx.Connect(
+		self.name, scard.SHARE_EXCLUSIVE, scard.PROTOCOL_ANY)
+	self.card = card
+	return card
 }
 
 func (self *Reader) WaitForCard() *scard.Card {
@@ -53,6 +65,7 @@ func (self *Reader) WaitForCard() *scard.Card {
 		if rs[0].EventState&scard.STATE_PRESENT != 0 {
 			card, _ := self.ctx.Connect(
 				self.name, scard.SHARE_EXCLUSIVE, scard.PROTOCOL_ANY)
+			self.card = card
 			return card
 		}
 		time.Sleep(1 * time.Second)

@@ -20,7 +20,7 @@ import (
 )
 
 func checkCard(c *cli.Context) error {
-	reader := NewReader()
+	reader := NewReader(c)
 	defer reader.Finalize()
 	card := reader.WaitForCard()
 	aid := "D3 92 f0 00 26 01 00 00 00 01"
@@ -29,14 +29,13 @@ func checkCard(c *cli.Context) error {
 	if sw1 == 0x90 && sw2 == 0x00 {
 		return nil
 	}
-
 	fmt.Fprintf(os.Stderr, "これは個人番号カードではありません。\n")
 	os.Exit(1)
 	return nil
 }
 
 func showCert(c *cli.Context, efid string, pin []byte) error {
-	reader := NewReader()
+	reader := NewReader(c)
 	if reader == nil {
 		os.Exit(1)
 	}
@@ -139,7 +138,7 @@ func showMynumber(c *cli.Context) error {
 		fmt.Printf("エラー: 暗証番号(4桁)を入力してください。\n")
 		return nil
 	}
-	reader := NewReader()
+	reader := NewReader(c)
 	if reader == nil {
 		os.Exit(1)
 	}
@@ -224,6 +223,7 @@ func readBinary(card *scard.Card, size uint16) []byte {
 }
 
 func tx(card *scard.Card, apdu string) (uint8, uint8, []byte) {
+	//fmt.Printf("%v\n", c.GetInt("verbose"))
 	fmt.Printf(">> %v\n", apdu)
 	cmd := ToBytes(apdu)
 	res, err := card.Transmit(cmd)
@@ -259,6 +259,12 @@ func main() {
 	app.Version = Version
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
+	app.Flags = []cli.Flag {
+		cli.IntFlag {
+			Name: "verbose",
+			Usage: "詳細出力",
+		},
+	}
 	app.Commands = []cli.Command {
 		{
 			Name: "sign_cert",
