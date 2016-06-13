@@ -44,6 +44,19 @@ func (self *Reader) Finalize() {
 	self.ctx.Release()
 }
 
+func (self *Reader) CheckCard() {
+	card := self.WaitForCard()
+	aid := "D3 92 f0 00 26 01 00 00 00 01"
+	apdu := "00 A4 04 0C" + " 0A " + aid
+	sw1, sw2, _ := tx(card, apdu)
+	if sw1 == 0x90 && sw2 == 0x00 {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "これは個人番号カードではありません。\n")
+	os.Exit(1)
+}
+
 func (self *Reader) GetCard() *scard.Card {
 	card, _ := self.ctx.Connect(
 		self.name, scard.SHARE_EXCLUSIVE, scard.PROTOCOL_ANY)

@@ -22,15 +22,7 @@ import (
 func checkCard(c *cli.Context) error {
 	reader := NewReader(c)
 	defer reader.Finalize()
-	card := reader.WaitForCard()
-	aid := "D3 92 f0 00 26 01 00 00 00 01"
-	apdu := "00 A4 04 0C" + " 0A " + aid
-	sw1, sw2, _ := tx(card, apdu)
-	if sw1 == 0x90 && sw2 == 0x00 {
-		return nil
-	}
-	fmt.Fprintf(os.Stderr, "これは個人番号カードではありません。\n")
-	os.Exit(1)
+	reader.CheckCard()
 	return nil
 }
 
