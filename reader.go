@@ -48,7 +48,7 @@ func (self *Reader) CheckCard() {
 	card := self.WaitForCard()
 	aid := "D3 92 f0 00 26 01 00 00 00 01"
 	apdu := "00 A4 04 0C" + " 0A " + aid
-	sw1, sw2, _ := tx(card, apdu)
+	sw1, sw2, _ := self.Tx(apdu)
 	if sw1 == 0x90 && sw2 == 0x00 {
 		return
 	}
@@ -85,3 +85,35 @@ func (self *Reader) WaitForCard() *scard.Card {
 	}
 	panic("unreachable")
 }
+
+func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
+	card := reader.card
+	//fmt.Printf("%v\n", c.GetInt("verbose"))
+	fmt.Printf(">> %v\n", apdu)
+	cmd := ToBytes(apdu)
+	res, err := card.Transmit(cmd)
+	if err != nil {
+		fmt.Printf("err: %s\n", err)
+		return 0, 0, nil
+	}
+
+	for i := 0; i < len(res); i++ {
+		if i % 0x10 == 0 {
+			fmt.Print("<<")
+		}
+		fmt.Printf(" %02X", res[i])
+		if i % 0x10 == 0x0f {
+			fmt.Println()
+		}
+	}
+	fmt.Println()
+
+	l := len(res)
+	if l == 2 {
+		return res[0], res[1], nil
+	}else if l > 2 {
+		return res[l-2], res[l-1], res[:l-2]
+	}
+	return 0, 0, nil
+}
+

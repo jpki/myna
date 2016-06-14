@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 	"github.com/urfave/cli"
 	"github.com/howeyc/gopass"
-	"github.com/ebfe/go.pcsclite/scard"
+	//"github.com/ebfe/go.pcsclite/scard"
 	"github.com/ianmcmahon/encoding_ssh"
 	//reflect"
     //"github.com/vaughan0/go-ini"
@@ -37,24 +37,24 @@ func showCert(c *cli.Context, efid string, pin []byte) error {
 	fmt.Printf("Card Status: %s\n", status)
 	aid := "D3 92 f0 00 26 01 00 00 00 01"
 	apdu := "00 A4 04 0C" + " 0A " + aid
-	tx(card, apdu)
+	reader.Tx(apdu)
 
 	if pin != nil {
         //tx(card, "00 a4 02 0C 02 00 18") // VERIFY EF for AUTH
-		tx(card, "00 a4 02 0C 02 00 1B") // VERIFY EF for SIGN
-		tx(card, "00 20 00 80")
+		reader.Tx("00 a4 02 0C 02 00 1B") // VERIFY EF for SIGN
+		reader.Tx("00 20 00 80")
 		apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
-		tx(card, apdu)
+		reader.Tx(apdu)
     }
 
-	tx(card, "00 A4 02 0C 02 " + efid)
-	data := readBinary(card, 4)
+	reader.Tx("00 A4 02 0C 02 " + efid)
+	data := readBinary(reader, 4)
 	if len(data) != 4 {
 		fmt.Printf("エラー: Unkown\n")
 		return errors.New("error")
 	}
 	data_size := uint16(data[2]) << 8 | uint16(data[3])
-	data = readBinary(card, 4 + data_size)
+	data = readBinary(reader, 4 + data_size)
 
 	/*
 	fp, _ := os.Create("cert.der")
@@ -144,24 +144,24 @@ func showMynumber(c *cli.Context) error {
 	fmt.Printf("Card Status: %s\n", status)
 	aid := "D3 92 10 00 31 00 01 01 04 08"
 	apdu := "00 A4 04 0C" + " 0A " + aid
-	tx(card, apdu)
-	tx(card, "00 a4 02 0C 02 00 11") // EF for VERIFY
-	tx(card, "00 20 00 80")
+	reader.Tx(apdu)
+	reader.Tx("00 a4 02 0C 02 00 11") // EF for VERIFY
+	reader.Tx("00 20 00 80")
 	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
-	tx(card, apdu)
-	tx(card, "00 A4 02 0C 02 00 01")
-	data := readBinary(card, 16)
+	reader.Tx(apdu)
+	reader.Tx("00 A4 02 0C 02 00 01")
+	data := readBinary(reader, 16)
 	var mynum asn1.RawValue
 	asn1.Unmarshal(data, &mynum)
 
-	tx(card, "00 A4 02 0C 02 00 02")
-	data = readBinary(card, 5)
+	reader.Tx("00 A4 02 0C 02 00 02")
+	data = readBinary(reader, 5)
 	if len(data) != 5 {
 		fmt.Printf("エラー: Unkown\n")
 		return errors.New("error")
 	}
 	data_size := uint16(data[3]) << 8 | uint16(data[4])
-	data = readBinary(card, 5 + data_size)
+	data = readBinary(reader, 5 + data_size)
 	var attr[5] asn1.RawValue
 	pos := 5
 	for i := 0; i < 5; i++ {
@@ -189,7 +189,7 @@ func showMynumber(c *cli.Context) error {
 	return nil
 }
 
-func readBinary(card *scard.Card, size uint16) []byte {
+func readBinary(reader *Reader, size uint16) []byte {
 	var l uint8
 	var apdu string
 	var pos uint16
@@ -204,7 +204,7 @@ func readBinary(card *scard.Card, size uint16) []byte {
 		}
 		apdu = fmt.Sprintf("00 B0 %02X %02X %02X",
 			pos >> 8 & 0xFF, pos & 0xFF, l)
-		sw1, sw2, data := tx(card, apdu)
+		sw1, sw2, data := reader.Tx(apdu)
 		if sw1 != 0x90 || sw2 != 0x00 {
 			return nil
 		}
@@ -214,35 +214,6 @@ func readBinary(card *scard.Card, size uint16) []byte {
 	return res
 }
 
-func tx(card *scard.Card, apdu string) (uint8, uint8, []byte) {
-	//fmt.Printf("%v\n", c.GetInt("verbose"))
-	fmt.Printf(">> %v\n", apdu)
-	cmd := ToBytes(apdu)
-	res, err := card.Transmit(cmd)
-	if err != nil {
-		fmt.Printf("err: %s\n", err)
-		return 0, 0, nil
-	}
-
-	for i := 0; i < len(res); i++ {
-		if i % 0x10 == 0 {
-			fmt.Print("<<")
-		}
-		fmt.Printf(" %02X", res[i])
-		if i % 0x10 == 0x0f {
-			fmt.Println()
-		}
-	}
-	fmt.Println()
-
-	l := len(res)
-	if l == 2 {
-		return res[0], res[1], nil
-	}else if l > 2 {
-		return res[l-2], res[l-1], res[:l-2]
-	}
-	return 0, 0, nil
-}
 
 func main() {
 	app := cli.NewApp()
