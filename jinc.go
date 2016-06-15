@@ -19,6 +19,13 @@ import (
     //"github.com/vaughan0/go-ini"
 )
 
+var commonFlags = []cli.Flag {
+	cli.BoolFlag {
+		Name: "verbose, v",
+		Usage: "詳細出力",
+	},
+}
+
 func checkCard(c *cli.Context) error {
 	reader := NewReader(c)
 	defer reader.Finalize()
@@ -214,26 +221,23 @@ func readBinary(reader *Reader, size uint16) []byte {
 	return res
 }
 
-
 func main() {
+	cli.VersionFlag = cli.BoolFlag{
+		Name: "version, V",
+		Usage: "print version",
+	}
 	app := cli.NewApp()
 	app.Name = "jinc"
 	app.Usage = "個人番号カードユーティリティ"
-	app.Version = Version
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
-	app.Flags = []cli.Flag {
-		cli.IntFlag {
-			Name: "verbose",
-			Usage: "詳細出力",
-		},
-	}
+	app.Version = Version
 	app.Commands = []cli.Command {
 		{
 			Name: "sign_cert",
 			Usage: "署名用証明書を表示",
 			Action: showSignCert,
-			Flags: []cli.Flag {
+			Flags: append(commonFlags, []cli.Flag {
 				cli.StringFlag {
 					Name: "pin",
 					Usage: "署名用パスワード(6-16桁)",
@@ -242,7 +246,7 @@ func main() {
 					Name: "form",
 					Usage: "出力形式(pem,ssh)",
 				},
-			},
+			}...),
 		},
 		{
 			Name: "sign_ca_cert",
