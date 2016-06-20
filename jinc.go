@@ -196,26 +196,6 @@ func showMynumber(c *cli.Context) error {
 	return nil
 }
 
-func pinStatus(c *cli.Context) error {
-	reader := NewReader(c)
-	if reader == nil {
-		os.Exit(1)
-	}
-	defer reader.Finalize()
-	reader.WaitForCard()
-
-	aid := "D3 92 f0 00 26 01 00 00 00 01"
-	apdu := "00 A4 04 0C" + " 0A " + aid
-	reader.Tx(apdu)
-
-	reader.Tx("00 a4 02 0C 02 00 18") // IEF for AUTH
-	reader.Tx("00 20 00 80")
-	reader.Tx("00 a4 02 0C 02 00 1B") // IEF for SIGN
-	reader.Tx("00 20 00 80")
-
-	return nil
-}
-
 func readBinary(reader *Reader, size uint16) []byte {
 	var l uint8
 	var apdu string
@@ -304,13 +284,6 @@ func main() {
 					Usage: "出力形式(txt,json)",
 				},
 			},
-		},
-		{
-			Name: "pin_status",
-			Usage: "PINステータス",
-			Action: pinStatus,
-			Before: checkCard,
-			Flags: commonFlags,
 		},
 		{
 			Name: "tool",

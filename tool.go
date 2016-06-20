@@ -11,6 +11,14 @@ var toolCommands = []cli.Command {
 		Name: "beep_off",
 		Usage: "Beep off for ACS Reader",
 		Action: beepOff,
+		Flags: commonFlags,
+	},
+	{
+		Name: "pin_status",
+		Usage: "PINステータス",
+		Action: pinStatus,
+		Before: checkCard,
+		Flags: commonFlags,
 	},
 	{
 		Name: "find_ap",
@@ -25,6 +33,23 @@ func beepOff(c *cli.Context) error {
 	defer reader.Finalize()
 	reader.WaitForCard()
 	reader.Tx("FF 00 52 00 00")
+	return nil
+}
+
+func pinStatus(c *cli.Context) error {
+	reader := NewReader(c)
+	defer reader.Finalize()
+	reader.WaitForCard()
+
+	aid := "D3 92 f0 00 26 01 00 00 00 01"
+	apdu := "00 A4 04 0C" + " 0A " + aid
+	reader.Tx(apdu)
+
+	reader.Tx("00 a4 02 0C 02 00 18") // IEF for AUTH
+	reader.Tx("00 20 00 80")
+	reader.Tx("00 a4 02 0C 02 00 1B") // IEF for SIGN
+	reader.Tx("00 20 00 80")
+
 	return nil
 }
 
