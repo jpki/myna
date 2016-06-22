@@ -55,6 +55,17 @@ func pinStatus(c *cli.Context) error {
 	if (sw1 == 0x63) {
 		fmt.Printf("署名用PIN: のこり%d回\n", sw2 - 0xC0)
 	}
+
+	aid = "D3 92 10 00 31 00 01 01 04 08"
+	apdu = "00 A4 04 0C" + " 0A " + aid
+	reader.Tx(apdu)
+	reader.Tx("00 a4 02 0C 02 00 11") // IEF for MYNUM
+	reader.Tx("00 20 00 80")
+	sw1, sw2, _ = reader.Tx("00 20 00 80")
+	if (sw1 == 0x63) {
+		fmt.Printf("券面入力補助PIN: のこり%d回\n", sw2 - 0xC0)
+	}
+
 	return nil
 }
 
