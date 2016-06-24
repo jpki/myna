@@ -95,6 +95,31 @@ func showAuthCACert(c *cli.Context) error {
 	return nil
 }
 
+func changeAuthPIN(c *cli.Context) error {
+	pin := c.String("pin")
+	if len(pin) == 0 {
+		fmt.Printf("認証用PIN(4桁): ")
+		input, _ := gopass.GetPasswdMasked()
+		pin = string(input)
+	}
+	bpin := []byte(strings.ToUpper(pin))
+
+	newpin := c.String("newpin")
+	if len(newpin) == 0 {
+		fmt.Printf("新しい認証用PIN(4桁): ")
+		input, _ := gopass.GetPasswdMasked()
+		newpin = string(input)
+	}
+
+	newbpin := []byte(strings.ToUpper(newpin))
+
+	/*
+	fmt.Printf("pin: % V\n", bpin)
+	fmt.Printf("newpin: % V\n", newbpin)
+*/
+	return nil
+}
+
 func showSignCert(c *cli.Context) error {
 	pin := c.String("pin")
 	if len(pin) == 0 {
@@ -268,6 +293,21 @@ func main() {
 			Name: "auth_ca_cert",
 			Usage: "利用者認証用CA証明書を表示",
 			Action: showAuthCACert,
+		},
+		{
+			Name: "auth_change_pin",
+			Usage: "利用者認証用PINを変更",
+			Flags: append(commonFlags, []cli.Flag {
+				cli.StringFlag {
+					Name: "pin",
+					Usage: "暗証番号(4桁)",
+				},
+				cli.StringFlag {
+					Name: "newpin",
+					Usage: "新しい暗証番号(4桁)",
+				},
+			}...),
+			Action: changeAuthPIN,
 		},
 		{
 			Name: "mynumber",
