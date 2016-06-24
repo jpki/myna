@@ -274,7 +274,7 @@ func main() {
 			Usage: "券面事項入力補助AP",
 			Action: showMynumber,
 			Before: checkCard,
-			Flags: []cli.Flag {
+			Flags: append(commonFlags, []cli.Flag {
 				cli.StringFlag {
 					Name: "pin",
 					Usage: "暗証番号(4桁)",
@@ -283,7 +283,7 @@ func main() {
 					Name: "form",
 					Usage: "出力形式(txt,json)",
 				},
-			},
+			}...),
 		},
 		{
 			Name: "tool",
