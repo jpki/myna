@@ -86,6 +86,10 @@ func (self *Reader) WaitForCard() *scard.Card {
 	panic("unreachable")
 }
 
+func (self *Reader) SelectAP(aid string) (uint8, uint8) {
+	return self.SelectDF(aid)
+}
+
 func (self *Reader) SelectDF(id string) (uint8, uint8) {
 	bid := ToBytes(id)
 	apdu := "00 A4 04 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
