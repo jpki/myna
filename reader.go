@@ -97,6 +97,13 @@ func (self *Reader) SelectDF(id string) (uint8, uint8) {
 	return sw1, sw2
 }
 
+func (self *Reader) SelectEF(id string) (uint8, uint8) {
+	bid := ToBytes(id)
+	apdu := "00 A4 02 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
+	sw1, sw2, _ := self.Tx(apdu)
+	return sw1, sw2
+}
+
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
 	if self.c.Bool("verbose") {
