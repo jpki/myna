@@ -334,6 +334,11 @@ func main() {
 			}...),
 		},
 		{
+			Name: "cms",
+			Usage: "署名関連",
+			Subcommands: cmsCommands,
+		},
+		{
 			Name: "tool",
 			Usage: "種々様々なツール",
 			Subcommands: toolCommands,
