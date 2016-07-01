@@ -68,8 +68,7 @@ func (self *Reader) WaitForCard() *scard.Card {
 	rs := make([]scard.ReaderState, 1)
 	rs[0].Reader = self.name
 	rs[0].CurrentState = scard.STATE_UNAWARE
-	for {
-		fmt.Fprintf(os.Stderr, "wait for card:\n")
+	for i := 0; i < 3; i++ {
 		err := self.ctx.GetStatusChange(rs, scard.INFINITE)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "エラー: %s\n", err)
@@ -81,9 +80,12 @@ func (self *Reader) WaitForCard() *scard.Card {
 			self.card = card
 			return card
 		}
+		fmt.Fprintf(os.Stderr, "wait for card...\n")
 		time.Sleep(1 * time.Second)
 	}
-	panic("unreachable")
+	fmt.Fprintf(os.Stderr, "カードが見つかりません。\n")
+	os.Exit(1)
+	return nil
 }
 
 func (self *Reader) SelectAP(aid string) (uint8, uint8) {

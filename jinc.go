@@ -180,8 +180,6 @@ func showMynumber(c *cli.Context) error {
 		os.Exit(1)
 	}
 
-	status, _ := card.Status()
-	fmt.Printf("Card Status: %s\n", status)
 	aid := "D3 92 10 00 31 00 01 01 04 08"
 	apdu := "00 A4 04 0C" + " 0A " + aid
 	reader.Tx(apdu)
