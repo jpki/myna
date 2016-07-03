@@ -283,22 +283,24 @@ func main() {
 			Name: "sign_ca_cert",
 			Usage: "署名用CA証明書を表示",
 			Action: showSignCACert,
+			Flags: commonFlags,
 		},
 		{
 			Name: "auth_cert",
 			Usage: "利用者認証用証明書を表示",
 			Action: showAuthCert,
-			Flags: []cli.Flag {
+			Flags: append(commonFlags, []cli.Flag {
 				cli.StringFlag {
 					Name: "form",
 					Usage: "出力形式(pem,ssh)",
 				},
-			},
+			}...),
 		},
 		{
 			Name: "auth_ca_cert",
 			Usage: "利用者認証用CA証明書を表示",
 			Action: showAuthCACert,
+			Flags: commonFlags,
 		},
 		{
 			Name: "auth_change_pin",
