@@ -140,3 +140,28 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	return 0, 0, nil
 }
 
+
+func (self *Reader) ReadBinary(size uint16) []byte {
+	var l uint8
+	var apdu string
+	var pos uint16
+	pos = 0
+	var res []byte
+
+	for pos < size {
+		if size - pos > 0xFF {
+			l = 0
+		}else{
+			l = uint8(size - pos)
+		}
+		apdu = fmt.Sprintf("00 B0 %02X %02X %02X",
+			pos >> 8 & 0xFF, pos & 0xFF, l)
+		sw1, sw2, data := self.Tx(apdu)
+		if sw1 != 0x90 || sw2 != 0x00 {
+			return nil
+		}
+		res = append(res, data...)
+		pos += uint16(len(data))
+	}
+	return res
+}

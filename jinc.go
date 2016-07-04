@@ -55,13 +55,13 @@ func showCert(c *cli.Context, efid string, pin []byte) error {
     }
 
 	reader.Tx("00 A4 02 0C 02 " + efid)
-	data := readBinary(reader, 4)
+	data := reader.ReadBinary(4)
 	if len(data) != 4 {
 		fmt.Printf("エラー: Unkown\n")
 		return errors.New("error")
 	}
 	data_size := uint16(data[2]) << 8 | uint16(data[3])
-	data = readBinary(reader, 4 + data_size)
+	data = reader.ReadBinary(data_size)
 
 	/*
 	fp, _ := os.Create("cert.der")
@@ -188,18 +188,18 @@ func showMynumber(c *cli.Context) error {
 	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
 	reader.Tx(apdu)
 	reader.Tx("00 A4 02 0C 02 00 01")
-	data := readBinary(reader, 16)
+	data := reader.ReadBinary(16)
 	var mynum asn1.RawValue
 	asn1.Unmarshal(data, &mynum)
 
 	reader.Tx("00 A4 02 0C 02 00 02")
-	data = readBinary(reader, 5)
+	data = reader.ReadBinary(5)
 	if len(data) != 5 {
 		fmt.Printf("エラー: Unkown\n")
 		return errors.New("error")
 	}
 	data_size := uint16(data[3]) << 8 | uint16(data[4])
-	data = readBinary(reader, 5 + data_size)
+	data = reader.ReadBinary(5 + data_size)
 	var attr[5] asn1.RawValue
 	pos := 5
 	for i := 0; i < 5; i++ {
@@ -225,31 +225,6 @@ func showMynumber(c *cli.Context) error {
 		fmt.Printf("性別:     %s\n", attr[4].Bytes)
 	}
 	return nil
-}
-
-func readBinary(reader *Reader, size uint16) []byte {
-	var l uint8
-	var apdu string
-	var pos uint16
-	pos = 0
-	var res []byte
-
-	for pos < size {
-		if size - pos > 0xFF {
-			l = 0xFF
-		}else{
-			l = uint8(size - pos)
-		}
-		apdu = fmt.Sprintf("00 B0 %02X %02X %02X",
-			pos >> 8 & 0xFF, pos & 0xFF, l)
-		sw1, sw2, data := reader.Tx(apdu)
-		if sw1 != 0x90 || sw2 != 0x00 {
-			return nil
-		}
-		res = append(res, data...)
-		pos += uint16(len(data))
-	}
-	return res
 }
 
 func main() {
