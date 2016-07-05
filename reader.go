@@ -109,7 +109,7 @@ func (self *Reader) SelectEF(id string) (uint8, uint8) {
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
 	if self.c.Bool("verbose") {
-		fmt.Printf(">> %v\n", apdu)
+		fmt.Printf("< %v\n", apdu)
 	}
 	cmd := ToBytes(apdu)
 	res, err := card.Transmit(cmd)
@@ -121,7 +121,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	if self.c.Bool("verbose") {
 		for i := 0; i < len(res); i++ {
 			if i % 0x10 == 0 {
-				fmt.Print("<<")
+				fmt.Print(">")
 			}
 			fmt.Printf(" %02X", res[i])
 			if i % 0x10 == 0x0f {
