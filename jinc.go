@@ -61,7 +61,7 @@ func showCert(c *cli.Context, efid string, pin []byte) error {
 		return errors.New("error")
 	}
 	data_size := uint16(data[2]) << 8 | uint16(data[3])
-	data = reader.ReadBinary(data_size)
+	data = reader.ReadBinary(4 + data_size)
 
 	/*
 	fp, _ := os.Create("cert.der")
