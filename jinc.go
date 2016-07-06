@@ -164,7 +164,7 @@ func showMynumber(c *cli.Context) error {
 	pin := []byte(c.String("pin"))
 	if len(pin) == 0 {
 		fmt.Printf("暗証番号(4桁): ")
-		pin, _ = gopass.GetPasswd()
+		pin, _ = gopass.GetPasswdMasked()
 	}
 	if len(pin) != 4 {
 		fmt.Printf("エラー: 暗証番号(4桁)を入力してください。\n")
