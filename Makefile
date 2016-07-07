@@ -10,6 +10,7 @@ deps:
 	go get -u github.com/howeyc/gopass
 	go get -u github.com/ebfe/go.pcsclite/scard
 	go get -u github.com/ianmcmahon/encoding_ssh
+	go get -u github.com/fullsailor/pkcs7
 
 run:
 	go run *.go
