@@ -1,4 +1,4 @@
-jinc - Japanese Indivisual Number Card Utility
+jinc - Japanese Individual Number Card Utility
 ==============================================
 
 [![Build Status](https://travis-ci.org/hamano/jinc.svg?branch=master)](https://travis-ci.org/hamano/jinc)
