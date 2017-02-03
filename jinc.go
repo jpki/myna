@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"github.com/urfave/cli"
 	"github.com/howeyc/gopass"
-	//"github.com/ebfe/go.pcsclite/scard"
 	"github.com/ianmcmahon/encoding_ssh"
 	//reflect"
     //"github.com/vaughan0/go-ini"

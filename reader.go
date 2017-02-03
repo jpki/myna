@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 	"github.com/urfave/cli"
-	"github.com/ebfe/go.pcsclite/scard"
+	"github.com/ebfe/scard"
 )
 
 type Reader struct {
@@ -59,7 +59,7 @@ func (self *Reader) CheckCard() {
 
 func (self *Reader) GetCard() *scard.Card {
 	card, _ := self.ctx.Connect(
-		self.name, scard.SHARE_EXCLUSIVE, scard.PROTOCOL_ANY)
+		self.name, scard.ShareExclusive, scard.ProtocolAny)
 	self.card = card
 	return card
 }
@@ -67,16 +67,16 @@ func (self *Reader) GetCard() *scard.Card {
 func (self *Reader) WaitForCard() *scard.Card {
 	rs := make([]scard.ReaderState, 1)
 	rs[0].Reader = self.name
-	rs[0].CurrentState = scard.STATE_UNAWARE
+	rs[0].CurrentState = scard.StateUnaware
 	for i := 0; i < 3; i++ {
-		err := self.ctx.GetStatusChange(rs, scard.INFINITE)
+		err := self.ctx.GetStatusChange(rs, -1)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "エラー: %s\n", err)
 			return nil
 		}
-		if rs[0].EventState&scard.STATE_PRESENT != 0 {
+		if rs[0].EventState&scard.StatePresent != 0 {
 			card, _ := self.ctx.Connect(
-				self.name, scard.SHARE_EXCLUSIVE, scard.PROTOCOL_ANY)
+				self.name, scard.ShareExclusive, scard.ProtocolAny)
 			self.card = card
 			return card
 		}
