@@ -1,4 +1,4 @@
-jinc - Japanese Individual Number Card Utility
+myna - Japanese Individual Number Card Utility
 ==============================================
 
 [![Build Status](https://travis-ci.org/hamano/jinc.svg?branch=master)](https://travis-ci.org/hamano/jinc)
@@ -28,11 +28,12 @@ $ export PATH=$GOPATH/bin:$PATH
 
 ## Usage
 
-See jinc --help and jinc <subcommand> --help
+See myna --help and myna <subcommand> --help
 
 ~~~
-% jinc --help
+% card --help
 COMMANDS:
+     card          券面事項を表示
      sign_cert     署名用証明書を表示
      sign_ca_cert  署名用CA証明書を表示
      auth_cert     利用者認証用証明書を表示
