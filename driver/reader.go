@@ -1,9 +1,11 @@
-package main
+package driver
 
 import (
 	"os"
 	"fmt"
 	"time"
+	"bytes"
+	"errors"
 	"github.com/urfave/cli"
 	"github.com/ebfe/scard"
 )
@@ -44,17 +46,28 @@ func (self *Reader) Finalize() {
 	self.ctx.Release()
 }
 
-func (self *Reader) CheckCard() {
+func (self *Reader) CheckCard() (bool, error) {
+	var sw1, sw2 uint8
 	self.WaitForCard()
-	aid := "D3 92 f0 00 26 01 00 00 00 01"
-	apdu := "00 A4 04 0C" + " 0A " + aid
-	sw1, sw2, _ := self.Tx(apdu)
-	if sw1 == 0x90 && sw2 == 0x00 {
-		return
+	sw1, sw2 = self.SelectAP("D3 92 f0 00 26 01 00 00 00 01")
+	if ! (sw1 == 0x90 && sw2 == 0x00) {
+		return false, errors.New("これは個人番号カードではありません。")
+	}
+	sw1, sw2 = self.SelectEF("00 06")
+	if ! (sw1 == 0x90 && sw2 == 0x00) {
+		return false, errors.New("これは個人番号カードではありません。")
 	}
 
-	fmt.Fprintf(os.Stderr, "これは個人番号カードではありません。\n")
-	os.Exit(1)
+	var data []byte
+	data = self.ReadBinary(0x20)
+	str := string(bytes.TrimRight(data, " "))
+	if str == "JPKIAPICCTOKEN2" {
+		return true, nil
+	} else if str == "JPKIAPICCTOKEN" {
+		return false, errors.New("これは住基カードですね?")
+	} else {
+		return false, errors.New("これは個人番号カードではありません。")
+	}
 }
 
 func (self *Reader) GetCard() *scard.Card {

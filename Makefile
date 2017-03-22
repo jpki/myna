@@ -1,9 +1,15 @@
 
-build:
-	go build -o jinc
+native:
+	go build -o myna
+
+win:
+	GOOS=windows GOARCH=amd64 go build -o myna.exe
+
+osx:
+	GOOS=darwin GOARCH=386 go build -o myna
 
 clean:
-	rm -rf jinc
+	rm -rf myna
 
 deps:
 	go get -u github.com/urfave/cli

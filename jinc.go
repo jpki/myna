@@ -1,6 +1,7 @@
 package main
 
 import (
+	"./driver"
 	"os"
 	"fmt"
 	"errors"
@@ -26,14 +27,15 @@ var commonFlags = []cli.Flag {
 }
 
 func checkCard(c *cli.Context) error {
-	reader := NewReader(c)
-	defer reader.Finalize()
-	reader.CheckCard()
+	err := driver.Check(c)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func showCert(c *cli.Context, efid string, pin []byte) error {
-	reader := NewReader(c)
+	reader := driver.NewReader(c)
 	if reader == nil {
 		os.Exit(1)
 	}
@@ -95,7 +97,7 @@ func showAuthCACert(c *cli.Context) error {
 }
 
 func changeAuthPIN(c *cli.Context) error {
-	reader := NewReader(c)
+	reader := driver.NewReader(c)
 	if reader == nil {
 		os.Exit(1)
 	}
@@ -154,12 +156,7 @@ func ToHexString(b []byte) string {
 	return s
 }
 
-func ToBytes(s string) []byte {
-	b, _ := hex.DecodeString(strings.Replace(s, " ", "", -1))
-	return b
-}
-
-func showMynumber(c *cli.Context) error {
+func showCard(c *cli.Context) error {
 	pin := []byte(c.String("pin"))
 	if len(pin) == 0 {
 		fmt.Printf("暗証番号(4桁): ")
@@ -169,7 +166,7 @@ func showMynumber(c *cli.Context) error {
 		fmt.Printf("エラー: 暗証番号(4桁)を入力してください。\n")
 		return nil
 	}
-	reader := NewReader(c)
+	reader := driver.NewReader(c)
 	if reader == nil {
 		os.Exit(1)
 	}
@@ -179,19 +176,18 @@ func showMynumber(c *cli.Context) error {
 		os.Exit(1)
 	}
 
-	aid := "D3 92 10 00 31 00 01 01 04 08"
-	apdu := "00 A4 04 0C" + " 0A " + aid
-	reader.Tx(apdu)
-	reader.Tx("00 a4 02 0C 02 00 11") // EF for VERIFY
+	var apdu string
+	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08")
+	reader.SelectEF("00 11") // EF for VERIFY
 	reader.Tx("00 20 00 80")
 	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
 	reader.Tx(apdu)
-	reader.Tx("00 A4 02 0C 02 00 01")
+	reader.SelectEF("00 01")
 	data := reader.ReadBinary(16)
 	var mynum asn1.RawValue
-	asn1.Unmarshal(data, &mynum)
+	asn1.Unmarshal(data[1:], &mynum)
 
-	reader.Tx("00 A4 02 0C 02 00 02")
+	reader.SelectEF("00 02")
 	data = reader.ReadBinary(5)
 	if len(data) != 5 {
 		fmt.Printf("エラー: Unkown\n")
@@ -232,12 +228,18 @@ func main() {
 		Usage: "print version",
 	}
 	app := cli.NewApp()
-	app.Name = "jinc"
+	app.Name = "myna"
 	app.Usage = "個人番号カードユーティリティ"
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
 	app.Version = Version
 	app.Commands = []cli.Command {
+		{
+			Name: "check",
+			Usage: "カードチェック",
+			Action: checkCard,
+			Flags: commonFlags,
+		},
 		{
 			Name: "sign_cert",
 			Usage: "署名用証明書を表示",
@@ -292,9 +294,9 @@ func main() {
 			Action: changeAuthPIN,
 		},
 		{
-			Name: "mynumber",
+			Name: "card",
 			Usage: "券面事項入力補助AP",
-			Action: showMynumber,
+			Action: showCard,
 			Before: checkCard,
 			Flags: append(commonFlags, []cli.Flag {
 				cli.StringFlag {

@@ -2,6 +2,7 @@ package main
 
 import (
 	//"os"
+	"./driver"
 	"fmt"
 	"github.com/urfave/cli"
 )
@@ -29,7 +30,7 @@ var toolCommands = []cli.Command {
 }
 
 func beepOff(c *cli.Context) error {
-	reader := NewReader(c)
+	reader := driver.NewReader(c)
 	defer reader.Finalize()
 	reader.WaitForCard()
 	reader.Tx("FF 00 52 00 00")
@@ -37,7 +38,7 @@ func beepOff(c *cli.Context) error {
 }
 
 func pinStatus(c *cli.Context) error {
-	reader := NewReader(c)
+	reader := driver.NewReader(c)
 	defer reader.Finalize()
 	reader.WaitForCard()
 
@@ -92,7 +93,7 @@ func pinStatus(c *cli.Context) error {
 func findAP(c *cli.Context) error {
 	var prefix = []byte{}
 
-	reader := NewReader(c)
+	reader := driver.NewReader(c)
 	defer reader.Finalize()
 	reader.WaitForCard()
 	ret := findDF(reader, prefix)
@@ -102,7 +103,7 @@ func findAP(c *cli.Context) error {
 	return nil
 }
 
-func findDF(reader *Reader, prefix []byte) [][]byte {
+func findDF(reader *driver.Reader, prefix []byte) [][]byte {
 	var tmp [][]byte
 	i := len(prefix)
 	l := i + 1
