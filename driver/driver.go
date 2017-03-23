@@ -2,6 +2,7 @@ package driver
 
 import (
 	"fmt"
+	"bytes"
 	"errors"
 	"strings"
 	"github.com/urfave/cli"
@@ -28,17 +29,36 @@ func ToHexString(b []byte) string {
 	return s
 }
 
-func Check(c *cli.Context) error {
+func CheckCard(c *cli.Context) error {
 	reader := NewReader(c)
 	if reader == nil {
 		return errors.New("リーダーが見つかりません。")
 	}
 	defer reader.Finalize()
-	_, err := reader.CheckCard()
-	return err
+	var sw1, sw2 uint8
+	reader.WaitForCard()
+	if ! reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") {
+		return errors.New("これは個人番号カードではありません。")
+	}
+
+	sw1, sw2 = reader.SelectEF("00 06")
+	if ! (sw1 == 0x90 && sw2 == 0x00) {
+		return errors.New("トークン情報を取得できません。")
+	}
+
+	var data []byte
+	data = reader.ReadBinary(0x20)
+	token := string(bytes.TrimRight(data, " "))
+	if token == "JPKIAPICCTOKEN2" {
+		return nil
+	} else if token == "JPKIAPICCTOKEN" {
+		return errors.New("これは住基カードですね?")
+	} else {
+		return fmt.Errorf("不明なトークン情報: %s", token)
+	}
 }
 
-func GetCardInfo(c *cli.Context, pin []byte) (*CardInfo, error) {
+func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 	reader := NewReader(c)
 	if reader == nil {
 		return nil, errors.New("リーダーが見つかりません。")
@@ -50,7 +70,7 @@ func GetCardInfo(c *cli.Context, pin []byte) (*CardInfo, error) {
 	}
 
 	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08")
-	reader.SelectEF("00 11") // EF for VERIFY
+	reader.SelectEF("00 11") // 券面入力補助PIN IEF
 	reader.Verify(pin)
 	reader.SelectEF("00 01")
 	data := reader.ReadBinary(16)
@@ -71,13 +91,12 @@ func GetCardInfo(c *cli.Context, pin []byte) (*CardInfo, error) {
 		pos += len(attr[i].FullBytes)
 	}
 
-	info := new(CardInfo)
-	info.Number = string(number.Bytes)
-	info.Header = fmt.Sprintf("% X", attr[0].Bytes)
-	info.Name = string(attr[1].Bytes)
-	info.Address = string(attr[2].Bytes)
-	info.Birth = string(attr[3].Bytes)
-	info.Sex = string(attr[4].Bytes)
+	info := map[string]string{}
+	info["number"] = string(number.Bytes)
+	info["header"] = fmt.Sprintf("% X", attr[0].Bytes)
+	info["name"] = string(attr[1].Bytes)
+	info["address"] = string(attr[2].Bytes)
+	info["birth"] = string(attr[3].Bytes)
+	info["sex"] = string(attr[4].Bytes)
 	return info, nil
 }
-

@@ -25,10 +25,19 @@ var commonFlags = []cli.Flag {
 }
 
 func checkCard(c *cli.Context) error {
-	err := driver.Check(c)
+	err := driver.CheckCard(c)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func testCard(c *cli.Context) error {
+	err := driver.CheckCard(c)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("マイナンバーカードです。\n")
 	return nil
 }
 
@@ -160,29 +169,22 @@ func showCard(c *cli.Context) error {
 		return nil
 	}
 
-	info, err := driver.GetCardInfo(c, pin)
+	info, err := driver.GetCardInfo(c, string(pin))
 	if err != nil {
 		fmt.Printf("エラー: %s\n", err)
 		os.Exit(1)
 	}
 
 	if c.String("form") == "json" {
-		j, _ := json.MarshalIndent(map[string]string{
-			"mynumber": info.Number,
-			"header": info.Header,
-			"name": info.Name,
-			"address": info.Address,
-			"birthday": info.Birth,
-			"sex": info.Sex,
-		}, "", "  ")
-		fmt.Printf("%s", j)
+		out, _ := json.MarshalIndent(info, "", "  ")
+		fmt.Printf("%s", out)
 	}else{
-		fmt.Printf("個人番号: %s\n", info.Number)
-		fmt.Printf("謎ヘッダ: %s\n", info.Header)
-		fmt.Printf("氏名:     %s\n", info.Name)
-		fmt.Printf("住所:     %s\n", info.Address)
-		fmt.Printf("生年月日: %s\n", info.Birth)
-		fmt.Printf("性別:     %s\n", info.Sex)
+		fmt.Printf("個人番号: %s\n", info["number"])
+		fmt.Printf("謎ヘッダ: %s\n", info["header"])
+		fmt.Printf("氏名:     %s\n", info["name"])
+		fmt.Printf("住所:     %s\n", info["address"])
+		fmt.Printf("生年月日: %s\n", info["birth"])
+		fmt.Printf("性別:     %s\n", info["sex"])
 	}
 	return nil
 }
@@ -200,9 +202,9 @@ func main() {
 	app.Version = Version
 	app.Commands = []cli.Command {
 		{
-			Name: "check",
-			Usage: "カードチェック",
-			Action: checkCard,
+			Name: "test",
+			Usage: "動作確認",
+			Action: testCard,
 			Flags: commonFlags,
 		},
 		{

@@ -4,8 +4,7 @@ import (
 	"os"
 	"fmt"
 	"time"
-	"bytes"
-	"errors"
+	_ "errors"
 	"github.com/urfave/cli"
 	"github.com/ebfe/scard"
 )
@@ -46,30 +45,6 @@ func (self *Reader) Finalize() {
 	self.ctx.Release()
 }
 
-func (self *Reader) CheckCard() (bool, error) {
-	var sw1, sw2 uint8
-	self.WaitForCard()
-	sw1, sw2 = self.SelectAP("D3 92 f0 00 26 01 00 00 00 01")
-	if ! (sw1 == 0x90 && sw2 == 0x00) {
-		return false, errors.New("これは個人番号カードではありません。")
-	}
-	sw1, sw2 = self.SelectEF("00 06")
-	if ! (sw1 == 0x90 && sw2 == 0x00) {
-		return false, errors.New("これは個人番号カードではありません。")
-	}
-
-	var data []byte
-	data = self.ReadBinary(0x20)
-	str := string(bytes.TrimRight(data, " "))
-	if str == "JPKIAPICCTOKEN2" {
-		return true, nil
-	} else if str == "JPKIAPICCTOKEN" {
-		return false, errors.New("これは住基カードですね?")
-	} else {
-		return false, errors.New("これは個人番号カードではありません。")
-	}
-}
-
 func (self *Reader) GetCard() *scard.Card {
 	card, _ := self.ctx.Connect(
 		self.name, scard.ShareExclusive, scard.ProtocolAny)
@@ -101,8 +76,14 @@ func (self *Reader) WaitForCard() *scard.Card {
 	return nil
 }
 
-func (self *Reader) SelectAP(aid string) (uint8, uint8) {
-	return self.SelectDF(aid)
+func (self *Reader) SelectAP(aid string) bool {
+	sw1, sw2 := self.SelectDF(aid)
+	if (sw1 == 0x90 && sw2 == 0x00) {
+		return true
+	} else {
+		return false
+	}
+
 }
 
 func (self *Reader) SelectDF(id string) (uint8, uint8) {
@@ -119,9 +100,10 @@ func (self *Reader) SelectEF(id string) (uint8, uint8) {
 	return sw1, sw2
 }
 
-func (self *Reader) Verify(pin []byte) (uint8, uint8) {
+func (self *Reader) Verify(pin string) (uint8, uint8) {
 	var apdu string
-	apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(pin), pin)
+	bpin := []byte(pin)
+	apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
 	sw1, sw2, _ := self.Tx(apdu)
 	return sw1, sw2
 }

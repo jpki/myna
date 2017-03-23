@@ -23,7 +23,7 @@ $ export PATH=$GOPATH/bin:$PATH
 
 ### Install jinc command
 ~~~
-% go get github.com/hamano/jinc
+% go get github.com/hamano/myna
 ~~~
 
 ## Usage
