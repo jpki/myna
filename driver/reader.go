@@ -114,7 +114,14 @@ func (self *Reader) SelectDF(id string) (uint8, uint8) {
 
 func (self *Reader) SelectEF(id string) (uint8, uint8) {
 	bid := ToBytes(id)
-	apdu := "00 A4 02 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
+	apdu := fmt.Sprintf("00 A4 02 0C %02X % X", len(bid), bid)
+	sw1, sw2, _ := self.Tx(apdu)
+	return sw1, sw2
+}
+
+func (self *Reader) Verify(pin []byte) (uint8, uint8) {
+	var apdu string
+	apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(pin), pin)
 	sw1, sw2, _ := self.Tx(apdu)
 	return sw1, sw2
 }
