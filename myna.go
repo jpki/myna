@@ -8,8 +8,6 @@ import (
 	"strings"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/hex"
-	"encoding/asn1"
 	"encoding/pem"
 	"encoding/json"
 	"github.com/urfave/cli"
@@ -151,11 +149,6 @@ func showSignCACert(c *cli.Context) error {
 	return nil
 }
 
-func ToHexString(b []byte) string {
-	s := hex.EncodeToString(b)
-	return s
-}
-
 func showCard(c *cli.Context) error {
 	pin := []byte(c.String("pin"))
 	if len(pin) == 0 {
@@ -166,58 +159,30 @@ func showCard(c *cli.Context) error {
 		fmt.Printf("エラー: 暗証番号(4桁)を入力してください。\n")
 		return nil
 	}
-	reader := driver.NewReader(c)
-	if reader == nil {
-		os.Exit(1)
-	}
-	defer reader.Finalize()
-	card := reader.WaitForCard()
-	if card == nil {
+
+	info, err := driver.GetCardInfo(c, pin)
+	if err != nil {
+		fmt.Printf("エラー: %s\n", err)
 		os.Exit(1)
 	}
 
-	var apdu string
-	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08")
-	reader.SelectEF("00 11") // EF for VERIFY
-	reader.Tx("00 20 00 80")
-	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
-	reader.Tx(apdu)
-	reader.SelectEF("00 01")
-	data := reader.ReadBinary(16)
-	var mynum asn1.RawValue
-	asn1.Unmarshal(data[1:], &mynum)
-
-	reader.SelectEF("00 02")
-	data = reader.ReadBinary(5)
-	if len(data) != 5 {
-		fmt.Printf("エラー: Unkown\n")
-		return errors.New("error")
-	}
-	data_size := uint16(data[3]) << 8 | uint16(data[4])
-	data = reader.ReadBinary(5 + data_size)
-	var attr[5] asn1.RawValue
-	pos := 5
-	for i := 0; i < 5; i++ {
-		asn1.Unmarshal(data[pos:], &attr[i])
-		pos += len(attr[i].FullBytes)
-	}
 	if c.String("form") == "json" {
 		j, _ := json.MarshalIndent(map[string]string{
-			"mynumber": string(mynum.Bytes),
-			"header": fmt.Sprintf("% X", attr[0].Bytes),
-			"name": string(attr[1].Bytes),
-			"addr": string(attr[2].Bytes),
-			"birthday": string(attr[3].Bytes),
-			"sex": string(attr[4].Bytes),
+			"mynumber": info.Number,
+			"header": info.Header,
+			"name": info.Name,
+			"address": info.Address,
+			"birthday": info.Birth,
+			"sex": info.Sex,
 		}, "", "  ")
 		fmt.Printf("%s", j)
 	}else{
-		fmt.Printf("個人番号: %s\n", mynum.Bytes)
-		fmt.Printf("謎ヘッダ: % X\n", attr[0].Bytes)
-		fmt.Printf("氏名:     %s\n", attr[1].Bytes)
-		fmt.Printf("住所:     %s\n", attr[2].Bytes)
-		fmt.Printf("生年月日: %s\n", attr[3].Bytes)
-		fmt.Printf("性別:     %s\n", attr[4].Bytes)
+		fmt.Printf("個人番号: %s\n", info.Number)
+		fmt.Printf("謎ヘッダ: %s\n", info.Header)
+		fmt.Printf("氏名:     %s\n", info.Name)
+		fmt.Printf("住所:     %s\n", info.Address)
+		fmt.Printf("生年月日: %s\n", info.Birth)
+		fmt.Printf("性別:     %s\n", info.Sex)
 	}
 	return nil
 }
@@ -239,6 +204,22 @@ func main() {
 			Usage: "カードチェック",
 			Action: checkCard,
 			Flags: commonFlags,
+		},
+		{
+			Name: "card",
+			Usage: "券面事項入力補助AP",
+			Action: showCard,
+			Before: checkCard,
+			Flags: append(commonFlags, []cli.Flag {
+				cli.StringFlag {
+					Name: "pin",
+					Usage: "暗証番号(4桁)",
+				},
+				cli.StringFlag {
+					Name: "form",
+					Usage: "出力形式(txt,json)",
+				},
+			}...),
 		},
 		{
 			Name: "sign_cert",
@@ -292,22 +273,6 @@ func main() {
 				},
 			}...),
 			Action: changeAuthPIN,
-		},
-		{
-			Name: "card",
-			Usage: "券面事項入力補助AP",
-			Action: showCard,
-			Before: checkCard,
-			Flags: append(commonFlags, []cli.Flag {
-				cli.StringFlag {
-					Name: "pin",
-					Usage: "暗証番号(4桁)",
-				},
-				cli.StringFlag {
-					Name: "form",
-					Usage: "出力形式(txt,json)",
-				},
-			}...),
 		},
 		{
 			Name: "cms",

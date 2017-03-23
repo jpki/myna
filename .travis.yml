@@ -5,7 +5,8 @@ go:
   - 1.6
   - 1.7
   - 1.8
-
+env:
+  - TRAVIS_BUILD_DIR=$HOME/build
 
 addons:
   apt:

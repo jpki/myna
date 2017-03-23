@@ -1,7 +1,7 @@
 myna - Japanese Individual Number Card Utility
 ==============================================
 
-[![Build Status](https://travis-ci.org/hamano/jinc.svg?branch=master)](https://travis-ci.org/hamano/jinc)
+[![Build Status](https://travis-ci.org/jpki/myna.svg?branch=master)](https://travis-ci.org/jpki/myna)
 
 ## Build requirements
 golang 1.6 or later
