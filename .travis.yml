@@ -13,12 +13,13 @@ addons:
 
 os:
   - linux
+  - windows
   - osx
 
-before_install:
-  - rsync -az ${TRAVIS_BUILD_DIR}/ $HOME/build/
-  - export TRAVIS_BUILD_DIR=$HOME/build/
-  - cd $HOME/build/
+#before_install:
+#  - rsync -az ${TRAVIS_BUILD_DIR}/ $HOME/build/
+#  - export TRAVIS_BUILD_DIR=$HOME/build/
+#  - cd $HOME/build/
 
 install:
-  - make deps
+  - make get-deps

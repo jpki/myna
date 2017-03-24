@@ -1,10 +1,10 @@
-package driver
+package libmyna
 
 import (
 	"os"
 	"fmt"
 	"time"
-	_ "errors"
+	"errors"
 	"github.com/urfave/cli"
 	"github.com/ebfe/scard"
 )
@@ -52,28 +52,25 @@ func (self *Reader) GetCard() *scard.Card {
 	return card
 }
 
-func (self *Reader) WaitForCard() *scard.Card {
+func (self *Reader) WaitForCard() error {
 	rs := make([]scard.ReaderState, 1)
 	rs[0].Reader = self.name
 	rs[0].CurrentState = scard.StateUnaware
 	for i := 0; i < 3; i++ {
 		err := self.ctx.GetStatusChange(rs, -1)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "エラー: %s\n", err)
-			return nil
+			return fmt.Errorf("エラー: %s\n", err)
 		}
 		if rs[0].EventState&scard.StatePresent != 0 {
 			card, _ := self.ctx.Connect(
 				self.name, scard.ShareExclusive, scard.ProtocolAny)
 			self.card = card
-			return card
+			return nil
 		}
 		fmt.Fprintf(os.Stderr, "wait for card...\n")
 		time.Sleep(1 * time.Second)
 	}
-	fmt.Fprintf(os.Stderr, "カードが見つかりません。\n")
-	os.Exit(1)
-	return nil
+	return errors.New("カードが見つかりません")
 }
 
 func (self *Reader) SelectAP(aid string) bool {
@@ -102,15 +99,22 @@ func (self *Reader) SelectEF(id string) (uint8, uint8) {
 
 func (self *Reader) Verify(pin string) (uint8, uint8) {
 	var apdu string
-	bpin := []byte(pin)
-	apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
-	sw1, sw2, _ := self.Tx(apdu)
-	return sw1, sw2
+	if pin == "" {
+		// lookup status
+		apdu = "00 20 00 80"
+		sw1, sw2, _ := self.Tx(apdu)
+		return sw1, sw2
+	} else {
+		bpin := []byte(pin)
+		apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
+		sw1, sw2, _ := self.Tx(apdu)
+		return sw1, sw2
+	}
 }
 
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
-	if self.c.Bool("verbose") {
+	if self.c.Bool("debug") {
 		fmt.Printf("< %v\n", apdu)
 	}
 	cmd := ToBytes(apdu)
@@ -120,7 +124,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 		return 0, 0, nil
 	}
 
-	if self.c.Bool("verbose") {
+	if self.c.Bool("debug") {
 		for i := 0; i < len(res); i++ {
 			if i % 0x10 == 0 {
 				fmt.Print(">")

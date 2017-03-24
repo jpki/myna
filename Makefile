@@ -1,6 +1,9 @@
 
 native:
-	go build -o myna
+	go build
+
+linux:
+	GOOS=linux GOARCH=amd64 go build -o myna_linux
 
 win:
 	GOOS=windows GOARCH=amd64 go build -o myna.exe
@@ -9,14 +12,11 @@ osx:
 	GOOS=darwin GOARCH=386 go build -o myna
 
 clean:
-	rm -rf myna
+	rm -rf myna myna.exe
 
-deps:
-	go get -u github.com/urfave/cli
-	go get -u github.com/howeyc/gopass
-	go get -u github.com/ebfe/scard
-	go get -u github.com/ianmcmahon/encoding_ssh
-	go get -u github.com/fullsailor/pkcs7
-
-run:
-	go run *.go
+get-deps:
+	go get -u -v github.com/urfave/cli
+	go get -u -v github.com/howeyc/gopass
+	go get -u -v github.com/ebfe/scard
+	go get -u -v github.com/ianmcmahon/encoding_ssh
+	go get -u -v github.com/fullsailor/pkcs7

@@ -1,7 +1,8 @@
 package main
 
+import "github.com/jpki/myna/libmyna"
+
 import (
-	"./driver"
 	"os"
 	"fmt"
 	"github.com/fullsailor/pkcs7"
@@ -19,7 +20,7 @@ var cmsCommands = []cli.Command {
 }
 
 func sign(c *cli.Context) error {
-	reader := driver.NewReader(c)
+	reader := libmyna.NewReader(c)
 	if reader == nil {
 		os.Exit(1)
 	}

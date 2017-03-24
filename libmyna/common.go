@@ -1,4 +1,4 @@
-package driver
+package libmyna
 
 import (
 	"fmt"
@@ -10,15 +10,6 @@ import (
 	"encoding/asn1"
 )
 
-type CardInfo struct {
-	Number string
-	Header string
-	Name string
-	Address string
-	Birth string
-	Sex string
-}
-
 func ToBytes(s string) []byte {
 	b, _ := hex.DecodeString(strings.Replace(s, " ", "", -1))
 	return b
@@ -29,14 +20,25 @@ func ToHexString(b []byte) string {
 	return s
 }
 
-func CheckCard(c *cli.Context) error {
+func Ready(c *cli.Context) (*Reader, error) {
 	reader := NewReader(c)
 	if reader == nil {
-		return errors.New("リーダーが見つかりません。")
+		return nil, errors.New("リーダーが見つかりません。")
+	}
+	err := reader.WaitForCard()
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
+}
+
+func CheckCard(c *cli.Context) error {
+	reader, err := Ready(c)
+	if err != nil {
+		return err
 	}
 	defer reader.Finalize()
 	var sw1, sw2 uint8
-	reader.WaitForCard()
 	if ! reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") {
 		return errors.New("これは個人番号カードではありません。")
 	}
@@ -64,14 +66,17 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 		return nil, errors.New("リーダーが見つかりません。")
 	}
 	defer reader.Finalize()
-	card := reader.WaitForCard()
-	if card == nil {
-		return nil, errors.New("カードが見つかりません。")
+	err := reader.WaitForCard()
+	if err != nil {
+		return nil, err
 	}
 
 	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08")
 	reader.SelectEF("00 11") // 券面入力補助PIN IEF
-	reader.Verify(pin)
+	sw1, sw2 := reader.Verify(pin)
+	if ! (sw1 == 0x90 && sw2 == 0x00) {
+		return nil, errors.New("暗証番号が間違っています。")
+	}
 	reader.SelectEF("00 01")
 	data := reader.ReadBinary(16)
 	var number asn1.RawValue
@@ -99,4 +104,60 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 	info["birth"] = string(attr[3].Bytes)
 	info["sex"] = string(attr[4].Bytes)
 	return info, nil
+}
+
+func GetPinStatus(c *cli.Context) (map[string]int, error) {
+	reader, err := Ready(c)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Finalize()
+
+	status := map[string]int{}
+
+	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") // 公的個人認証
+	reader.SelectEF("00 18") // IEF for AUTH
+	var sw1, sw2 uint8
+	sw1, sw2 = reader.Verify("")
+	if (sw1 == 0x63) {
+		status["auth"] = int(sw2 & 0x0F)
+	}else{
+		status["auth"] = -1
+	}
+
+	reader.SelectEF("00 1B") // IEF for SIGN
+	sw1, sw2 = reader.Verify("")
+	if (sw1 == 0x63) {
+		status["sign"] = int(sw2 & 0x0F)
+	}else{
+		status["sign"] = -1
+	}
+
+	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08") // 券面入力補助AP
+	reader.SelectEF("00 11") // IEF
+	sw1, sw2 = reader.Verify("")
+	if (sw1 == 0x63) {
+		status["card"] = int(sw2 & 0x0F)
+	}else{
+		status["card"] = -1
+	}
+
+	reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
+	reader.SelectEF("00 1C")
+	sw1, sw2 = reader.Verify("")
+	if (sw1 == 0x63) {
+		status["unknown1"] = int(sw2 & 0x0F)
+	}else{
+		status["unknown1"] = -1
+	}
+
+	reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 住基?
+	reader.SelectEF("00 1C")
+	sw1, sw2 = reader.Verify("")
+	if (sw1 == 0x63) {
+		status["unknown2"] = int(sw2 & 0x0F)
+	}else{
+		status["unknown2"] = -1
+	}
+	return status, nil
 }
