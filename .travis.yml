@@ -13,7 +13,6 @@ addons:
 
 os:
   - linux
-  - windows
   - osx
 
 #before_install:
