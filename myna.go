@@ -114,9 +114,19 @@ func main() {
 			Action: changeAuthPIN,
 		},
 		{
-			Name: "cms",
-			Usage: "署名関連",
-			Subcommands: cmsCommands,
+			Name: "sign",
+			Usage: "署名用証明書で署名",
+			Action: sign,
+			Flags: append(commonFlags, []cli.Flag {
+				cli.StringFlag {
+					Name: "pin",
+					Usage: "暗証番号(4桁)",
+				},
+				cli.StringFlag {
+					Name: "in",
+					Usage: "署名対象ファイル",
+				},
+			}...),
 		},
 		{
 			Name: "tool",
@@ -307,5 +317,32 @@ func showPinStatus(c *cli.Context) error {
 	fmt.Printf("謎のPIN1: のこり%d回\n", status["unknown1"])
 	fmt.Printf("謎のPIN2: のこり%d回\n", status["unknown2"])
 
+	return nil
+}
+
+func sign(c *cli.Context) error {
+	pin := c.String("pin")
+	if len(pin) == 0 {
+		fmt.Printf("署名用パスワード(6-16桁): ")
+		input, _ := gopass.GetPasswdMasked()
+		pin = string(input)
+	}
+	pass := strings.ToUpper(pin)
+
+	if len(pin) < 6 || 16 < len(pin) {
+		fmt.Printf("エラー: 署名用パスワード(6-16桁)を入力してください。\n")
+		return nil
+	}
+
+	in := c.String("in")
+	if in == "" {
+		return errors.New("エラー: 署名対象ファイルを指定してください。")
+	}
+
+	err := libmyna.Sign(c, pass, in, "out.txt")
+	if err != nil {
+		fmt.Printf("エラー: %s\n", err)
+		os.Exit(1)
+	}
 	return nil
 }

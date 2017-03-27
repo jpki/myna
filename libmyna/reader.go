@@ -74,23 +74,27 @@ func (self *Reader) WaitForCard() error {
 }
 
 func (self *Reader) SelectAP(aid string) bool {
-	sw1, sw2 := self.SelectDF(aid)
+	return self.SelectDF(aid)
+}
+
+func (self *Reader) SelectDF(id string) bool {
+	if self.c.Bool("debug") {
+		fmt.Fprintf(os.Stderr, "# Select DF\n")
+	}
+	bid := ToBytes(id)
+	apdu := "00 A4 04 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
+	sw1, sw2, _ := self.Tx(apdu)
 	if (sw1 == 0x90 && sw2 == 0x00) {
 		return true
 	} else {
 		return false
 	}
-
-}
-
-func (self *Reader) SelectDF(id string) (uint8, uint8) {
-	bid := ToBytes(id)
-	apdu := "00 A4 04 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
-	sw1, sw2, _ := self.Tx(apdu)
-	return sw1, sw2
 }
 
 func (self *Reader) SelectEF(id string) (uint8, uint8) {
+	if self.c.Bool("debug") {
+		fmt.Fprintf(os.Stderr, "# Select EF\n")
+	}
 	bid := ToBytes(id)
 	apdu := fmt.Sprintf("00 A4 02 0C %02X % X", len(bid), bid)
 	sw1, sw2, _ := self.Tx(apdu)
@@ -100,11 +104,16 @@ func (self *Reader) SelectEF(id string) (uint8, uint8) {
 func (self *Reader) Verify(pin string) (uint8, uint8) {
 	var apdu string
 	if pin == "" {
-		// lookup status
+		if self.c.Bool("debug") {
+			fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
+		}
 		apdu = "00 20 00 80"
 		sw1, sw2, _ := self.Tx(apdu)
 		return sw1, sw2
 	} else {
+		if self.c.Bool("debug") {
+			fmt.Fprintf(os.Stderr, "# Verify PIN")
+		}
 		bpin := []byte(pin)
 		apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
 		sw1, sw2, _ := self.Tx(apdu)
@@ -115,21 +124,21 @@ func (self *Reader) Verify(pin string) (uint8, uint8) {
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
 	if self.c.Bool("debug") {
-		fmt.Printf("< %v\n", apdu)
+		fmt.Fprintf(os.Stderr, "< %v\n", apdu)
 	}
 	cmd := ToBytes(apdu)
 	res, err := card.Transmit(cmd)
 	if err != nil {
-		fmt.Printf("err: %s\n", err)
+		fmt.Fprintf(os.Stderr,"err: %s\n", err)
 		return 0, 0, nil
 	}
 
 	if self.c.Bool("debug") {
 		for i := 0; i < len(res); i++ {
 			if i % 0x10 == 0 {
-				fmt.Print(">")
+				fmt.Fprintf(os.Stderr, ">")
 			}
-			fmt.Printf(" %02X", res[i])
+			fmt.Fprintf(os.Stderr, " %02X", res[i])
 			if i % 0x10 == 0x0f {
 				fmt.Println()
 			}
@@ -146,8 +155,11 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	return 0, 0, nil
 }
 
-
 func (self *Reader) ReadBinary(size uint16) []byte {
+	if self.c.Bool("debug") {
+		fmt.Fprintf(os.Stderr, "# Read Binary\n")
+	}
+
 	var l uint8
 	var apdu string
 	var pos uint16
@@ -171,3 +183,18 @@ func (self *Reader) ReadBinary(size uint16) []byte {
 	}
 	return res
 }
+
+func (self *Reader) Signature(data []byte) ([]byte, error) {
+	if self.c.Bool("debug") {
+		fmt.Fprintf(os.Stderr, "# Signature ")
+	}
+
+	apdu := fmt.Sprintf("80 2a 00 80 %02X % X 00", len(data), data)
+	sw1, sw2, res := self.Tx(apdu)
+	if (sw1 == 0x90 && sw2 == 0x00) {
+		return res, nil
+	} else {
+		return nil, fmt.Errorf("署名エラー(%0X, %0X)", sw1, sw2)
+	}
+}
+

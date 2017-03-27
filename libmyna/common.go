@@ -1,13 +1,20 @@
 package libmyna
 
 import (
+	"os"
+	"io"
 	"fmt"
 	"bytes"
 	"errors"
 	"strings"
-	"github.com/urfave/cli"
+	"hash"
+	"io/ioutil"
+	"crypto/sha256"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/asn1"
+	"github.com/urfave/cli"
+	_ "github.com/fullsailor/pkcs7"
 )
 
 func ToBytes(s string) []byte {
@@ -161,3 +168,63 @@ func GetPinStatus(c *cli.Context) (map[string]int, error) {
 	}
 	return status, nil
 }
+
+func DigestInfo(md hash.Hash) []byte {
+	var prefix = []byte{0x30, 0x31, 0x30, 0x0d, // SEQUENCE { SEQUENCE {
+		0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, // sha-256
+		0x05, 0x00, // NULL }
+		0x04, 0x20} // OCTET STRING
+	return append(prefix, md.Sum(nil)...)
+}
+
+type ContentInfo struct {
+	ContentType asn1.ObjectIdentifier
+	Content     asn1.RawValue `asn1:"explicit,optional,tag:0"`
+}
+
+func Sign(c *cli.Context, pin string, in string, out string) error {
+	inFile, err := os.Open(in)
+	if err != nil {
+		return err
+	}
+	digest := sha256.New()
+	if _, err := io.Copy(digest, inFile); err != nil {
+		return err
+	}
+	inFile.Close()
+
+	reader, err := Ready(c)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") // JPKI
+	reader.SelectEF("00 1B") // IEF for SIGN
+	sw1, sw2 := reader.Verify(pin)
+	if ! (sw1 == 0x90 && sw2 == 0x00) {
+		return errors.New("暗証番号が間違っています。")
+	}
+	reader.SelectEF("00 1A") // Select SIGN EF
+	digestInfo := DigestInfo(digest)
+
+	signed, err := reader.Signature(digestInfo)
+	if err != nil {
+		return err
+	}
+	buf, err := ioutil.ReadFile(in)
+	content, err := asn1.Marshal(buf)
+	contentInfo := ContentInfo{
+		ContentType: asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 7, 1},
+		Content: asn1.RawValue{Class: 2, Tag: 0, Bytes: content, IsCompound: true},
+	}
+	digAlg := pkix.AlgorithmIdentifier{
+		Algorithm: asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}, //SHA256
+	}
+	fmt.Printf("content: % X\n", content)
+	fmt.Printf("digAlg: %v\n", digAlg)
+	fmt.Printf("sha256: % X\n", digestInfo)
+	fmt.Printf("signed: % X\n", signed)
+	fmt.Printf("contentInfo: %v\n", contentInfo)
+	return nil
+}
+
