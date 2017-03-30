@@ -124,48 +124,22 @@ func GetPinStatus(c *cli.Context) (map[string]int, error) {
 
 	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") // 公的個人認証
 	reader.SelectEF("00 18") // IEF for AUTH
-	var sw1, sw2 uint8
-	sw1, sw2 = reader.Verify("")
-	if (sw1 == 0x63) {
-		status["auth"] = int(sw2 & 0x0F)
-	}else{
-		status["auth"] = -1
-	}
+	status["auth"] = reader.LookupPin()
 
 	reader.SelectEF("00 1B") // IEF for SIGN
-	sw1, sw2 = reader.Verify("")
-	if (sw1 == 0x63) {
-		status["sign"] = int(sw2 & 0x0F)
-	}else{
-		status["sign"] = -1
-	}
+	status["sign"] = reader.LookupPin()
 
 	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08") // 券面入力補助AP
 	reader.SelectEF("00 11") // IEF
-	sw1, sw2 = reader.Verify("")
-	if (sw1 == 0x63) {
-		status["card"] = int(sw2 & 0x0F)
-	}else{
-		status["card"] = -1
-	}
+	status["card"] = reader.LookupPin()
 
 	reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
 	reader.SelectEF("00 1C")
-	sw1, sw2 = reader.Verify("")
-	if (sw1 == 0x63) {
-		status["unknown1"] = int(sw2 & 0x0F)
-	}else{
-		status["unknown1"] = -1
-	}
+	status["unknown1"] = reader.LookupPin()
 
 	reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 住基?
 	reader.SelectEF("00 1C")
-	sw1, sw2 = reader.Verify("")
-	if (sw1 == 0x63) {
-		status["unknown2"] = int(sw2 & 0x0F)
-	}else{
-		status["unknown2"] = -1
-	}
+	status["unknown2"] = reader.LookupPin()
 	return status, nil
 }
 

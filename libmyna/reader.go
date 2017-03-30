@@ -121,6 +121,18 @@ func (self *Reader) Verify(pin string) (uint8, uint8) {
 	}
 }
 
+func (self *Reader) LookupPin() int {
+	if self.c.Bool("debug") {
+		fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
+	}
+	sw1, sw2, _ := self.Tx("00 20 00 80")
+	if (sw1 == 0x63) {
+		return int(sw2 & 0x0F)
+	}else{
+		return -1
+	}
+}
+
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
 	if self.c.Bool("debug") {
