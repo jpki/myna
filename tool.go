@@ -13,13 +13,11 @@ var toolCommands = []cli.Command {
 		Name: "beep_off",
 		Usage: "Beep off for ACS Reader",
 		Action: beepOff,
-		Flags: commonFlags,
 	},
 	{
 		Name: "find_ap",
 		Usage: "search AP",
 		Action: findAP,
-		Flags: commonFlags,
 	},
 }
 

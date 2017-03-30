@@ -3,25 +3,31 @@ package main
 import "github.com/jpki/myna/libmyna"
 
 import (
-	"os"
-	"fmt"
-	"errors"
-	"strings"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/pem"
 	"encoding/json"
-	"github.com/urfave/cli"
+	"encoding/pem"
+	"errors"
+	"fmt"
 	"github.com/howeyc/gopass"
 	"github.com/ianmcmahon/encoding_ssh"
+	"github.com/urfave/cli"
+	"os"
+	"strings"
 )
 
-var commonFlags = []cli.Flag {
-	cli.BoolFlag {
-		Name: "debug, d",
+var globalFlags = []cli.Flag{
+	cli.BoolFlag{
+		Name:  "debug, d",
 		Usage: "詳細出力",
 	},
 }
+
+var certFormFlag = cli.StringFlag{
+	Name:  "form",
+	Usage: "出力形式(text,pem,der,ssh)",
+}
+
 
 func main() {
 	app := cli.NewApp()
@@ -30,107 +36,104 @@ func main() {
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
 	app.Version = libmyna.Version
-	app.Commands = []cli.Command {
+	app.Flags = globalFlags
+	app.Commands = []cli.Command{
 		{
-			Name: "test",
-			Usage: "動作確認",
+			Name:   "test",
+			Usage:  "動作確認",
 			Action: testCard,
-			Flags: commonFlags,
 		},
 		{
-			Name: "card",
-			Usage: "券面事項入力補助AP",
+			Name:   "card",
+			Usage:  "券面事項入力補助AP",
 			Action: showCardInfo,
 			Before: checkCard,
-			Flags: append(commonFlags, []cli.Flag {
+			Flags: []cli.Flag {
 				cli.StringFlag {
-					Name: "pin",
+					Name:  "pin",
 					Usage: "暗証番号(4桁)",
 				},
 				cli.StringFlag {
-					Name: "form",
+					Name:  "form",
 					Usage: "出力形式(txt,json)",
 				},
-			}...),
+			},
 		},
 		{
-			Name: "pin_status",
-			Usage: "PINステータス",
+			Name:   "pin_status",
+			Usage:  "PINステータス",
 			Action: showPinStatus,
 			Before: checkCard,
-			Flags: commonFlags,
 		},
 		{
-			Name: "sign_cert",
-			Usage: "署名用証明書を表示",
+			Name:   "auth_cert",
+			Usage:  "利用者認証用証明書を表示",
+			Action: showAuthCert,
+			Flags: []cli.Flag {
+				certFormFlag,
+			},
+		},
+		{
+			Name:   "auth_ca_cert",
+			Usage:  "利用者認証用CA証明書を表示",
+			Action: showAuthCACert,
+			Flags: []cli.Flag {
+				certFormFlag,
+			},
+		},
+		{
+			Name:   "sign_cert",
+			Usage:  "署名用証明書を表示",
 			Action: showSignCert,
-			Flags: append(commonFlags, []cli.Flag {
-				cli.StringFlag {
-					Name: "pin",
+			Flags: []cli.Flag {
+				certFormFlag,
+				cli.StringFlag{
+					Name:  "pin",
 					Usage: "署名用パスワード(6-16桁)",
 				},
-				cli.StringFlag {
-					Name: "form",
-					Usage: "出力形式(pem,ssh)",
-				},
-			}...),
+			},
 		},
 		{
-			Name: "sign_ca_cert",
-			Usage: "署名用CA証明書を表示",
+			Name:   "sign_ca_cert",
+			Usage:  "署名用CA証明書を表示",
 			Action: showSignCACert,
-			Flags: commonFlags,
+			Flags: []cli.Flag {
+				certFormFlag,
+			},
 		},
 		{
-			Name: "auth_cert",
-			Usage: "利用者認証用証明書を表示",
-			Action: showAuthCert,
-			Flags: append(commonFlags, []cli.Flag {
-				cli.StringFlag {
-					Name: "form",
-					Usage: "出力形式(pem,ssh)",
-				},
-			}...),
-		},
-		{
-			Name: "auth_ca_cert",
-			Usage: "利用者認証用CA証明書を表示",
-			Action: showAuthCACert,
-			Flags: commonFlags,
-		},
-		{
-			Name: "auth_change_pin",
+			Name:  "auth_change_pin",
 			Usage: "利用者認証用PINを変更",
-			Flags: append(commonFlags, []cli.Flag {
+			Flags: []cli.Flag {
 				cli.StringFlag {
-					Name: "pin",
+					Name:  "pin",
 					Usage: "暗証番号(4桁)",
 				},
 				cli.StringFlag {
-					Name: "newpin",
+					Name:  "newpin",
 					Usage: "新しい暗証番号(4桁)",
 				},
-			}...),
+			},
 			Action: changeAuthPIN,
 		},
 		{
-			Name: "sign",
-			Usage: "署名用証明書で署名",
+			Name:   "sign",
+			Usage:  "署名用証明書で署名",
 			Action: sign,
-			Flags: append(commonFlags, []cli.Flag {
-				cli.StringFlag {
-					Name: "pin",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "pin",
 					Usage: "暗証番号(4桁)",
 				},
-				cli.StringFlag {
-					Name: "in",
+				cli.StringFlag{
+					Name:  "in",
 					Usage: "署名対象ファイル",
 				},
-			}...),
+			},
 		},
 		{
-			Name: "tool",
-			Usage: "種々様々なツール",
+			Name:        "tool",
+			Usage:       "種々様々なツール",
 			Subcommands: toolCommands,
 		},
 	}
@@ -161,14 +164,14 @@ func printCert(c *cli.Context, cert *x509.Certificate) {
 		block.Type = "CERTIFICATE"
 		block.Bytes = cert.Raw
 		pem.Encode(os.Stdout, &block)
-    } else if form == "der" {
+	} else if form == "der" {
 		fmt.Println("not implement yet")
 		/*
-    fp, _ := os.Create("cert.der")
-	defer fp.Close()
-	fp.Write(data)
-*/
-    } else if form == "ssh" {
+		    fp, _ := os.Create("cert.der")
+			defer fp.Close()
+			fp.Write(data)
+		*/
+	} else if form == "ssh" {
 		rsaPubkey := cert.PublicKey.(*rsa.PublicKey)
 		sshPubkey, _ := ssh.EncodePublicKey(*rsaPubkey, "")
 		fmt.Println(sshPubkey)
@@ -279,7 +282,7 @@ func showCardInfo(c *cli.Context) error {
 	if c.String("form") == "json" {
 		out, _ := json.MarshalIndent(info, "", "  ")
 		fmt.Printf("%s", out)
-	}else{
+	} else {
 		fmt.Printf("個人番号: %s\n", info["number"])
 		fmt.Printf("謎ヘッダ: %s\n", info["header"])
 		fmt.Printf("氏名:     %s\n", info["name"])

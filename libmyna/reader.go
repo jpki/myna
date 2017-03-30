@@ -78,7 +78,7 @@ func (self *Reader) SelectAP(aid string) bool {
 }
 
 func (self *Reader) SelectDF(id string) bool {
-	if self.c.Bool("debug") {
+	if self.c.GlobalBool("debug") {
 		fmt.Fprintf(os.Stderr, "# Select DF\n")
 	}
 	bid := ToBytes(id)
@@ -92,7 +92,7 @@ func (self *Reader) SelectDF(id string) bool {
 }
 
 func (self *Reader) SelectEF(id string) (uint8, uint8) {
-	if self.c.Bool("debug") {
+	if self.c.GlobalBool("debug") {
 		fmt.Fprintf(os.Stderr, "# Select EF\n")
 	}
 	bid := ToBytes(id)
@@ -104,14 +104,14 @@ func (self *Reader) SelectEF(id string) (uint8, uint8) {
 func (self *Reader) Verify(pin string) (uint8, uint8) {
 	var apdu string
 	if pin == "" {
-		if self.c.Bool("debug") {
+		if self.c.GlobalBool("debug") {
 			fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
 		}
 		apdu = "00 20 00 80"
 		sw1, sw2, _ := self.Tx(apdu)
 		return sw1, sw2
 	} else {
-		if self.c.Bool("debug") {
+		if self.c.GlobalBool("debug") {
 			fmt.Fprintf(os.Stderr, "# Verify PIN")
 		}
 		bpin := []byte(pin)
@@ -122,7 +122,7 @@ func (self *Reader) Verify(pin string) (uint8, uint8) {
 }
 
 func (self *Reader) LookupPin() int {
-	if self.c.Bool("debug") {
+	if self.c.GlobalBool("debug") {
 		fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
 	}
 	sw1, sw2, _ := self.Tx("00 20 00 80")
@@ -135,7 +135,7 @@ func (self *Reader) LookupPin() int {
 
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
-	if self.c.Bool("debug") {
+	if self.c.GlobalBool("debug") {
 		fmt.Fprintf(os.Stderr, "< %v\n", apdu)
 	}
 	cmd := ToBytes(apdu)
@@ -145,7 +145,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 		return 0, 0, nil
 	}
 
-	if self.c.Bool("debug") {
+	if self.c.GlobalBool("debug") {
 		for i := 0; i < len(res); i++ {
 			if i % 0x10 == 0 {
 				fmt.Fprintf(os.Stderr, ">")
@@ -168,7 +168,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 }
 
 func (self *Reader) ReadBinary(size uint16) []byte {
-	if self.c.Bool("debug") {
+	if self.c.GlobalBool("debug") {
 		fmt.Fprintf(os.Stderr, "# Read Binary\n")
 	}
 
@@ -197,7 +197,7 @@ func (self *Reader) ReadBinary(size uint16) []byte {
 }
 
 func (self *Reader) Signature(data []byte) ([]byte, error) {
-	if self.c.Bool("debug") {
+	if self.c.GlobalBool("debug") {
 		fmt.Fprintf(os.Stderr, "# Signature ")
 	}
 
