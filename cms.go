@@ -6,7 +6,7 @@ import (
 	"os"
 	"fmt"
 	"encoding/pem"
-	"github.com/fullsailor/pkcs7"
+	"github.com/hamano/pkcs7"
 	"github.com/urfave/cli"
 	"github.com/howeyc/gopass"
 )

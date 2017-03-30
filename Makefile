@@ -19,4 +19,5 @@ get-deps:
 	go get -u -v github.com/howeyc/gopass
 	go get -u -v github.com/ebfe/scard
 	go get -u -v github.com/ianmcmahon/encoding_ssh
-	go get -u -v github.com/fullsailor/pkcs7
+	go get -u -v github.com/hamano/pkcs7
+#	go get -u -v github.com/fullsailor/pkcs7
