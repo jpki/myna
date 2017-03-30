@@ -6,7 +6,28 @@ myna - Japanese Individual Number Card Utility
 ## Build requirements
 golang 1.6 or later
 
-## Install 
+## Install myna command
+
+~~~
+% go get -u -v github.com/jpki/myna
+~~~
+
+## Usage
+
+See myna --help and myna <subcommand> --help
+
+~~~
+% myna --help
+COMMANDS:
+     card          券面事項を表示
+     pin_status    PINステータスを表示
+     sign_cert     署名用証明書を表示
+     sign_ca_cert  署名用CA証明書を表示
+     auth_cert     利用者認証用証明書を表示
+     auth_ca_cert  利用者認証用CA証明書を表示
+     tool          種々様々なツール
+~~~
+
 
 ### Build Requirements for Debian/Ubuntu
 
@@ -26,24 +47,3 @@ $ export PATH=$GOPATH/bin:$PATH
 - github.com/ebfe/scard is not allow to build on windows. apply [the patch](https://github.com/ebfe/scard/pull/3)
 
 ### Build Requirements for OSX
-
-### Install myna command
-~~~
-% go get github.com/hamano/myna
-~~~
-
-## Usage
-
-See myna --help and myna <subcommand> --help
-
-~~~
-% myna --help
-COMMANDS:
-     card          券面事項を表示
-     sign_cert     署名用証明書を表示
-     sign_ca_cert  署名用CA証明書を表示
-     auth_cert     利用者認証用証明書を表示
-     auth_ca_cert  利用者認証用CA証明書を表示
-     tool          種々様々なツール
-~~~
-
