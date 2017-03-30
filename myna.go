@@ -28,7 +28,6 @@ var certFormFlag = cli.StringFlag{
 	Usage: "出力形式(text,pem,der,ssh)",
 }
 
-
 func main() {
 	app := cli.NewApp()
 	app.Name = "myna"
@@ -48,12 +47,12 @@ func main() {
 			Usage:  "券面事項入力補助AP",
 			Action: showCardInfo,
 			Before: checkCard,
-			Flags: []cli.Flag {
-				cli.StringFlag {
+			Flags: []cli.Flag{
+				cli.StringFlag{
 					Name:  "pin",
 					Usage: "暗証番号(4桁)",
 				},
-				cli.StringFlag {
+				cli.StringFlag{
 					Name:  "form",
 					Usage: "出力形式(txt,json)",
 				},
@@ -69,7 +68,7 @@ func main() {
 			Name:   "auth_cert",
 			Usage:  "利用者認証用証明書を表示",
 			Action: showAuthCert,
-			Flags: []cli.Flag {
+			Flags: []cli.Flag{
 				certFormFlag,
 			},
 		},
@@ -77,7 +76,7 @@ func main() {
 			Name:   "auth_ca_cert",
 			Usage:  "利用者認証用CA証明書を表示",
 			Action: showAuthCACert,
-			Flags: []cli.Flag {
+			Flags: []cli.Flag{
 				certFormFlag,
 			},
 		},
@@ -85,7 +84,7 @@ func main() {
 			Name:   "sign_cert",
 			Usage:  "署名用証明書を表示",
 			Action: showSignCert,
-			Flags: []cli.Flag {
+			Flags: []cli.Flag{
 				certFormFlag,
 				cli.StringFlag{
 					Name:  "pin",
@@ -97,19 +96,19 @@ func main() {
 			Name:   "sign_ca_cert",
 			Usage:  "署名用CA証明書を表示",
 			Action: showSignCACert,
-			Flags: []cli.Flag {
+			Flags: []cli.Flag{
 				certFormFlag,
 			},
 		},
 		{
 			Name:  "auth_change_pin",
 			Usage: "利用者認証用PINを変更",
-			Flags: []cli.Flag {
-				cli.StringFlag {
+			Flags: []cli.Flag{
+				cli.StringFlag{
 					Name:  "pin",
 					Usage: "暗証番号(4桁)",
 				},
-				cli.StringFlag {
+				cli.StringFlag{
 					Name:  "newpin",
 					Usage: "新しい暗証番号(4桁)",
 				},
@@ -167,9 +166,9 @@ func printCert(c *cli.Context, cert *x509.Certificate) {
 	} else if form == "der" {
 		fmt.Println("not implement yet")
 		/*
-		    fp, _ := os.Create("cert.der")
-			defer fp.Close()
-			fp.Write(data)
+			    fp, _ := os.Create("cert.der")
+				defer fp.Close()
+				fp.Write(data)
 		*/
 	} else if form == "ssh" {
 		rsaPubkey := cert.PublicKey.(*rsa.PublicKey)
