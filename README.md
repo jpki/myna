@@ -1,4 +1,4 @@
-myna - Japanese Individual Number Card Utility
+myna - MyNumber Card Utility
 ==============================================
 
 [![Build Status](https://travis-ci.org/jpki/myna.svg?branch=master)](https://travis-ci.org/jpki/myna)
@@ -46,6 +46,5 @@ $ export PATH=$GOPATH/bin:$PATH
 ### Build Requirements for Windows
 
 - Install golang and git
-- github.com/ebfe/scard is not allow to build on windows. apply [the patch](https://github.com/ebfe/scard/pull/3)
 
 ### Build Requirements for OSX
