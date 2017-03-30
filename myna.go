@@ -154,68 +154,45 @@ func testCard(c *cli.Context) error {
 	return nil
 }
 
-func showCert(c *cli.Context, efid string, pin []byte) error {
-	reader := libmyna.NewReader(c)
-	if reader == nil {
-		os.Exit(1)
-	}
-	defer reader.Finalize()
-	err := reader.WaitForCard()
-	if err != nil {
-		return err
-	}
-	//status, _ := card.Status()
-	//fmt.Printf("Card Status: %s\n", status)
-	aid := "D3 92 f0 00 26 01 00 00 00 01"
-	apdu := "00 A4 04 0C" + " 0A " + aid
-	reader.Tx(apdu)
-
-	if pin != nil {
-        //tx(card, "00 a4 02 0C 02 00 18") // VERIFY EF for AUTH
-		reader.Tx("00 a4 02 0C 02 00 1B") // VERIFY EF for SIGN
-		reader.Tx("00 20 00 80")
-		apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
-		reader.Tx(apdu)
-    }
-
-	reader.Tx("00 A4 02 0C 02 " + efid)
-	data := reader.ReadBinary(4)
-	if len(data) != 4 {
-		fmt.Printf("エラー: Unkown\n")
-		return errors.New("error")
-	}
-	data_size := uint16(data[2]) << 8 | uint16(data[3])
-	data = reader.ReadBinary(4 + data_size)
-
-	/*
-	fp, _ := os.Create("cert.der")
+func printCert(c *cli.Context, cert *x509.Certificate) {
+	form := c.String("form")
+	if form == "pem" {
+		var block pem.Block
+		block.Type = "CERTIFICATE"
+		block.Bytes = cert.Raw
+		pem.Encode(os.Stdout, &block)
+    } else if form == "der" {
+		fmt.Println("not implement yet")
+		/*
+    fp, _ := os.Create("cert.der")
 	defer fp.Close()
 	fp.Write(data)
-    */
-
-	form := c.String("form")
-	if form == "ssh" {
-		cert, _ := x509.ParseCertificate(data)
+*/
+    } else if form == "ssh" {
 		rsaPubkey := cert.PublicKey.(*rsa.PublicKey)
 		sshPubkey, _ := ssh.EncodePublicKey(*rsaPubkey, "")
 		fmt.Println(sshPubkey)
-	}else{
-		var block pem.Block
-		block.Type = "CERTIFICATE"
-		block.Bytes = data
-		pem.Encode(os.Stdout, &block)
+	} else {
+		fmt.Printf("Subject: %s\n", libmyna.Name2String(cert.Subject))
+		fmt.Printf("Issuer: %s\n", libmyna.Name2String(cert.Issuer))
 	}
-
-	return nil
 }
 
 func showAuthCert(c *cli.Context) error {
-	showCert(c, "00 0A", nil)
+	cert, err := libmyna.GetCert(c, "00 0A", "")
+	if err != nil {
+		return err
+	}
+	printCert(c, cert)
 	return nil
 }
 
 func showAuthCACert(c *cli.Context) error {
-	showCert(c, "00 0B", nil)
+	cert, err := libmyna.GetCert(c, "00 0B", "")
+	if err != nil {
+		return err
+	}
+	printCert(c, cert)
 	return nil
 }
 
@@ -259,18 +236,26 @@ func showSignCert(c *cli.Context) error {
 		input, _ := gopass.GetPasswdMasked()
 		pin = string(input)
 	}
-	pass := []byte(strings.ToUpper(pin))
+	pass := strings.ToUpper(pin)
 
-	if len(pin) < 6 || 16 < len(pin) {
+	if len(pass) < 6 || 16 < len(pass) {
 		fmt.Printf("エラー: 署名用パスワード(6-16桁)を入力してください。\n")
 		return nil
 	}
-	showCert(c, "00 01", pass)
+	cert, err := libmyna.GetCert(c, "00 01", pass)
+	if err != nil {
+		return err
+	}
+	printCert(c, cert)
 	return nil
 }
 
 func showSignCACert(c *cli.Context) error {
-	showCert(c, "00 02", nil)
+	cert, err := libmyna.GetCert(c, "00 02", "")
+	if err != nil {
+		return err
+	}
+	printCert(c, cert)
 	return nil
 }
 

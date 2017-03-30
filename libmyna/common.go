@@ -10,11 +10,12 @@ import (
 	"hash"
 	"io/ioutil"
 	"crypto/sha256"
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/asn1"
 	"github.com/urfave/cli"
-	_ "github.com/fullsailor/pkcs7"
+
 )
 
 func ToBytes(s string) []byte {
@@ -202,3 +203,44 @@ func Sign(c *cli.Context, pin string, in string, out string) error {
 	return nil
 }
 
+func Name2String(name pkix.Name) string {
+	var dn []string
+	for _, rdns := range name.ToRDNSequence() {
+		for _, rdn := range rdns {
+			value := rdn.Value.(string)
+			dn = append(dn, fmt.Sprintf("%s=%s", rdn.Type.String(), value))
+		}
+	}
+	return strings.Join(dn, "/")
+}
+
+func GetCert(c *cli.Context, efid string, pin string) (*x509.Certificate, error) {
+	reader, err := Ready(c)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Finalize()
+	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") // JPKI
+	reader.SelectEF(efid)
+
+	if pin != "" {
+		reader.SelectEF("00 1B") // VERIFY EF for SIGN
+		sw1, sw2 := reader.Verify(pin)
+		if ! (sw1 == 0x90 && sw2 == 0x00) {
+			return nil, errors.New("暗証番号が間違っています。")
+		}
+    }
+
+	reader.SelectEF(efid)
+	data := reader.ReadBinary(4)
+	if len(data) != 4 {
+		return nil, errors.New("ReadBinary: invalid length")
+	}
+	data_size := uint16(data[2]) << 8 | uint16(data[3])
+	data = reader.ReadBinary(4 + data_size)
+	cert, err := x509.ParseCertificate(data)
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
+}
