@@ -16,7 +16,7 @@ golang 1.6 or later
 
 ## Usage
 
-See myna --help and myna <subcommand> --help
+See myna --help and myna subcommand --help
 
 ~~~
 % myna --help
