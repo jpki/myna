@@ -122,10 +122,14 @@ func main() {
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "pin",
-					Usage: "暗証番号(4桁)",
+					Usage: "署名用パスワード(6-16桁)",
 				},
 				cli.StringFlag{
-					Name:  "in",
+					Name:  "in,i",
+					Usage: "署名対象ファイル",
+				},
+				cli.StringFlag{
+					Name:  "out,o",
 					Usage: "署名対象ファイル",
 				},
 			},
@@ -136,7 +140,11 @@ func main() {
 			Subcommands: toolCommands,
 		},
 	}
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "エラー: %s\n", err)
+		os.Exit(1)
+	}
 }
 
 func checkCard(c *cli.Context) error {
@@ -317,19 +325,21 @@ func sign(c *cli.Context) error {
 	pass := strings.ToUpper(pin)
 
 	if len(pin) < 6 || 16 < len(pin) {
-		fmt.Printf("エラー: 署名用パスワード(6-16桁)を入力してください。\n")
-		return nil
+		return errors.New("署名用パスワード(6-16桁)を入力してください。")
 	}
-
 	in := c.String("in")
 	if in == "" {
-		return errors.New("エラー: 署名対象ファイルを指定してください。")
+		return errors.New("署名対象ファイルを指定してください。")
 	}
 
-	err := libmyna.Sign(c, pass, in, "out.txt")
+	out := c.String("out")
+	if out == "" {
+		return errors.New("出力ファイルを指定してください。")
+	}
+
+	err := libmyna.Sign(c, pass, in, out)
 	if err != nil {
-		fmt.Printf("エラー: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	return nil
 }

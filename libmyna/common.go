@@ -2,18 +2,16 @@ package libmyna
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/hamano/pkcs7"
 	"github.com/urfave/cli"
-	"hash"
-	"io"
 	"io/ioutil"
-	"os"
 	"strings"
 )
 
@@ -143,12 +141,18 @@ func GetPinStatus(c *cli.Context) (map[string]int, error) {
 	return status, nil
 }
 
-func DigestInfo(md hash.Hash) []byte {
-	var prefix = []byte{0x30, 0x31, 0x30, 0x0d, // SEQUENCE { SEQUENCE {
-		0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, // sha-256
+func makeDigestInfo(hash []byte) []byte {
+	var prefix = []byte{0x30, 0x21, 0x30, 0x09, // SEQUENCE { SEQUENCE {
+		0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, // sha-1
 		0x05, 0x00, // NULL }
-		0x04, 0x20} // OCTET STRING
-	return append(prefix, md.Sum(nil)...)
+		0x04, 0x14} // OCTET STRING
+	/*
+		var prefixSHA256 = []byte{0x30, 0x31, 0x30, 0x0d, // SEQUENCE { SEQUENCE {
+			0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, // sha-256
+			0x05, 0x00, // NULL }
+			0x04, 0x20} // OCTET STRING
+	*/
+	return append(prefix, hash...)
 }
 
 type ContentInfo struct {
@@ -157,15 +161,30 @@ type ContentInfo struct {
 }
 
 func Sign(c *cli.Context, pin string, in string, out string) error {
-	inFile, err := os.Open(in)
+	rawContent, err := ioutil.ReadFile(in)
 	if err != nil {
 		return err
 	}
-	digest := sha256.New()
-	if _, err := io.Copy(digest, inFile); err != nil {
+
+	toBeSigned, err := pkcs7.NewSignedData(rawContent)
+	if err != nil {
 		return err
 	}
-	inFile.Close()
+
+	// 署名用証明書の取得
+	cert, err := GetCert(c, "00 01", pin)
+	if err != nil {
+		return err
+	}
+	attrs, hashed, err := toBeSigned.HashAttributes(crypto.SHA1, pkcs7.SignerInfoConfig{})
+	if err != nil {
+		return err
+	}
+
+	ias, err := pkcs7.Cert2issuerAndSerial(cert)
+	if err != nil {
+		return err
+	}
 
 	reader, err := Ready(c)
 	if err != nil {
@@ -179,26 +198,33 @@ func Sign(c *cli.Context, pin string, in string, out string) error {
 		return errors.New("暗証番号が間違っています。")
 	}
 	reader.SelectEF("00 1A") // Select SIGN EF
-	digestInfo := DigestInfo(digest)
+	digestInfo := makeDigestInfo(hashed)
 
-	signed, err := reader.Signature(digestInfo)
+	signature, err := reader.Signature(digestInfo)
 	if err != nil {
 		return err
 	}
-	buf, err := ioutil.ReadFile(in)
-	content, err := asn1.Marshal(buf)
-	contentInfo := ContentInfo{
-		ContentType: asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 7, 1},
-		Content:     asn1.RawValue{Class: 2, Tag: 0, Bytes: content, IsCompound: true},
+
+	oidDigestAlgorithmSHA1 := asn1.ObjectIdentifier{1, 3, 14, 3, 2, 26}
+	oidEncryptionAlgorithmRSA := asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 1}
+	signerInfo := pkcs7.SignerInfo{
+		AuthenticatedAttributes:   attrs,
+		DigestAlgorithm:           pkix.AlgorithmIdentifier{Algorithm: oidDigestAlgorithmSHA1},
+		DigestEncryptionAlgorithm: pkix.AlgorithmIdentifier{Algorithm: oidEncryptionAlgorithmRSA},
+		IssuerAndSerialNumber:     ias,
+		EncryptedDigest:           signature,
+		Version:                   1,
 	}
-	digAlg := pkix.AlgorithmIdentifier{
-		Algorithm: asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}, //SHA256
+	toBeSigned.AddSignerInfo(cert, signerInfo)
+	signed, err := toBeSigned.Finish()
+	if err != nil {
+		return err
 	}
-	fmt.Printf("content: % X\n", content)
-	fmt.Printf("digAlg: %v\n", digAlg)
-	fmt.Printf("sha256: % X\n", digestInfo)
-	fmt.Printf("signed: % X\n", signed)
-	fmt.Printf("contentInfo: %v\n", contentInfo)
+
+	err = ioutil.WriteFile(out, signed, 0664)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
