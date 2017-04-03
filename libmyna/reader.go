@@ -62,8 +62,11 @@ func (self *Reader) WaitForCard() error {
 			return fmt.Errorf("エラー: %s\n", err)
 		}
 		if rs[0].EventState&scard.StatePresent != 0 {
-			card, _ := self.ctx.Connect(
+			card, err := self.ctx.Connect(
 				self.name, scard.ShareExclusive, scard.ProtocolAny)
+			if err != nil {
+				return err
+			}
 			self.card = card
 			return nil
 		}
