@@ -1,22 +1,19 @@
-myna - MyNumber Card Utility
+myna - マイナンバーカード・ユーティリティ
 ==============================================
 
 [![Build Status](https://travis-ci.org/jpki/myna.svg?branch=master)](https://travis-ci.org/jpki/myna)
 [![codebeat](https://codebeat.co/badges/0bbab46f-5683-4848-92e7-eed36e660b0f)](https://codebeat.co/projects/github-com-jpki-myna-master)
 [![Go Report Card](https://goreportcard.com/badge/jpki/myna)](https://goreportcard.com/report/jpki/myna)
 
-## Build requirements
-golang 1.6 or later
+## サポートOS
 
-## Install myna command
+- Windows
+- OS X
+- Linux
 
-~~~
-% go get -u -v github.com/jpki/myna
-~~~
+## 使い方
 
-## Usage
-
-See myna --help and myna subcommand --help
+myna --help や myna `サブコマンド` --help を見てください。
 
 ~~~
 % myna --help
@@ -30,21 +27,30 @@ COMMANDS:
      tool          種々様々なツール
 ~~~
 
+## ビルド環境
 
-### Build Requirements for Debian/Ubuntu
+golang 1.6 or later
+
+## mynaコマンドのビルド・インストール
 
 ~~~
-# apt-get install golang libpcsclite-dev
+% go get -u github.com/jpki/myna
 ~~~
 
-### Set GOPATH
+### 依存パッケージのインストール(Debian/Ubuntu)
+
 ~~~
-$ export GOPATH=~/go
-$ export PATH=$GOPATH/bin:$PATH
+# apt-get install libpcsclite-dev
 ~~~
 
-### Build Requirements for Windows
+### 依存パッケージのインストール(RHEL/CentOS)
+
+~~~
+# yum install pcsc-lite-devel
+~~~
+
+### Windowsでビルド
 
 - Install golang and git
 
-### Build Requirements for OSX
+### OSXでビルド

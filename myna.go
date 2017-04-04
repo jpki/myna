@@ -249,8 +249,7 @@ func showSignCert(c *cli.Context) error {
 	pass := strings.ToUpper(pin)
 
 	if len(pass) < 6 || 16 < len(pass) {
-		fmt.Printf("エラー: 署名用パスワード(6-16桁)を入力してください。\n")
-		return nil
+		return errors.New("署名用パスワード(6-16桁)を入力してください。")
 	}
 	cert, err := libmyna.GetCert(c, "00 01", pass)
 	if err != nil {
@@ -276,14 +275,12 @@ func showCardInfo(c *cli.Context) error {
 		pin, _ = gopass.GetPasswdMasked()
 	}
 	if len(pin) != 4 {
-		fmt.Printf("エラー: 暗証番号(4桁)を入力してください。\n")
-		return nil
+		return errors.New("暗証番号(4桁)を入力してください。")
 	}
 
 	info, err := libmyna.GetCardInfo(c, string(pin))
 	if err != nil {
-		fmt.Printf("エラー: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	if c.String("form") == "json" {
