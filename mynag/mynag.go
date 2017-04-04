@@ -58,23 +58,23 @@ func mynag(c *cli.Context) error {
 
 	// create button box
 	boxButton := gtk.NewVBox(false, 1)
-	buttonTest := gtk.NewToggleButtonWithLabel("動作確認")
+	buttonTest := gtk.NewButtonWithLabel("動作確認")
 	buttonTest.Clicked(onTest, c)
 	boxButton.Add(buttonTest)
 
-	buttonCardInfo := gtk.NewToggleButtonWithLabel("券面事項確認")
+	buttonCardInfo := gtk.NewButtonWithLabel("券面事項確認")
 	buttonCardInfo.Clicked(onCardInfo, c)
 	boxButton.Add(buttonCardInfo)
 
-	buttonShowCert := gtk.NewToggleButtonWithLabel("証明書表示")
+	buttonShowCert := gtk.NewButtonWithLabel("証明書表示")
 	buttonShowCert.Clicked(onShowCert, c)
 	boxButton.Add(buttonShowCert)
 
-	buttonSign := gtk.NewToggleButtonWithLabel("署名")
+	buttonSign := gtk.NewButtonWithLabel("署名")
 	buttonSign.Clicked(onSign, c)
 	boxButton.Add(buttonSign)
 
-	buttonPinStatus := gtk.NewToggleButtonWithLabel("PINステータス")
+	buttonPinStatus := gtk.NewButtonWithLabel("PINステータス")
 	buttonPinStatus.Clicked(onPinStatus, c)
 	boxButton.Add(buttonPinStatus)
 
@@ -324,5 +324,78 @@ func selectCert() int {
 
 func onSign(ctx *glib.CallbackContext) {
 	//c := ctx.Data().(*cli.Context)
-	showErrorMsg("署名")
+	dialog := gtk.NewDialog()
+	defer dialog.Destroy()
+	dialog.SetTitle("署名")
+
+	inputEntry := gtk.NewEntry()
+	inputEntry.SetWidthChars(64)
+	inputEntry.SetEditable(false)
+	outputEntry := gtk.NewEntry()
+	outputEntry.SetWidthChars(64)
+	outputEntry.SetEditable(false)
+
+	vbox := dialog.GetVBox()
+	inputButton := gtk.NewButtonWithLabel("入力ファイル")
+	inputButton.Clicked(func() {
+		filedialog := gtk.NewFileChooserDialog(
+			"ファイル選択",
+			nil,
+			gtk.FILE_CHOOSER_ACTION_OPEN,
+			gtk.STOCK_OK,
+			gtk.RESPONSE_ACCEPT)
+		filedialog.Response(func() {
+			filename := filedialog.GetFilename()
+			inputEntry.SetText(filename)
+			filedialog.Destroy()
+			if outputEntry.GetText() == "" {
+				outputEntry.SetText(filename + ".p7s")
+			}
+		})
+		filedialog.Run()
+	})
+	row := gtk.NewHBox(false, 1)
+	row.Add(inputEntry)
+	row.Add(inputButton)
+	vbox.Add(row)
+
+	outputButton := gtk.NewButtonWithLabel("出力ファイル")
+	outputButton.Clicked(func() {
+		filedialog := gtk.NewFileChooserDialog(
+			"ファイル選択",
+			nil,
+			gtk.FILE_CHOOSER_ACTION_SAVE,
+			gtk.STOCK_OK,
+			gtk.RESPONSE_ACCEPT)
+		filedialog.Response(func() {
+			outputEntry.SetText(filedialog.GetFilename())
+			filedialog.Destroy()
+		})
+		filedialog.Run()
+
+	})
+	row = gtk.NewHBox(false, 1)
+	row.Add(outputEntry)
+	row.Add(outputButton)
+	vbox.Add(row)
+
+	dialog.AddButton(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL)
+	dialog.AddButton("署名", gtk.RESPONSE_OK)
+	dialog.ShowAll()
+	res := dialog.Run()
+	if res != gtk.RESPONSE_OK {
+		return
+	}
+	inputFile := inputEntry.GetText()
+	if inputFile == "" {
+		showErrorMsg("入力ファイルを指定してください")
+		return
+	}
+	outputFile := outputEntry.GetText()
+	if outputFile == "" {
+		showErrorMsg("出力ファイルを指定してください")
+		return
+	}
+	fmt.Printf("input: %s\n", inputFile)
+	fmt.Printf("output: %s\n", outputFile)
 }
