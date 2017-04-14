@@ -17,7 +17,7 @@ import (
 func main() {
 	app := cli.NewApp()
 	app.Name = "mynag"
-	app.Usage = "マイナクライアント(GUI)"
+	app.Description = "マイナクライアント(GUI)"
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
 	app.Version = libmyna.Version
@@ -35,7 +35,7 @@ func mynag(c *cli.Context) error {
 	gtk.Init(&os.Args)
 	window := gtk.NewWindow(gtk.WINDOW_TOPLEVEL)
 	window.SetPosition(gtk.WIN_POS_CENTER)
-	window.SetTitle(c.App.Usage)
+	window.SetTitle(c.App.Description)
 	window.SetIconName("application-certificate")
 	window.Connect("destroy", func(ctx *glib.CallbackContext) {
 		gtk.MainQuit()
@@ -105,16 +105,27 @@ func onAbout(ctx *glib.CallbackContext) {
 	c := ctx.Data().(*cli.Context)
 	dialog := gtk.NewAboutDialog()
 	dialog.SetName("About")
-	dialog.SetProgramName(c.App.Name)
+	dialog.SetProgramName(c.App.Description)
 	dialog.SetAuthors([]string{c.App.Author})
-	//dialog.SetLicense("ライセンス")
+	comments := `
+このソフトウェアはMITライセンスで配布されます。
+GTK+ は LGPLライセンス
+mattn ware の go-gtk
+かわいいウサギのイラストはいらすとやの著作物です
+`
+	dialog.SetComments(comments)
+	dialog.SetWebsite("https://github.com/jpki/myna")
+	license, _ := Asset("../LICENSE")
+	dialog.SetLicense(string(license))
 	dialog.SetWrapLicense(true)
+	imageData, _ := Asset("usagi.png")
+	imageBuf, _ := gdkpixbuf.NewPixbufFromData(imageData)
+	dialog.SetLogo(imageBuf)
 	dialog.Run()
 	dialog.Destroy()
 }
 
 func onQuit(ctx *glib.CallbackContext) {
-	_ = ctx.Data().(*cli.Context)
 	gtk.MainQuit()
 }
 
@@ -219,7 +230,11 @@ func onCardInfo(ctx *glib.CallbackContext) {
 
 func onPinStatus(ctx *glib.CallbackContext) {
 	c := ctx.Data().(*cli.Context)
-	status, _ := libmyna.GetPinStatus(c)
+	status, err := libmyna.GetPinStatus(c)
+	if err != nil {
+		showErrorMsg(err.Error())
+		return
+	}
 	var msg string
 	msg += fmt.Sprintf("認証用PIN: のこり%d回\n", status["auth"])
 	msg += fmt.Sprintf("署名用PIN: のこり%d回\n", status["sign"])
@@ -323,7 +338,7 @@ func selectCert() int {
 }
 
 func onSign(ctx *glib.CallbackContext) {
-	//c := ctx.Data().(*cli.Context)
+	c := ctx.Data().(*cli.Context)
 	dialog := gtk.NewDialog()
 	defer dialog.Destroy()
 	dialog.SetTitle("署名")
@@ -343,16 +358,18 @@ func onSign(ctx *glib.CallbackContext) {
 			nil,
 			gtk.FILE_CHOOSER_ACTION_OPEN,
 			gtk.STOCK_OK,
-			gtk.RESPONSE_ACCEPT)
-		filedialog.Response(func() {
+			gtk.RESPONSE_OK,
+			gtk.STOCK_CANCEL,
+			gtk.RESPONSE_CANCEL)
+		res := filedialog.Run()
+		if res == gtk.RESPONSE_OK {
 			filename := filedialog.GetFilename()
 			inputEntry.SetText(filename)
-			filedialog.Destroy()
 			if outputEntry.GetText() == "" {
 				outputEntry.SetText(filename + ".p7s")
 			}
-		})
-		filedialog.Run()
+		}
+		filedialog.Destroy()
 	})
 	row := gtk.NewHBox(false, 1)
 	row.Add(inputEntry)
@@ -366,13 +383,14 @@ func onSign(ctx *glib.CallbackContext) {
 			nil,
 			gtk.FILE_CHOOSER_ACTION_SAVE,
 			gtk.STOCK_OK,
-			gtk.RESPONSE_ACCEPT)
-		filedialog.Response(func() {
+			gtk.RESPONSE_OK,
+			gtk.STOCK_CANCEL,
+			gtk.RESPONSE_CANCEL)
+		res := filedialog.Run()
+		if res == gtk.RESPONSE_OK {
 			outputEntry.SetText(filedialog.GetFilename())
-			filedialog.Destroy()
-		})
-		filedialog.Run()
-
+		}
+		filedialog.Destroy()
 	})
 	row = gtk.NewHBox(false, 1)
 	row.Add(outputEntry)
@@ -386,16 +404,25 @@ func onSign(ctx *glib.CallbackContext) {
 	if res != gtk.RESPONSE_OK {
 		return
 	}
-	inputFile := inputEntry.GetText()
-	if inputFile == "" {
+	inFile := inputEntry.GetText()
+	if inFile == "" {
 		showErrorMsg("入力ファイルを指定してください")
 		return
 	}
-	outputFile := outputEntry.GetText()
-	if outputFile == "" {
+	outFile := outputEntry.GetText()
+	if outFile == "" {
 		showErrorMsg("出力ファイルを指定してください")
 		return
 	}
-	fmt.Printf("input: %s\n", inputFile)
-	fmt.Printf("output: %s\n", outputFile)
+	pass := popupPasswordPrompt()
+	if pass == "" {
+		return
+	}
+
+	err := libmyna.Sign(c, pass, inFile, outFile)
+	if err != nil {
+		showErrorMsg(err.Error())
+		return
+	}
+	showMsg("署名完了")
 }
