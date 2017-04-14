@@ -10,6 +10,7 @@ myna - マイナンバーカード・ユーティリティ
 - Windows
 - OS X
 - Linux
+- FreeBSD
 
 ## 使い方
 
@@ -54,3 +55,12 @@ golang 1.6 or later
 - Install golang and git
 
 ### OSXでビルド
+
+### FreeBSDでビルド
+
+依存パッケージのインストール
+
+~~~
+# pkg install pcsc-lite ccid pkgconf
+~~~
+
