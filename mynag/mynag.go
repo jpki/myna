@@ -104,8 +104,8 @@ func mynag(c *cli.Context) error {
 func onAbout(ctx *glib.CallbackContext) {
 	c := ctx.Data().(*cli.Context)
 	dialog := gtk.NewAboutDialog()
-	dialog.SetName("About")
-	dialog.SetProgramName(c.App.Description)
+	dialog.SetProgramName(c.App.Name)
+	dialog.SetVersion(c.App.Version)
 	dialog.SetAuthors([]string{c.App.Author})
 	comments := `
 このソフトウェアはMITライセンスで配布されます。
