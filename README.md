@@ -21,6 +21,7 @@ myna --help や myna `サブコマンド` --help を見てください。
 COMMANDS:
      card          券面事項を表示
      cert          証明書を表示
+     sign          CMS署名
      pin_status    PINステータスを表示
 ~~~
 
