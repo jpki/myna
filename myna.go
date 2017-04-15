@@ -189,8 +189,12 @@ func printCert(c *cli.Context, cert *x509.Certificate) {
 		sshPubkey, _ := ssh.EncodePublicKey(*rsaPubkey, "")
 		fmt.Println(sshPubkey)
 	} else {
+		fmt.Printf("SerialNumber: %s\n", cert.SerialNumber)
 		fmt.Printf("Subject: %s\n", libmyna.Name2String(cert.Subject))
 		fmt.Printf("Issuer: %s\n", libmyna.Name2String(cert.Issuer))
+		fmt.Printf("NotBefore: %s\n", cert.NotBefore)
+		fmt.Printf("NotAfter: %s\n", cert.NotAfter)
+		fmt.Printf("KeyUsage: %v\n", cert.KeyUsage)
 	}
 }
 
