@@ -52,7 +52,9 @@ golang 1.6 or later
 
 ### Windowsでビルド
 
-- Install golang and git
+~~~
+PS> choco install -y git golang
+~~~
 
 ### OSXでビルド
 
@@ -63,4 +65,3 @@ golang 1.6 or later
 ~~~
 # pkg install pcsc-lite ccid pkgconf
 ~~~
-

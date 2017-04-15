@@ -16,18 +16,6 @@ import (
 	"strings"
 )
 
-var globalFlags = []cli.Flag{
-	cli.BoolFlag{
-		Name:  "debug, d",
-		Usage: "詳細出力",
-	},
-}
-
-var certFormFlag = cli.StringFlag{
-	Name:  "form",
-	Usage: "出力形式(text,pem,der,ssh)",
-}
-
 func main() {
 	app := cli.NewApp()
 	app.Name = "myna"
@@ -35,7 +23,12 @@ func main() {
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
 	app.Version = libmyna.Version
-	app.Flags = globalFlags
+	app.Flags = []cli.Flag{
+		cli.BoolFlag{
+			Name:  "debug, d",
+			Usage: "詳細出力",
+		},
+	}
 	app.Commands = []cli.Command{
 		{
 			Name:   "test",
@@ -59,46 +52,15 @@ func main() {
 			},
 		},
 		{
+			Name:        "cert",
+			Usage:       "証明書を表示",
+			Subcommands: certCommands,
+		},
+		{
 			Name:   "pin_status",
 			Usage:  "PINステータス",
 			Action: showPinStatus,
 			Before: checkCard,
-		},
-		{
-			Name:   "auth_cert",
-			Usage:  "利用者認証用証明書を表示",
-			Action: showAuthCert,
-			Flags: []cli.Flag{
-				certFormFlag,
-			},
-		},
-		{
-			Name:   "auth_ca_cert",
-			Usage:  "利用者認証用CA証明書を表示",
-			Action: showAuthCACert,
-			Flags: []cli.Flag{
-				certFormFlag,
-			},
-		},
-		{
-			Name:   "sign_cert",
-			Usage:  "署名用証明書を表示",
-			Action: showSignCert,
-			Flags: []cli.Flag{
-				certFormFlag,
-				cli.StringFlag{
-					Name:  "pin",
-					Usage: "署名用パスワード(6-16桁)",
-				},
-			},
-		},
-		{
-			Name:   "sign_ca_cert",
-			Usage:  "署名用CA証明書を表示",
-			Action: showSignCACert,
-			Flags: []cli.Flag{
-				certFormFlag,
-			},
 		},
 		{
 			Name:  "auth_change_pin",
@@ -145,6 +107,50 @@ func main() {
 		fmt.Fprintf(os.Stderr, "エラー: %s\n", err)
 		os.Exit(1)
 	}
+}
+
+var certFormFlag = cli.StringFlag{
+	Name:  "form",
+	Usage: "出力形式(text,pem,der,ssh)",
+}
+
+var certCommands = []cli.Command{
+	{
+		Name:   "auth",
+		Usage:  "利用者認証用証明書を表示",
+		Action: showAuthCert,
+		Flags: []cli.Flag{
+			certFormFlag,
+		},
+	},
+	{
+		Name:   "auth_ca",
+		Usage:  "利用者認証用CA証明書を表示",
+		Action: showAuthCACert,
+		Flags: []cli.Flag{
+			certFormFlag,
+		},
+	},
+	{
+		Name:   "sign",
+		Usage:  "署名用証明書を表示",
+		Action: showSignCert,
+		Flags: []cli.Flag{
+			certFormFlag,
+			cli.StringFlag{
+				Name:  "pin",
+				Usage: "署名用パスワード(6-16桁)",
+			},
+		},
+	},
+	{
+		Name:   "sign_ca",
+		Usage:  "署名用CA証明書を表示",
+		Action: showSignCACert,
+		Flags: []cli.Flag{
+			certFormFlag,
+		},
+	},
 }
 
 func checkCard(c *cli.Context) error {
