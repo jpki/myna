@@ -20,12 +20,8 @@ myna --help や myna `サブコマンド` --help を見てください。
 % myna --help
 COMMANDS:
      card          券面事項を表示
+     cert          証明書を表示
      pin_status    PINステータスを表示
-     sign_cert     署名用証明書を表示
-     sign_ca_cert  署名用CA証明書を表示
-     auth_cert     利用者認証用証明書を表示
-     auth_ca_cert  利用者認証用CA証明書を表示
-     tool          種々様々なツール
 ~~~
 
 ## ビルド環境
