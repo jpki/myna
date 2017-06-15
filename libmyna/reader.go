@@ -1,17 +1,17 @@
 package libmyna
 
 import (
-	"os"
-	"fmt"
-	"time"
 	"errors"
-	"github.com/urfave/cli"
+	"fmt"
 	"github.com/ebfe/scard"
+	"github.com/urfave/cli"
+	"os"
+	"time"
 )
 
 type Reader struct {
-	ctx *scard.Context
-	c *cli.Context
+	ctx  *scard.Context
+	c    *cli.Context
 	name string
 	card *scard.Card
 }
@@ -25,12 +25,11 @@ func NewReader(c *cli.Context) *Reader {
 
 	readers, err := ctx.ListReaders()
 	if err != nil || len(readers) == 0 {
-		fmt.Fprintf(os.Stderr, "エラー: リーダーが見つかりません。\n")
 		return nil
 	}
 	if len(readers) >= 2 {
 		fmt.Fprintf(os.Stderr,
-			"警告: 複数のリーダーが見つかりました。最初のものを使います。\n")
+			"警告: 複数のリーダーが見つかりました。最初のものを使います\n")
 	}
 
 	reader := new(Reader)
@@ -87,7 +86,7 @@ func (self *Reader) SelectDF(id string) bool {
 	bid := ToBytes(id)
 	apdu := "00 A4 04 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
 	sw1, sw2, _ := self.Tx(apdu)
-	if (sw1 == 0x90 && sw2 == 0x00) {
+	if sw1 == 0x90 && sw2 == 0x00 {
 		return true
 	} else {
 		return false
@@ -115,7 +114,7 @@ func (self *Reader) Verify(pin string) (uint8, uint8) {
 		return sw1, sw2
 	} else {
 		if self.c.GlobalBool("debug") {
-			fmt.Fprintf(os.Stderr, "# Verify PIN")
+			fmt.Fprintf(os.Stderr, "# Verify PIN\n")
 		}
 		bpin := []byte(pin)
 		apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
@@ -129,9 +128,9 @@ func (self *Reader) LookupPin() int {
 		fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
 	}
 	sw1, sw2, _ := self.Tx("00 20 00 80")
-	if (sw1 == 0x63) {
+	if sw1 == 0x63 {
 		return int(sw2 & 0x0F)
-	}else{
+	} else {
 		return -1
 	}
 }
@@ -144,17 +143,17 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	cmd := ToBytes(apdu)
 	res, err := card.Transmit(cmd)
 	if err != nil {
-		fmt.Fprintf(os.Stderr,"err: %s\n", err)
+		fmt.Fprintf(os.Stderr, "err: %s\n", err)
 		return 0, 0, nil
 	}
 
 	if self.c.GlobalBool("debug") {
 		for i := 0; i < len(res); i++ {
-			if i % 0x10 == 0 {
+			if i%0x10 == 0 {
 				fmt.Fprintf(os.Stderr, ">")
 			}
 			fmt.Fprintf(os.Stderr, " %02X", res[i])
-			if i % 0x10 == 0x0f {
+			if i%0x10 == 0x0f {
 				fmt.Println()
 			}
 		}
@@ -164,7 +163,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	l := len(res)
 	if l == 2 {
 		return res[0], res[1], nil
-	}else if l > 2 {
+	} else if l > 2 {
 		return res[l-2], res[l-1], res[:l-2]
 	}
 	return 0, 0, nil
@@ -182,13 +181,13 @@ func (self *Reader) ReadBinary(size uint16) []byte {
 	var res []byte
 
 	for pos < size {
-		if size - pos > 0xFF {
+		if size-pos > 0xFF {
 			l = 0
-		}else{
+		} else {
 			l = uint8(size - pos)
 		}
 		apdu = fmt.Sprintf("00 B0 %02X %02X %02X",
-			pos >> 8 & 0xFF, pos & 0xFF, l)
+			pos>>8&0xFF, pos&0xFF, l)
 		sw1, sw2, data := self.Tx(apdu)
 		if sw1 != 0x90 || sw2 != 0x00 {
 			return nil
@@ -206,10 +205,9 @@ func (self *Reader) Signature(data []byte) ([]byte, error) {
 
 	apdu := fmt.Sprintf("80 2a 00 80 %02X % X 00", len(data), data)
 	sw1, sw2, res := self.Tx(apdu)
-	if (sw1 == 0x90 && sw2 == 0x00) {
+	if sw1 == 0x90 && sw2 == 0x00 {
 		return res, nil
 	} else {
 		return nil, fmt.Errorf("署名エラー(%0X, %0X)", sw1, sw2)
 	}
 }
-

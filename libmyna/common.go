@@ -28,7 +28,7 @@ func ToHexString(b []byte) string {
 func Ready(c *cli.Context) (*Reader, error) {
 	reader := NewReader(c)
 	if reader == nil {
-		return nil, errors.New("リーダーが見つかりません。")
+		return nil, errors.New("リーダーが見つかりません")
 	}
 	err := reader.WaitForCard()
 	if err != nil {
@@ -45,12 +45,12 @@ func CheckCard(c *cli.Context) error {
 	defer reader.Finalize()
 	var sw1, sw2 uint8
 	if !reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") {
-		return errors.New("これは個人番号カードではありません。")
+		return errors.New("これは個人番号カードではありません")
 	}
 
 	sw1, sw2 = reader.SelectEF("00 06")
 	if !(sw1 == 0x90 && sw2 == 0x00) {
-		return errors.New("トークン情報を取得できません。")
+		return errors.New("トークン情報を取得できません")
 	}
 
 	var data []byte
@@ -68,7 +68,7 @@ func CheckCard(c *cli.Context) error {
 func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 	reader := NewReader(c)
 	if reader == nil {
-		return nil, errors.New("リーダーが見つかりません。")
+		return nil, errors.New("リーダーが見つかりません")
 	}
 	defer reader.Finalize()
 	err := reader.WaitForCard()
@@ -80,7 +80,7 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 	reader.SelectEF("00 11") // 券面入力補助PIN IEF
 	sw1, sw2 := reader.Verify(pin)
 	if !(sw1 == 0x90 && sw2 == 0x00) {
-		return nil, errors.New("暗証番号が間違っています。")
+		return nil, errors.New("暗証番号が間違っています")
 	}
 	reader.SelectEF("00 01")
 	data := reader.ReadBinary(16)
@@ -195,7 +195,7 @@ func Sign(c *cli.Context, pin string, in string, out string) error {
 	reader.SelectEF("00 1B")                         // IEF for SIGN
 	sw1, sw2 := reader.Verify(pin)
 	if !(sw1 == 0x90 && sw2 == 0x00) {
-		return errors.New("暗証番号が間違っています。")
+		return errors.New("暗証番号が間違っています")
 	}
 	reader.SelectEF("00 1A") // Select SIGN EF
 	digestInfo := makeDigestInfo(hashed)
@@ -264,7 +264,7 @@ func GetCert(c *cli.Context, efid string, pin string) (*x509.Certificate, error)
 		reader.SelectEF("00 1B") // VERIFY EF for SIGN
 		sw1, sw2 := reader.Verify(pin)
 		if !(sw1 == 0x90 && sw2 == 0x00) {
-			return nil, errors.New("暗証番号が間違っています。")
+			return nil, errors.New("暗証番号が間違っています")
 		}
 	}
 
