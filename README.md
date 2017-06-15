@@ -28,6 +28,10 @@ COMMANDS:
      pin_status    PINステータスを表示
 ~~~
 
+## GUI版もあるよ
+
+![mynaqt](mynaqt.png)
+
 ## ビルド環境
 
 golang 1.6 or later
