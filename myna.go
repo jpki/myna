@@ -1,7 +1,5 @@
 package main
 
-import "github.com/jpki/myna/libmyna"
-
 import (
 	"crypto/rsa"
 	"crypto/x509"
@@ -11,8 +9,10 @@ import (
 	"fmt"
 	"github.com/howeyc/gopass"
 	"github.com/ianmcmahon/encoding_ssh"
+	"github.com/jpki/myna/libmyna"
 	"github.com/urfave/cli"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -257,8 +257,8 @@ func showSignCert(c *cli.Context) error {
 		pin = string(input)
 	}
 	pass := strings.ToUpper(pin)
-
-	if len(pass) < 6 || 16 < len(pass) {
+	match, _ := regexp.MatchString("^[A-Z0-9]{6,16}$", pass)
+	if !match {
 		return errors.New("署名用パスワード(6-16桁)を入力してください。")
 	}
 	cert, err := libmyna.GetCert(c, "00 01", pass)
@@ -279,16 +279,18 @@ func showSignCACert(c *cli.Context) error {
 }
 
 func showCardInfo(c *cli.Context) error {
-	pin := []byte(c.String("pin"))
+	pin := c.String("pin")
 	if len(pin) == 0 {
 		fmt.Printf("暗証番号(4桁): ")
-		pin, _ = gopass.GetPasswdMasked()
+		input, _ := gopass.GetPasswdMasked()
+		pin = string(input)
 	}
-	if len(pin) != 4 {
+	match, _ := regexp.MatchString("^\\d{4}$", pin)
+	if !match {
 		return errors.New("暗証番号(4桁)を入力してください。")
 	}
 
-	info, err := libmyna.GetCardInfo(c, string(pin))
+	info, err := libmyna.GetCardInfo(c, pin)
 	if err != nil {
 		return err
 	}
@@ -330,18 +332,18 @@ func sign(c *cli.Context) error {
 		pin = string(input)
 	}
 	pass := strings.ToUpper(pin)
-
-	if len(pin) < 6 || 16 < len(pin) {
-		return errors.New("署名用パスワード(6-16桁)を入力してください。")
+	match, _ := regexp.MatchString("^[A-Z0-9]{6,16}$", pass)
+	if !match {
+		return errors.New("署名用パスワード(6-16桁)を入力してください")
 	}
 	in := c.String("in")
 	if in == "" {
-		return errors.New("署名対象ファイルを指定してください。")
+		return errors.New("署名対象ファイルを指定してください")
 	}
 
 	out := c.String("out")
 	if out == "" {
-		return errors.New("出力ファイルを指定してください。")
+		return errors.New("出力ファイルを指定してください")
 	}
 
 	err := libmyna.Sign(c, pass, in, out)
