@@ -11,6 +11,9 @@ myna - マイナンバーカード・ユーティリティ
 - OS X
 - Linux
 - FreeBSD
+## ダウンロード
+
+<https://github.com/jpki/myna/releases>
 
 ## 使い方
 

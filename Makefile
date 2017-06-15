@@ -9,7 +9,7 @@ win:
 	GOOS=windows GOARCH=amd64 go build -o myna.exe
 
 osx:
-	GOOS=darwin GOARCH=386 go build -o myna
+	GOOS=darwin GOARCH=amd64 go build -o myna
 
 clean:
 	rm -rf myna myna.exe
