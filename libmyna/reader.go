@@ -79,6 +79,14 @@ func (self *Reader) SelectAP(aid string) bool {
 	return self.SelectDF(aid)
 }
 
+func (self *Reader) SelectCardAP() bool {
+	return self.SelectDF("D3 92 10 00 31 00 01 01 04 08")
+}
+
+func (self *Reader) SelectJPKIAP() bool {
+	return self.SelectDF("D3 92 f0 00 26 01 00 00 00 01")
+}
+
 func (self *Reader) SelectDF(id string) bool {
 	if self.c.GlobalBool("debug") {
 		fmt.Fprintf(os.Stderr, "# Select DF\n")
@@ -103,6 +111,18 @@ func (self *Reader) SelectEF(id string) (uint8, uint8) {
 	return sw1, sw2
 }
 
+func (self *Reader) LookupPin() int {
+	if self.c.GlobalBool("debug") {
+		fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
+	}
+	sw1, sw2, _ := self.Tx("00 20 00 80")
+	if sw1 == 0x63 {
+		return int(sw2 & 0x0F)
+	} else {
+		return -1
+	}
+}
+
 func (self *Reader) Verify(pin string) (uint8, uint8) {
 	var apdu string
 	if pin == "" {
@@ -123,15 +143,18 @@ func (self *Reader) Verify(pin string) (uint8, uint8) {
 	}
 }
 
-func (self *Reader) LookupPin() int {
+func (self *Reader) ChangePin(pin string) bool {
+	var apdu string
 	if self.c.GlobalBool("debug") {
-		fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
+		fmt.Fprintf(os.Stderr, "# Change PIN\n")
 	}
-	sw1, sw2, _ := self.Tx("00 20 00 80")
-	if sw1 == 0x63 {
-		return int(sw2 & 0x0F)
+	bpin := []byte(pin)
+	apdu = fmt.Sprintf("00 24 01 80 %02X % X", len(bpin), bpin)
+	sw1, sw2, _ := self.Tx(apdu)
+	if sw1 == 0x90 && sw2 == 0x00 {
+		return true
 	} else {
-		return -1
+		return false
 	}
 }
 

@@ -63,23 +63,8 @@ func main() {
 			Before: checkCard,
 		},
 		{
-			Name:  "auth_change_pin",
-			Usage: "利用者認証用PINを変更",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "pin",
-					Usage: "暗証番号(4桁)",
-				},
-				cli.StringFlag{
-					Name:  "newpin",
-					Usage: "新しい暗証番号(4桁)",
-				},
-			},
-			Action: changeAuthPIN,
-		},
-		{
 			Name:   "sign",
-			Usage:  "署名用証明書で署名",
+			Usage:  "CMS署名",
 			Action: sign,
 			Flags: []cli.Flag{
 				cli.StringFlag{
@@ -97,7 +82,12 @@ func main() {
 			},
 		},
 		{
-			Name:        "tool",
+			Name:        "change_pin",
+			Usage:       "PIN変更",
+			Subcommands: changePinCommands,
+		},
+		{
+			Name:        "misc",
 			Usage:       "種々様々なツール",
 			Subcommands: toolCommands,
 		},
@@ -216,39 +206,6 @@ func showAuthCACert(c *cli.Context) error {
 	return nil
 }
 
-func changeAuthPIN(c *cli.Context) error {
-	reader := libmyna.NewReader(c)
-	if reader == nil {
-		os.Exit(1)
-	}
-	defer reader.Finalize()
-	reader.WaitForCard()
-
-	pin := c.String("pin")
-	if len(pin) == 0 {
-		fmt.Printf("認証用PIN(4桁): ")
-		input, _ := gopass.GetPasswdMasked()
-		pin = string(input)
-	}
-
-	newpin := c.String("newpin")
-	if len(newpin) == 0 {
-		fmt.Printf("新しい認証用PIN(4桁): ")
-		input, _ := gopass.GetPasswdMasked()
-		newpin = string(input)
-	}
-
-	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01")
-	reader.SelectEF("00 18")
-	apdu := "00 20 00 80"
-	reader.Tx(apdu)
-	apdu = "00 20 00 80 " + fmt.Sprintf("%02X % X", len(pin), pin)
-	reader.Tx(apdu)
-	apdu = "00 24 01 80 " + fmt.Sprintf("%02X % X", len(newpin), newpin)
-	reader.Tx(apdu)
-	return nil
-}
-
 func showSignCert(c *cli.Context) error {
 	pin := c.String("pin")
 	if len(pin) == 0 {
@@ -315,9 +272,9 @@ func showPinStatus(c *cli.Context) error {
 		return err
 	}
 
+	fmt.Printf("券面入力補助PIN: のこり%d回\n", status["card"])
 	fmt.Printf("認証用PIN: のこり%d回\n", status["auth"])
 	fmt.Printf("署名用PIN: のこり%d回\n", status["sign"])
-	fmt.Printf("券面入力補助PIN: のこり%d回\n", status["card"])
 	fmt.Printf("謎のPIN1: のこり%d回\n", status["unknown1"])
 	fmt.Printf("謎のPIN2: のこり%d回\n", status["unknown2"])
 

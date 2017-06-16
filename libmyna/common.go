@@ -44,7 +44,7 @@ func CheckCard(c *cli.Context) error {
 	}
 	defer reader.Finalize()
 	var sw1, sw2 uint8
-	if !reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") {
+	if !reader.SelectJPKIAP() {
 		return errors.New("これは個人番号カードではありません")
 	}
 
@@ -76,7 +76,7 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 		return nil, err
 	}
 
-	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08")
+	reader.SelectCardAP()
 	reader.SelectEF("00 11") // 券面入力補助PIN IEF
 	sw1, sw2 := reader.Verify(pin)
 	if !(sw1 == 0x90 && sw2 == 0x00) {
@@ -120,15 +120,15 @@ func GetPinStatus(c *cli.Context) (map[string]int, error) {
 
 	status := map[string]int{}
 
-	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") // 公的個人認証
-	reader.SelectEF("00 18")                         // IEF for AUTH
+	reader.SelectJPKIAP()
+	reader.SelectEF("00 18") // IEF for AUTH
 	status["auth"] = reader.LookupPin()
 
 	reader.SelectEF("00 1B") // IEF for SIGN
 	status["sign"] = reader.LookupPin()
 
-	reader.SelectAP("D3 92 10 00 31 00 01 01 04 08") // 券面入力補助AP
-	reader.SelectEF("00 11")                         // IEF
+	reader.SelectCardAP()
+	reader.SelectEF("00 11") // IEF
 	status["card"] = reader.LookupPin()
 
 	reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
@@ -191,8 +191,8 @@ func Sign(c *cli.Context, pin string, in string, out string) error {
 		return err
 	}
 	defer reader.Finalize()
-	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") // JPKI
-	reader.SelectEF("00 1B")                         // IEF for SIGN
+	reader.SelectJPKIAP()
+	reader.SelectEF("00 1B") // IEF for SIGN
 	sw1, sw2 := reader.Verify(pin)
 	if !(sw1 == 0x90 && sw2 == 0x00) {
 		return errors.New("暗証番号が間違っています")
@@ -257,7 +257,7 @@ func GetCert(c *cli.Context, efid string, pin string) (*x509.Certificate, error)
 		return nil, err
 	}
 	defer reader.Finalize()
-	reader.SelectAP("D3 92 f0 00 26 01 00 00 00 01") // JPKI
+	reader.SelectJPKIAP()
 	reader.SelectEF(efid)
 
 	if pin != "" {
@@ -280,4 +280,73 @@ func GetCert(c *cli.Context, efid string, pin string) (*x509.Certificate, error)
 		return nil, err
 	}
 	return cert, nil
+}
+
+func ChangePinCard(c *cli.Context, pin string, newpin string) error {
+	reader, err := Ready(c)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	reader.WaitForCard()
+
+	reader.SelectCardAP()
+	reader.SelectEF("00 11") // 券面入力補助PIN IEF
+
+	//reader.LookupPin()
+	sw1, sw2 := reader.Verify(pin)
+	if !(sw1 == 0x90 && sw2 == 0x00) {
+		return errors.New("現在のPINが間違っています")
+	}
+	res := reader.ChangePin(newpin)
+	if !res {
+		return errors.New("PINの変更に失敗しました")
+	}
+	return nil
+}
+
+func ChangePinAuth(c *cli.Context, pin string, newpin string) error {
+	reader, err := Ready(c)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	reader.WaitForCard()
+
+	reader.SelectJPKIAP()
+	reader.SelectEF("00 18")
+
+	//reader.LookupPin()
+	sw1, sw2 := reader.Verify(pin)
+	if !(sw1 == 0x90 && sw2 == 0x00) {
+		return errors.New("現在のPINが間違っています")
+	}
+	res := reader.ChangePin(newpin)
+	if !res {
+		return errors.New("PINの変更に失敗しました")
+	}
+	return nil
+}
+
+func ChangePinSign(c *cli.Context, pin string, newpin string) error {
+	reader, err := Ready(c)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	reader.WaitForCard()
+
+	reader.SelectJPKIAP()
+	reader.SelectEF("00 1B") // IEF for SIGN
+
+	//reader.LookupPin()
+	sw1, sw2 := reader.Verify(pin)
+	if !(sw1 == 0x90 && sw2 == 0x00) {
+		return errors.New("現在のパスワードが間違っています")
+	}
+	res := reader.ChangePin(newpin)
+	if !res {
+		return errors.New("PINの変更に失敗しました")
+	}
+	return nil
 }
