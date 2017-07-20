@@ -65,6 +65,15 @@ func CheckCard(c *cli.Context) error {
 	}
 }
 
+func TestCard(c *cli.Context) error {
+	reader, err := Ready(c)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	return nil
+}
+
 func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 	reader := NewReader(c)
 	if reader == nil {
@@ -92,13 +101,24 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 	if len(data) != 5 {
 		return nil, errors.New("Error at ReadBinary()")
 	}
-	data_size := uint16(data[3])<<8 | uint16(data[4])
-	data = reader.ReadBinary(5 + data_size)
+
+	var data_size uint16
+	var pos uint16
+	if data[2]&0x80 == 0 {
+		// データ長が1オクテット
+		data_size = uint16(data[2])
+		pos = 3
+	} else {
+		//データ長が2オクテット
+		data_size = uint16(data[3])<<8 | uint16(data[4])
+		pos = 5
+	}
+
+	data = reader.ReadBinary(pos + data_size)
 	var attr [5]asn1.RawValue
-	pos := 5
 	for i := 0; i < 5; i++ {
 		asn1.Unmarshal(data[pos:], &attr[i])
-		pos += len(attr[i].FullBytes)
+		pos += uint16(len(attr[i].FullBytes))
 	}
 
 	info := map[string]string{}
