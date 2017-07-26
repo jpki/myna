@@ -97,6 +97,10 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 	asn1.Unmarshal(data[1:], &number)
 
 	reader.SelectEF("00 02")
+
+	// TODO: ファイルサイズがわからないのでDERデータの先頭5オクテット
+	// を読んで調べているが、FCIなどでファイルサイズを調べる方法があれ
+	// ばこんなことしなくても良い。
 	data = reader.ReadBinary(5)
 	if len(data) != 5 {
 		return nil, errors.New("Error at ReadBinary()")
