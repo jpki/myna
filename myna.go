@@ -157,6 +157,11 @@ func testCard(c *cli.Context) error {
 		return err
 	}
 	fmt.Printf("マイナンバーカードです。\n")
+
+	//FindEF(c, "D3 92 10 00 31 00 01 01 01 00")
+	//FindEF(c, "D3 92 10 00 31 00 01 01 04 01")
+	//FindEF(c, "D3 92 10 00 31 00 01 01 04 02")
+	//FindEF(c, "D3 92 10 00 31 00 01 01 04 08")
 	return nil
 }
 
@@ -261,7 +266,7 @@ func showCardInfo(c *cli.Context) error {
 		fmt.Printf("氏名:     %s\n", info["name"])
 		fmt.Printf("住所:     %s\n", info["address"])
 		fmt.Printf("生年月日: %s\n", info["birth"])
-		fmt.Printf("性別:     %s\n", info["sex"])
+		fmt.Printf("性別:     %s\n", ToISO5218String(info["sex"]))
 	}
 	return nil
 }

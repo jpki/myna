@@ -124,7 +124,7 @@ func onCardInfo(checked bool) {
 	msg += fmt.Sprintf("氏名:     %s\n", info["name"])
 	msg += fmt.Sprintf("住所:     %s\n", info["address"])
 	msg += fmt.Sprintf("生年月日: %s\n", info["birth"])
-	msg += fmt.Sprintf("性別:     %s", info["sex"])
+	msg += fmt.Sprintf("性別:     %s", ToISO5218String(info["sex"]))
 	widgets.QMessageBox_Information(nil, "券面事項確認", msg,
 		widgets.QMessageBox__Close, 0)
 }
