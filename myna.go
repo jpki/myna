@@ -266,7 +266,7 @@ func showCardInfo(c *cli.Context) error {
 		fmt.Printf("氏名:     %s\n", info["name"])
 		fmt.Printf("住所:     %s\n", info["address"])
 		fmt.Printf("生年月日: %s\n", info["birth"])
-		fmt.Printf("性別:     %s\n", ToISO5218String(info["sex"]))
+		fmt.Printf("性別:     %s\n", libmyna.ToISO5218String(info["sex"]))
 	}
 	return nil
 }
