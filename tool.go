@@ -67,3 +67,23 @@ func findDF(reader *libmyna.Reader, prefix []byte) [][]byte {
 	}
 	return tmp
 }
+
+func FindEF(c *cli.Context, df string) {
+	reader, err := libmyna.Ready(c)
+	if err != nil {
+		return
+	}
+	defer reader.Finalize()
+	reader.SelectDF(df)
+	for i := 0; i < 255; i++ {
+		for j := 0; j < 255; j++ {
+			ef := fmt.Sprintf("%02X %02X", i, j)
+			sw1, _ := reader.SelectEF(ef)
+			if sw1 == 0x90 {
+				fmt.Printf("FOUND %s\n", ef)
+				sw1, sw2, data := reader.Tx("00 20 00 80")
+				fmt.Printf("-> %x, %x, % X\n", sw1, sw2, data)
+			}
+		}
+	}
+}
