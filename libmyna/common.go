@@ -142,13 +142,14 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 		pos += uint16(len(attr[i].FullBytes))
 	}
 
-	info := map[string]string{}
-	info["number"] = string(number.Bytes)
-	info["header"] = fmt.Sprintf("% X", attr[0].Bytes)
-	info["name"] = string(attr[1].Bytes)
-	info["address"] = string(attr[2].Bytes)
-	info["birth"] = string(attr[3].Bytes)
-	info["sex"] = string(attr[4].Bytes)
+	info := map[string]string{
+		"number":  string(number.Bytes),
+		"header":  fmt.Sprintf("% X", attr[0].Bytes),
+		"name":    string(attr[1].Bytes),
+		"address": string(attr[2].Bytes),
+		"birth":   string(attr[3].Bytes),
+		"sex":     string(attr[4].Bytes),
+	}
 	return info, nil
 }
 

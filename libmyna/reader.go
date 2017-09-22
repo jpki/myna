@@ -158,6 +158,19 @@ func (self *Reader) ChangePin(pin string) bool {
 	}
 }
 
+func dumpBinary(bin []byte) {
+	for i := 0; i < len(bin); i++ {
+		if i%0x10 == 0 {
+			fmt.Fprintf(os.Stderr, ">")
+		}
+		fmt.Fprintf(os.Stderr, " %02X", bin[i])
+		if i%0x10 == 0x0f {
+			fmt.Println()
+		}
+	}
+	fmt.Println()
+}
+
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
 	if self.c.GlobalBool("debug") {
@@ -171,16 +184,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	}
 
 	if self.c.GlobalBool("debug") {
-		for i := 0; i < len(res); i++ {
-			if i%0x10 == 0 {
-				fmt.Fprintf(os.Stderr, ">")
-			}
-			fmt.Fprintf(os.Stderr, " %02X", res[i])
-			if i%0x10 == 0x0f {
-				fmt.Println()
-			}
-		}
-		fmt.Println()
+		dumpBinary(res)
 	}
 
 	l := len(res)
