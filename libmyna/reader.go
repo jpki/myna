@@ -55,7 +55,7 @@ func (self *Reader) WaitForCard() error {
 	rs := make([]scard.ReaderState, 1)
 	rs[0].Reader = self.name
 	rs[0].CurrentState = scard.StateUnaware
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		err := self.ctx.GetStatusChange(rs, -1)
 		if err != nil {
 			return fmt.Errorf("エラー: %s\n", err)
@@ -63,11 +63,10 @@ func (self *Reader) WaitForCard() error {
 		if rs[0].EventState&scard.StatePresent != 0 {
 			card, err := self.ctx.Connect(
 				self.name, scard.ShareExclusive, scard.ProtocolAny)
-			if err != nil {
-				return err
+			if err == nil {
+				self.card = card
+				return nil
 			}
-			self.card = card
-			return nil
 		}
 		fmt.Fprintf(os.Stderr, "wait for card...\n")
 		time.Sleep(1 * time.Second)
