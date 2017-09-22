@@ -16,6 +16,77 @@ import (
 	"strings"
 )
 
+var appFlags = []cli.Flag{
+	cli.BoolFlag{
+		Name:  "debug, d",
+		Usage: "詳細出力",
+	},
+}
+
+var appCommands = []cli.Command{
+	{
+		Name:   "test",
+		Usage:  "動作確認",
+		Action: testCard,
+	},
+	{
+		Name:   "card",
+		Usage:  "券面事項入力補助AP",
+		Action: showCardInfo,
+		Before: checkCard,
+		Flags: []cli.Flag{
+			cli.StringFlag{
+				Name:  "pin",
+				Usage: "暗証番号(4桁)",
+			},
+			cli.StringFlag{
+				Name:  "form",
+				Usage: "出力形式(txt,json)",
+			},
+		},
+	},
+	{
+		Name:        "cert",
+		Usage:       "証明書を表示",
+		Subcommands: certCommands,
+	},
+	{
+		Name:   "pin_status",
+		Usage:  "PINステータス",
+		Action: showPinStatus,
+		Before: checkCard,
+	},
+	{
+		Name:   "sign",
+		Usage:  "CMS署名",
+		Action: sign,
+		Flags: []cli.Flag{
+			cli.StringFlag{
+				Name:  "pin",
+				Usage: "署名用パスワード(6-16桁)",
+			},
+			cli.StringFlag{
+				Name:  "in,i",
+				Usage: "署名対象ファイル",
+			},
+			cli.StringFlag{
+				Name:  "out,o",
+				Usage: "署名対象ファイル",
+			},
+		},
+	},
+	{
+		Name:        "change_pin",
+		Usage:       "PIN変更",
+		Subcommands: changePinCommands,
+	},
+	{
+		Name:        "misc",
+		Usage:       "種々様々なツール",
+		Subcommands: toolCommands,
+	},
+}
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "myna"
@@ -23,75 +94,8 @@ func main() {
 	app.Author = "HAMANO Tsukasa"
 	app.Email = "hamano@osstech.co.jp"
 	app.Version = libmyna.Version
-	app.Flags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "debug, d",
-			Usage: "詳細出力",
-		},
-	}
-	app.Commands = []cli.Command{
-		{
-			Name:   "test",
-			Usage:  "動作確認",
-			Action: testCard,
-		},
-		{
-			Name:   "card",
-			Usage:  "券面事項入力補助AP",
-			Action: showCardInfo,
-			Before: checkCard,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "pin",
-					Usage: "暗証番号(4桁)",
-				},
-				cli.StringFlag{
-					Name:  "form",
-					Usage: "出力形式(txt,json)",
-				},
-			},
-		},
-		{
-			Name:        "cert",
-			Usage:       "証明書を表示",
-			Subcommands: certCommands,
-		},
-		{
-			Name:   "pin_status",
-			Usage:  "PINステータス",
-			Action: showPinStatus,
-			Before: checkCard,
-		},
-		{
-			Name:   "sign",
-			Usage:  "CMS署名",
-			Action: sign,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "pin",
-					Usage: "署名用パスワード(6-16桁)",
-				},
-				cli.StringFlag{
-					Name:  "in,i",
-					Usage: "署名対象ファイル",
-				},
-				cli.StringFlag{
-					Name:  "out,o",
-					Usage: "署名対象ファイル",
-				},
-			},
-		},
-		{
-			Name:        "change_pin",
-			Usage:       "PIN変更",
-			Subcommands: changePinCommands,
-		},
-		{
-			Name:        "misc",
-			Usage:       "種々様々なツール",
-			Subcommands: toolCommands,
-		},
-	}
+	app.Flags = appFlags
+	app.Commands = appCommands
 	err := app.Run(os.Args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "エラー: %s\n", err)
