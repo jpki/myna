@@ -164,10 +164,10 @@ func dumpBinary(bin []byte) {
 		}
 		fmt.Fprintf(os.Stderr, " %02X", bin[i])
 		if i%0x10 == 0x0f {
-			fmt.Println()
+			fmt.Fprintln(os.Stderr)
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(os.Stderr)
 }
 
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
@@ -226,7 +226,7 @@ func (self *Reader) ReadBinary(size uint16) []byte {
 
 func (self *Reader) Signature(data []byte) ([]byte, error) {
 	if self.c.GlobalBool("debug") {
-		fmt.Fprintf(os.Stderr, "# Signature ")
+		fmt.Fprintf(os.Stderr, "# Signature\n")
 	}
 
 	apdu := fmt.Sprintf("80 2a 00 80 %02X % X 00", len(data), data)
