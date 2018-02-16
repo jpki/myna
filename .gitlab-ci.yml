@@ -1,0 +1,30 @@
+variables:
+  VERSION: "0.3"
+
+cache:
+  paths:
+    - cache
+
+before_script:
+  - pwd
+
+build-linux-amd64:
+  image: hamano4.lan.osstech.co.jp:5000/ci/myna-devel-linux-amd64:latest
+  script:
+    - ./ci/myna-build-linux-amd64.sh
+  variables:
+    DIST_DIR: myna-$VERSION-linux-amd64
+  artifacts:
+    paths:
+      - $DIST_DIR
+
+build-windows-x64:
+  image: hamano4.lan.osstech.co.jp:5000/ci/myna-devel-windows-x64:latest
+  script:
+    - ./ci/myna-build-windows-x64.sh
+  variables:
+    DIST_DIR: myna-$VERSION-windows-x64
+  artifacts:
+    paths:
+      - $DIST_DIR
+
