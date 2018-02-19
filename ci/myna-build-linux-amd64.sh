@@ -17,5 +17,6 @@ upx ${DIST_DIR}/myna
 
 find mynaqt/deploy
 cp mynaqt/deploy/linux/mynaqt ${DIST_DIR}/
+cp -rp mynaqt/deploy/linux/lib ${DIST_DIR}/
+chrpath -r '$ORIGIN/lib' ${DIST_DIR}/mynaqt
 upx ${DIST_DIR}/mynaqt
-
