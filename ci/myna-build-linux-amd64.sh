@@ -21,4 +21,5 @@ cp -rp mynaqt/deploy/linux/lib ${DIST_DIR}/
 mkdir -p ${DIST_DIR}/plugins
 cp -rp mynaqt/deploy/linux/plugins/platforms ${DIST_DIR}/plugins
 chrpath -r '$ORIGIN/lib' ${DIST_DIR}/mynaqt
+cp ${DIST_DIR}/mynaqt ${DIST_DIR}/mynaqt.orig
 upx ${DIST_DIR}/mynaqt
