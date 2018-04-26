@@ -1,3 +1,3 @@
 #!/bin/sh
 
-go run *.go "$@"
+go run -tags tool *.go "$@"
