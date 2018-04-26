@@ -142,11 +142,14 @@ func onPinStatus(checked bool) {
 		return
 	}
 	var msg string
-	msg += fmt.Sprintf("認証用PIN: のこり%d回\n", status["auth"])
-	msg += fmt.Sprintf("署名用PIN: のこり%d回\n", status["sign"])
-	msg += fmt.Sprintf("券面入力補助PIN: のこり%d回\n", status["card"])
-	msg += fmt.Sprintf("謎のPIN1: のこり%d回\n", status["unknown1"])
-	msg += fmt.Sprintf("謎のPIN2: のこり%d回", status["unknown2"])
+	msg += fmt.Sprintf("入力補助PIN: のこり%2d回\n",
+		status["card_input_helper_pin"])
+	msg += fmt.Sprintf("入力補助PIN(A): のこり%2d回\n",
+		status["card_input_helper_pin_a"])
+	msg += fmt.Sprintf("入力補助PIN(B): のこり%2d回\n",
+		status["card_input_helper_pin_b"])
+	msg += fmt.Sprintf("JPKI認証用PIN: のこり%2d回\n", status["jpki_auth"])
+	msg += fmt.Sprintf("JPKI署名用PIN: のこり%2d回\n", status["jpki_sign"])
 	widgets.QMessageBox_Information(nil, "PINステータス", msg,
 		widgets.QMessageBox__Ok, 0)
 }

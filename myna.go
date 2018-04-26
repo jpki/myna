@@ -281,12 +281,18 @@ func showPinStatus(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("券面入力補助PIN: のこり%d回\n", status["card"])
-	fmt.Printf("認証用PIN: のこり%d回\n", status["auth"])
-	fmt.Printf("署名用PIN: のこり%d回\n", status["sign"])
-	fmt.Printf("謎のPIN1: のこり%d回\n", status["unknown1"])
-	fmt.Printf("謎のPIN2: のこり%d回\n", status["unknown2"])
-
+	fmt.Printf("入力補助PIN:\tのこり%2d回\n",
+		status["card_input_helper_pin"])
+	fmt.Printf("入力補助PIN(A):\tのこり%2d回\n",
+		status["card_input_helper_pin_a"])
+	fmt.Printf("入力補助PIN(B):\tのこり%2d回\n",
+		status["card_input_helper_pin_b"])
+	fmt.Printf("JPKI認証用PIN:\tのこり%2d回\n", status["jpki_auth"])
+	fmt.Printf("JPKI署名用PIN:\tのこり%2d回\n", status["jpki_sign"])
+	/*
+		fmt.Printf("謎のPIN1:\tのこり%d回\n", status["unknown1"])
+		fmt.Printf("謎のPIN2:\tのこり%d回\n", status["unknown2"])
+	*/
 	return nil
 }
 

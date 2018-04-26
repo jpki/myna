@@ -102,8 +102,8 @@ func GetCardInfo(c *cli.Context, pin string) (map[string]string, error) {
 		return nil, err
 	}
 
-	reader.SelectCardAP()
-	reader.SelectEF("00 11") // 券面入力補助PIN IEF
+	reader.SelectCardInputHelperAP()
+	reader.SelectEF("00 11") // 券面入力補助PIN
 	sw1, sw2 := reader.Verify(pin)
 	if !(sw1 == 0x90 && sw2 == 0x00) {
 		return nil, errors.New("暗証番号が間違っています")
@@ -164,20 +164,24 @@ func GetPinStatus(c *cli.Context) (map[string]int, error) {
 
 	reader.SelectJPKIAP()
 	reader.SelectEF("00 18") // IEF for AUTH
-	status["auth"] = reader.LookupPin()
+	status["jpki_auth"] = reader.LookupPin()
 
 	reader.SelectEF("00 1B") // IEF for SIGN
-	status["sign"] = reader.LookupPin()
+	status["jpki_sign"] = reader.LookupPin()
 
-	reader.SelectCardAP()
-	reader.SelectEF("00 11") // IEF
-	status["card"] = reader.LookupPin()
+	reader.SelectCardInputHelperAP()
+	reader.SelectEF("00 11")
+	status["card_input_helper_pin"] = reader.LookupPin()
+	reader.SelectEF("00 14")
+	status["card_input_helper_pin_a"] = reader.LookupPin()
+	reader.SelectEF("00 15")
+	status["card_input_helper_pin_b"] = reader.LookupPin()
 
 	reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
 	reader.SelectEF("00 1C")
 	status["unknown1"] = reader.LookupPin()
 
-	reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 住基?
+	reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 謎AP
 	reader.SelectEF("00 1C")
 	status["unknown2"] = reader.LookupPin()
 	return status, nil
@@ -332,7 +336,7 @@ func ChangePinCard(c *cli.Context, pin string, newpin string) error {
 	defer reader.Finalize()
 	reader.WaitForCard()
 
-	reader.SelectCardAP()
+	reader.SelectCardInputHelperAP()
 	reader.SelectEF("00 11") // 券面入力補助PIN IEF
 
 	//reader.LookupPin()
