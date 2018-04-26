@@ -142,6 +142,10 @@ func onPinStatus(checked bool) {
 		return
 	}
 	var msg string
+	msg += fmt.Sprintf("券面事項PIN(A): のこり%2d回\n",
+		status["card_info_pin_a"])
+	msg += fmt.Sprintf("券面事項PIN(B): のこり%2d回\n",
+		status["card_info_pin_b"])
 	msg += fmt.Sprintf("入力補助PIN: のこり%2d回\n",
 		status["card_input_helper_pin"])
 	msg += fmt.Sprintf("入力補助PIN(A): のこり%2d回\n",

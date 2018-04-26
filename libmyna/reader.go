@@ -78,6 +78,10 @@ func (self *Reader) SelectAP(aid string) bool {
 	return self.SelectDF(aid)
 }
 
+func (self *Reader) SelectCardInfoAP() bool {
+	return self.SelectDF("D3 92 10 00 31 00 01 01 04 02")
+}
+
 func (self *Reader) SelectCardInputHelperAP() bool {
 	return self.SelectDF("D3 92 10 00 31 00 01 01 04 08")
 }

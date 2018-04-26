@@ -281,6 +281,10 @@ func showPinStatus(c *cli.Context) error {
 		return err
 	}
 
+	fmt.Printf("券面事項PIN(A):\tのこり%2d回\n",
+		status["card_info_pin_a"])
+	fmt.Printf("券面事項PIN(B):\tのこり%2d回\n",
+		status["card_info_pin_b"])
 	fmt.Printf("入力補助PIN:\tのこり%2d回\n",
 		status["card_input_helper_pin"])
 	fmt.Printf("入力補助PIN(A):\tのこり%2d回\n",
