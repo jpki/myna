@@ -26,13 +26,10 @@ func showCardInfo(cmd *cobra.Command, args []string) error {
 		}
 		pin = string(input)
 	}
-	/*
-		match, _ := regexp.MatchString("^\\d{4}$", pin)
-		if !match {
-			return errors.New("暗証番号(4桁)を入力してください。")
-		}
-	*/
-
+	err := libmyna.Validate4DigitPin(pin)
+	if err != nil {
+		return err
+	}
 	info, err := libmyna.GetCardInfo(&ctx, pin)
 	if err != nil {
 		return err

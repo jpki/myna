@@ -70,6 +70,11 @@ func pinChangeCard(cmd *cobra.Command, args []string) error {
 		}
 		pin = string(input)
 	}
+	err := libmyna.Validate4DigitPin(pin)
+	if err != nil {
+		return err
+	}
+
 	newpin, _ := cmd.Flags().GetString("newpin")
 	if newpin == "" {
 		fmt.Printf("新しい%s: ", pinName)
@@ -79,7 +84,12 @@ func pinChangeCard(cmd *cobra.Command, args []string) error {
 		}
 		newpin = string(input)
 	}
-	err := libmyna.ChangeCardInputHelperPin(&ctx, pin, newpin)
+	err = libmyna.Validate4DigitPin(newpin)
+	if err != nil {
+		return err
+	}
+
+	err = libmyna.ChangeCardInputHelperPin(&ctx, pin, newpin)
 	if err != nil {
 		return err
 	}
@@ -105,6 +115,11 @@ func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 		}
 		pin = string(input)
 	}
+	err := libmyna.Validate4DigitPin(pin)
+	if err != nil {
+		return err
+	}
+
 	newpin, _ := cmd.Flags().GetString("newpin")
 	if newpin == "" {
 		fmt.Printf("新しい%s: ", pinName)
@@ -114,6 +129,11 @@ func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 		}
 		newpin = string(input)
 	}
+	err = libmyna.Validate4DigitPin(newpin)
+	if err != nil {
+		return err
+	}
+
 	err := libmyna.ChangeJPKIAuthPin(&ctx, pin, newpin)
 	if err != nil {
 		return err
