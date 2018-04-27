@@ -41,6 +41,7 @@ func init() {
 	// when this action is called directly.
 	cobra.EnableCommandSorting = false
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "デバッグ出力")
-	rootCmd.AddCommand(testCmd)
+	rootCmd.AddCommand(cardCmd)
 	rootCmd.AddCommand(pinCmd)
+	rootCmd.AddCommand(testCmd)
 }
