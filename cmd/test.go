@@ -9,7 +9,8 @@ import (
 
 var testCmd = &cobra.Command{
 	Use:   "test",
-	Short: "動作確認",
+	Short: "リーダーの動作確認",
+	Long:  "カードリーダーの動作確認を行います",
 	RunE:  test,
 }
 

@@ -37,7 +37,7 @@ var jpkiCertCmd = &cobra.Command{
 
 func jpkiCert(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
-		cmd.Usage()
+		cmd.Help()
 		return nil
 	}
 	var cert *x509.Certificate

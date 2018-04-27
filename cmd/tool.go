@@ -17,18 +17,23 @@ var toolCmd = &cobra.Command{
 
 var beepCmd = &cobra.Command{
 	Use:   "beep on|off",
-	Short: "ACS Readerのbeep音を切り替えます",
-	RunE:  beep,
+	Short: "ACS Readerのbeep音設定",
+	Long: `ACS Readerのbeep音を切り替えます
+
+ - on  ビープ音を有効化します
+ - off ビープ音を無効化します
+`,
+	RunE: beep,
 }
 
 func beep(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
-		cmd.Usage()
+		cmd.Help()
 		return nil
 	}
 
 	if args[0] != "on" && args[0] != "off" {
-		cmd.Usage()
+		cmd.Help()
 		return nil
 	}
 
