@@ -1,3 +1,5 @@
+// +build tool
+
 package cmd
 
 import (
@@ -110,7 +112,7 @@ func findDF(reader *libmyna.Reader, prefix []byte) [][]byte {
 }
 
 /*
-func FindEF(c *cli.Context, df string) {
+func findEF(c *cli.Context, df string) {
 	reader, err := libmyna.Ready(c)
 	if err != nil {
 		return
@@ -137,4 +139,5 @@ func init() {
 	beepCmd.AddCommand(beepOffCmd)
 
 	toolCmd.AddCommand(findAPCmd)
+	rootCmd.AddCommand(toolCmd)
 }
