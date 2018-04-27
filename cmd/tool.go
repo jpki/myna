@@ -27,11 +27,13 @@ var beepOnCmd = &cobra.Command{
 }
 
 func beepOn(cmd *cobra.Command, args []string) error {
-	reader, err := libmyna.NewReader(&ctx)
+	reader, err := libmyna.NewReader()
 	if reader == nil {
 		return err
 	}
 	defer reader.Finalize()
+	debug, _ := cmd.Flags().GetBool("debug")
+	reader.SetDebug(debug)
 	err = reader.Connect()
 	if err != nil {
 		return err
@@ -47,11 +49,13 @@ var beepOffCmd = &cobra.Command{
 }
 
 func beepOff(cmd *cobra.Command, args []string) error {
-	reader, err := libmyna.NewReader(&ctx)
+	reader, err := libmyna.NewReader()
 	if reader == nil {
 		return err
 	}
 	defer reader.Finalize()
+	debug, _ := cmd.Flags().GetBool("debug")
+	reader.SetDebug(debug)
 	err = reader.Connect()
 	if err != nil {
 		return err
@@ -69,11 +73,13 @@ var findAPCmd = &cobra.Command{
 func findAP(cmd *cobra.Command, args []string) error {
 	var prefix = []byte{}
 
-	reader, err := libmyna.NewReader(&ctx)
+	reader, err := libmyna.NewReader()
 	if reader == nil {
 		return err
 	}
 	defer reader.Finalize()
+	debug, _ := cmd.Flags().GetBool("debug")
+	reader.SetDebug(debug)
 	err = reader.Connect()
 	if err != nil {
 		return err

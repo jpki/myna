@@ -30,7 +30,7 @@ func showCardInfo(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	info, err := libmyna.GetCardInfo(&ctx, pin)
+	info, err := libmyna.GetCardInfo(pin)
 	if err != nil {
 		return err
 	}

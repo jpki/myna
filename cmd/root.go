@@ -8,8 +8,6 @@ import (
 	"github.com/jpki/myna/libmyna"
 )
 
-var ctx libmyna.Context
-
 var rootCmd = &cobra.Command{
 	Use:          "myna",
 	Version:      libmyna.Version,
@@ -17,7 +15,7 @@ var rootCmd = &cobra.Command{
 	Long:         `マイナンバーカード・ユーティリティ・JPKI署名ツール`,
 	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		ctx.Debug, _ = cmd.Flags().GetBool("debug")
+		libmyna.Debug, _ = cmd.Flags().GetBool("debug")
 	},
 }
 

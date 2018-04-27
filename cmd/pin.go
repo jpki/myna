@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/howeyc/gopass"
 	"github.com/spf13/cobra"
@@ -24,7 +23,7 @@ var pinStatusCmd = &cobra.Command{
 }
 
 func pinStatus(cmd *cobra.Command, args []string) error {
-	status, err := libmyna.GetPinStatus(&ctx)
+	status, err := libmyna.GetPinStatus()
 	if err != nil {
 		return err
 	}
@@ -89,7 +88,7 @@ func pinChangeCard(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = libmyna.ChangeCardInputHelperPin(&ctx, pin, newpin)
+	err = libmyna.ChangeCardInputHelperPin(pin, newpin)
 	if err != nil {
 		return err
 	}
@@ -134,7 +133,7 @@ func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err := libmyna.ChangeJPKIAuthPin(&ctx, pin, newpin)
+	err = libmyna.ChangeJPKIAuthPin(pin, newpin)
 	if err != nil {
 		return err
 	}
@@ -169,9 +168,8 @@ func pinChangeJPKISign(cmd *cobra.Command, args []string) error {
 		}
 		newpin = string(input)
 	}
-	err := libmyna.ChangeJPKISignPin(&ctx, pin, newpin)
+	err := libmyna.ChangeJPKISignPin(pin, newpin)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "エラー: %s", err)
 		return err
 	}
 	fmt.Printf("%sを変更しました", pinName)
