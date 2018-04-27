@@ -12,8 +12,6 @@ import (
 var pinCmd = &cobra.Command{
 	Use:   "pin",
 	Short: "PIN関連操作",
-	Long: `PIN関連操作
-`,
 }
 
 var pinStatusCmd = &cobra.Command{
@@ -55,10 +53,14 @@ var pinChangeCmd = &cobra.Command{
 var pinChangeCardCmd = &cobra.Command{
 	Use:   "card",
 	Short: "券面入力補助用PINを変更",
-	RunE:  pinChangeCard,
+	Long: `券面入力補助用PINを変更します
+暗証番号は4桁の数字を入力してください
+`,
+	RunE: pinChangeCard,
 }
 
 func pinChangeCard(cmd *cobra.Command, args []string) error {
+	fmt.Println(cmd.Long)
 	pinName := "券面入力補助用PIN(4桁)"
 	pin, _ := cmd.Flags().GetString("pin")
 	if pin == "" {
@@ -69,10 +71,6 @@ func pinChangeCard(cmd *cobra.Command, args []string) error {
 		}
 		pin = string(input)
 	}
-	err := libmyna.Validate4DigitPin(pin)
-	if err != nil {
-		return err
-	}
 
 	newpin, _ := cmd.Flags().GetString("newpin")
 	if newpin == "" {
@@ -83,12 +81,8 @@ func pinChangeCard(cmd *cobra.Command, args []string) error {
 		}
 		newpin = string(input)
 	}
-	err = libmyna.Validate4DigitPin(newpin)
-	if err != nil {
-		return err
-	}
 
-	err = libmyna.ChangeCardInputHelperPin(pin, newpin)
+	err := libmyna.ChangeCardInputHelperPin(pin, newpin)
 	if err != nil {
 		return err
 	}
@@ -99,11 +93,14 @@ func pinChangeCard(cmd *cobra.Command, args []string) error {
 var pinChangeJPKIAuthCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "JPKI認証用PINを変更",
-	Long:  `JPKI認証用PINを変更します`,
-	RunE:  pinChangeJPKIAuth,
+	Long: `JPKI認証用PINを変更します
+暗証番号は4桁の数字を入力してください
+`,
+	RunE: pinChangeJPKIAuth,
 }
 
 func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
+	fmt.Println(cmd.Long)
 	pinName := "JPKI認証用パスワード"
 	pin, _ := cmd.Flags().GetString("pin")
 	if pin == "" {
@@ -113,10 +110,6 @@ func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		pin = string(input)
-	}
-	err := libmyna.Validate4DigitPin(pin)
-	if err != nil {
-		return err
 	}
 
 	newpin, _ := cmd.Flags().GetString("newpin")
@@ -128,12 +121,8 @@ func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 		}
 		newpin = string(input)
 	}
-	err = libmyna.Validate4DigitPin(newpin)
-	if err != nil {
-		return err
-	}
 
-	err = libmyna.ChangeJPKIAuthPin(pin, newpin)
+	err := libmyna.ChangeJPKIAuthPin(pin, newpin)
 	if err != nil {
 		return err
 	}
@@ -144,11 +133,21 @@ func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 var pinChangeJPKISignCmd = &cobra.Command{
 	Use:   "sign",
 	Short: "JPKI署名用パスワードを変更",
-	Long:  `JPKI署名用パスワードを変更します`,
-	RunE:  pinChangeJPKISign,
+	Long: `JPKI署名用パスワードを変更します
+パスワードに利用できる文字種は以下のとおり
+
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+0123456789
+
+文字数は6文字から16文字まで
+アルファベットは大文字のみ使うことができます。
+小文字を入力した場合は、大文字に変換されます。
+`,
+	RunE: pinChangeJPKISign,
 }
 
 func pinChangeJPKISign(cmd *cobra.Command, args []string) error {
+	fmt.Println(cmd.Long)
 	pinName := "JPKI署名用パスワード"
 	pin, _ := cmd.Flags().GetString("pin")
 	if pin == "" {
