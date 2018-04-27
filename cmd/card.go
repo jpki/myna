@@ -11,9 +11,14 @@ import (
 )
 
 var cardCmd = &cobra.Command{
-	Use:   "card",
-	Short: "券面事項を確認",
-	RunE:  showCardInfo,
+	Use:     "card",
+	Short:   "券面事項を確認",
+	RunE:    showCardInfo,
+	PreRunE: checkCard,
+}
+
+func checkCard(cmd *cobra.Command, args []string) error {
+	return libmyna.CheckCard()
 }
 
 func showCardInfo(cmd *cobra.Command, args []string) error {
@@ -30,6 +35,12 @@ func showCardInfo(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	mynumber, err := libmyna.GetMyNumber(pin)
+	if err != nil {
+		return err
+	}
+
 	info, err := libmyna.GetCardInfo(pin)
 	if err != nil {
 		return err
@@ -41,7 +52,7 @@ func showCardInfo(cmd *cobra.Command, args []string) error {
 		out, _ := json.MarshalIndent(info, "", "  ")
 		fmt.Printf("%s", out)
 	default:
-		fmt.Printf("個人番号: %s\n", info["number"])
+		fmt.Printf("個人番号: %s\n", mynumber)
 		fmt.Printf("謎ヘッダ: %s\n", info["header"])
 		fmt.Printf("氏名:     %s\n", info["name"])
 		fmt.Printf("住所:     %s\n", info["address"])
