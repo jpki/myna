@@ -11,6 +11,7 @@ myna - マイナンバーカード・ユーティリティ
 - OS X
 - Linux
 - FreeBSD
+
 ## ダウンロード
 
 <https://github.com/jpki/myna/releases>
@@ -34,7 +35,7 @@ COMMANDS:
 
 ## ビルド環境
 
-golang 1.6 or later
+golang 1.7 or later
 
 ## mynaコマンドのビルド・インストール
 
