@@ -24,22 +24,15 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		//fmt.Fprintf(os.Stderr, "エラー: %s\n", err)
 		os.Exit(1)
 	}
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.hoge.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
 	cobra.EnableCommandSorting = false
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "デバッグ出力")
 	rootCmd.AddCommand(cardCmd)
+	rootCmd.AddCommand(jpkiCmd)
 	rootCmd.AddCommand(pinCmd)
 	rootCmd.AddCommand(testCmd)
 }

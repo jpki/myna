@@ -16,17 +16,22 @@ var toolCmd = &cobra.Command{
 }
 
 var beepCmd = &cobra.Command{
-	Use:   "beep",
+	Use:   "beep on|off",
 	Short: "ACS Readerのbeep音を切り替えます",
+	RunE:  beep,
 }
 
-var beepOnCmd = &cobra.Command{
-	Use:   "on",
-	Short: "beep音を有効化します",
-	RunE:  beepOn,
-}
+func beep(cmd *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		cmd.Usage()
+		return nil
+	}
 
-func beepOn(cmd *cobra.Command, args []string) error {
+	if args[0] != "on" && args[0] != "off" {
+		cmd.Usage()
+		return nil
+	}
+
 	reader, err := libmyna.NewReader()
 	if reader == nil {
 		return err
@@ -38,29 +43,12 @@ func beepOn(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	reader.Tx("FF 00 52 FF 00")
-	return nil
-}
 
-var beepOffCmd = &cobra.Command{
-	Use:   "off",
-	Short: "beep音を無効化します",
-	RunE:  beepOff,
-}
-
-func beepOff(cmd *cobra.Command, args []string) error {
-	reader, err := libmyna.NewReader()
-	if reader == nil {
-		return err
+	if args[0] != "on" {
+		reader.Tx("FF 00 52 FF 00")
+	} else if args[0] != "off" {
+		reader.Tx("FF 00 52 00 00")
 	}
-	defer reader.Finalize()
-	debug, _ := cmd.Flags().GetBool("debug")
-	reader.SetDebug(debug)
-	err = reader.Connect()
-	if err != nil {
-		return err
-	}
-	reader.Tx("FF 00 52 00 00")
 	return nil
 }
 
@@ -141,8 +129,6 @@ func findEF(c *cli.Context, df string) {
 
 func init() {
 	toolCmd.AddCommand(beepCmd)
-	beepCmd.AddCommand(beepOnCmd)
-	beepCmd.AddCommand(beepOffCmd)
 
 	toolCmd.AddCommand(findAPCmd)
 	rootCmd.AddCommand(toolCmd)
