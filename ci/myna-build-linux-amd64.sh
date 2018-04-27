@@ -9,9 +9,11 @@ make
 
 mkdir -p ${DIST_DIR}
 
+strip myna
 cp myna ${DIST_DIR}/
-strip ${DIST_DIR}/myna
 upx ${DIST_DIR}/myna
+
+exit 0
 
 (cd mynaqt && qtdeploy build)
 

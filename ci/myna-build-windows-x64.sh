@@ -10,12 +10,14 @@ make win
 
 mkdir -p ${DIST_DIR}
 
+upx myna.exe
 cp myna.exe ${DIST_DIR}/
-upx ${DIST_DIR}/myna.exe
+
+exit 0
 
 (cd mynaqt && qtdeploy build windows)
 
 find mynaqt/deploy
+upx mynaqt/deploy/windows/mynaqt.exe
 cp mynaqt/deploy/windows/mynaqt.exe ${DIST_DIR}/
-upx ${DIST_DIR}/mynaqt.exe
 
