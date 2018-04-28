@@ -18,6 +18,9 @@ import (
 var jpkiCmd = &cobra.Command{
 	Use:   "jpki",
 	Short: "公的個人認証関連コマンド",
+	Long: `公的個人認証関連コマンド
+各種証明書の取得や署名・検証を行います
+`,
 }
 
 var jpkiCertCmd = &cobra.Command{
@@ -58,6 +61,7 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 			pin = string(input)
 		}
 		pin = strings.ToUpper(pin)
+
 		cert, err = libmyna.GetJPKISignCert(pin)
 	case "SIGNCA":
 		fmt.Printf("sign ca cert\n")
