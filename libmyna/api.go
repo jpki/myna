@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/asn1"
 	"errors"
 	"fmt"
-	"github.com/hamano/pkcs7"
+	"github.com/mozilla-services/pkcs7"
+	"io"
 	"io/ioutil"
 	"strings"
 )
@@ -306,7 +306,8 @@ func GetJPKISignCACert() (*x509.Certificate, error) {
 	return GetJPKICert("00 02", "")
 }
 
-func CmsSignJPKISign(pin string, in string, out string) error {
+/*
+func CmsSignJPKISignOld(pin string, in string, out string) error {
 	rawContent, err := ioutil.ReadFile(in)
 	if err != nil {
 		return err
@@ -378,5 +379,76 @@ func CmsSignJPKISign(pin string, in string, out string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+*/
+
+type JPKISignSigner struct {
+	pin    string
+	pubkey crypto.PublicKey
+}
+
+func (self JPKISignSigner) Public() crypto.PublicKey {
+	return self.pubkey
+}
+
+func (self JPKISignSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+	digestInfo := makeDigestInfo(digest)
+	reader, err := NewReader()
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Finalize()
+	reader.SetDebug(Debug)
+	err = reader.Connect()
+	if err != nil {
+		return nil, err
+	}
+	reader.SelectJPKIAP()
+	reader.SelectEF("00 1B") // IEF for SIGN
+	err = reader.Verify(self.pin)
+	if err != nil {
+		return nil, err
+	}
+
+	reader.SelectEF("00 1A") // Select SIGN EF
+	signature, err = reader.Signature(digestInfo)
+	if err != nil {
+		return nil, err
+	}
+	return signature, nil
+}
+
+func CmsSignJPKISign(pin string, in string, out string) error {
+	content, err := ioutil.ReadFile(in)
+	if err != nil {
+		return err
+	}
+
+	// 署名用証明書の取得
+	cert, err := GetJPKISignCert(pin)
+	if err != nil {
+		return err
+	}
+
+	privkey := JPKISignSigner{pin, cert.PublicKey}
+
+	toBeSigned, err := pkcs7.NewSignedData(content)
+
+	err = toBeSigned.AddSigner(cert, privkey, pkcs7.SignerInfoConfig{})
+	if err != nil {
+		return err
+	}
+
+	signed, err := toBeSigned.Finish()
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(out, signed, 0664)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

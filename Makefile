@@ -20,6 +20,7 @@ get-deps:
 	go get -u github.com/howeyc/gopass
 	go get -u github.com/ebfe/scard
 	go get -u github.com/ianmcmahon/encoding_ssh
-	go get -u github.com/hamano/pkcs7
+	go get -u github.com/mozilla-services/pkcs7
 #	go get -u github.com/fullsailor/pkcs7
+#	go get -u github.com/hamano/pkcs7
 
