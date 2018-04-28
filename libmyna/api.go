@@ -7,10 +7,12 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/asn1"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/mozilla-services/pkcs7"
@@ -435,8 +437,11 @@ func GetDigestOID(md string) (asn1.ObjectIdentifier, error) {
 	}
 }
 
-func CmsSignJPKISign(pin string, in string, out string, hash string) error {
+func CmsSignJPKISign(pin string, in string, out string, hash string, form string) error {
 	digest, err := GetDigestOID(hash)
+	if err != nil {
+		return err
+	}
 
 	content, err := ioutil.ReadFile(in)
 	if err != nil {
@@ -463,10 +468,38 @@ func CmsSignJPKISign(pin string, in string, out string, hash string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(out, signed, 0664)
-	if err != nil {
+	if err = writeCms(out, signed, form); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func writeCms(out string, signed []byte, form string) error {
+	var file *os.File
+	var err error
+	if out == "" {
+		file = os.Stdout
+	} else {
+		file, err = os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		defer file.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	switch strings.ToUpper(form) {
+	case "PEM":
+		err = pem.Encode(file, &pem.Block{Type: "PKCS7", Bytes: signed})
+		if err != nil {
+			return err
+		}
+
+	case "DER":
+		_, err = file.Write(signed)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
