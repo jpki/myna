@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eu
 set -x
 
 mkdir -p $GOPATH/src/github.com/jpki/
