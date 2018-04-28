@@ -48,42 +48,7 @@ func test(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	fmt.Printf("OK\n")
-	fmt.Printf("  EventState: 0x%08x\n", rs[0].EventState)
-
-	if rs[0].EventState&scard.StateIgnore != 0 {
-		fmt.Printf("    IGNORE\n")
-	}
-	if rs[0].EventState&scard.StateChanged != 0 {
-		fmt.Printf("    CHANGED\n")
-	}
-	if rs[0].EventState&scard.StateUnknown != 0 {
-		fmt.Printf("    UNKNOWN\n")
-	}
-	if rs[0].EventState&scard.StateUnavailable != 0 {
-		fmt.Printf("    UNAVAILABLE\n")
-	}
-	if rs[0].EventState&scard.StateEmpty != 0 {
-		fmt.Printf("    EMPTY\n")
-	}
-	if rs[0].EventState&scard.StatePresent != 0 {
-		fmt.Printf("    PRESENT\n")
-	}
-	if rs[0].EventState&scard.StateAtrmatch != 0 {
-		fmt.Printf("    ATRMATCH\n")
-	}
-	if rs[0].EventState&scard.StateExclusive != 0 {
-		fmt.Printf("    EXCLUSIVE\n")
-	}
-	if rs[0].EventState&scard.StateInuse != 0 {
-		fmt.Printf("    INUSE\n")
-	}
-	if rs[0].EventState&scard.StateMute != 0 {
-		fmt.Printf("    MUTE\n")
-	}
-	if rs[0].EventState&scard.StateUnpowered != 0 {
-		fmt.Printf("    UNPOWERED\n")
-	}
-
+	printEventState(rs[0].EventState)
 	fmt.Printf("SCardConnect: ")
 	card, err := ctx.Connect(readers[0], scard.ShareExclusive, scard.ProtocolAny)
 	if err != nil {
@@ -117,6 +82,29 @@ func test(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("OK\n")
 	return nil
+}
+
+var eventStateFlags = [][]interface{}{
+	[]interface{}{scard.StateIgnore, "STATE_IGNORE"},
+	[]interface{}{scard.StateChanged, "STATE_CHANGED"},
+	[]interface{}{scard.StateUnknown, "STATE_UNKNOWN"},
+	[]interface{}{scard.StateUnavailable, "STATE_UNAVAILABLE"},
+	[]interface{}{scard.StateEmpty, "STATE_EMPTY"},
+	[]interface{}{scard.StatePresent, "STATE_PRESENT"},
+	[]interface{}{scard.StateAtrmatch, "STATE_ATRMATCH"},
+	[]interface{}{scard.StateExclusive, "STATE_EXCLUSIVE"},
+	[]interface{}{scard.StateInuse, "STATE_INUSE"},
+	[]interface{}{scard.StateMute, "STATE_MUTE"},
+	[]interface{}{scard.StateUnpowered, "STATE_UNPOWERED"},
+}
+
+func printEventState(eventState scard.StateFlag) {
+	fmt.Printf("  EventState: 0x%08x\n", eventState)
+	for _, flag := range eventStateFlags {
+		if eventState&flag[0].(scard.StateFlag) != 0 {
+			fmt.Printf("    %s\n", flag[1])
+		}
+	}
 }
 
 func init() {

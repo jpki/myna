@@ -62,27 +62,23 @@ var pinChangeCardCmd = &cobra.Command{
 func pinChangeCard(cmd *cobra.Command, args []string) error {
 	fmt.Println(cmd.Long)
 	pinName := "券面入力補助用PIN(4桁)"
-	pin, _ := cmd.Flags().GetString("pin")
+	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
-		fmt.Printf("現在の%s: ", pinName)
-		input, err := gopass.GetPasswdMasked()
+		pin, err = inputPin(fmt.Sprintf("現在の%s: ", pinName))
 		if err != nil {
 			return nil
 		}
-		pin = string(input)
 	}
 
-	newpin, _ := cmd.Flags().GetString("newpin")
+	newpin, err := cmd.Flags().GetString("newpin")
 	if newpin == "" {
-		fmt.Printf("新しい%s: ", pinName)
-		input, err := gopass.GetPasswdMasked()
+		newpin, err = inputPin(fmt.Sprintf("新しい%s: ", pinName))
 		if err != nil {
 			return nil
 		}
-		newpin = string(input)
 	}
 
-	err := libmyna.ChangeCardInputHelperPin(pin, newpin)
+	err = libmyna.ChangeCardInputHelperPin(pin, newpin)
 	if err != nil {
 		return err
 	}
@@ -102,27 +98,23 @@ var pinChangeJPKIAuthCmd = &cobra.Command{
 func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 	fmt.Println(cmd.Long)
 	pinName := "JPKI認証用パスワード"
-	pin, _ := cmd.Flags().GetString("pin")
+	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
-		fmt.Printf("現在の%s: ", pinName)
-		input, err := gopass.GetPasswdMasked()
+		pin, err = inputPin(fmt.Sprintf("現在の%s: ", pinName))
 		if err != nil {
 			return nil
 		}
-		pin = string(input)
 	}
 
 	newpin, _ := cmd.Flags().GetString("newpin")
 	if newpin == "" {
-		fmt.Printf("新しい%s: ", pinName)
-		input, err := gopass.GetPasswdMasked()
+		newpin, err = inputPin(fmt.Sprintf("新しい%s: ", pinName))
 		if err != nil {
 			return nil
 		}
-		newpin = string(input)
 	}
 
-	err := libmyna.ChangeJPKIAuthPin(pin, newpin)
+	err = libmyna.ChangeJPKIAuthPin(pin, newpin)
 	if err != nil {
 		return err
 	}
@@ -148,31 +140,37 @@ ABCDEFGHIJKLMNOPQRSTUVWXYZ
 
 func pinChangeJPKISign(cmd *cobra.Command, args []string) error {
 	fmt.Println(cmd.Long)
-	pinName := "JPKI署名用パスワード"
-	pin, _ := cmd.Flags().GetString("pin")
+	pinName := "JPKI署名用パスワード(6-16文字)"
+	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
-		fmt.Printf("現在の%s: ", pinName)
-		input, err := gopass.GetPasswdMasked()
+		pin, err = inputPin(fmt.Sprintf("現在の%s: ", pinName))
 		if err != nil {
 			return nil
 		}
-		pin = string(input)
 	}
-	newpin, _ := cmd.Flags().GetString("newpin")
+	newpin, err := cmd.Flags().GetString("newpin")
 	if newpin == "" {
-		fmt.Printf("新しい%s: ", pinName)
-		input, err := gopass.GetPasswdMasked()
+		newpin, err = inputPin(fmt.Sprintf("新しい%s: ", pinName))
 		if err != nil {
 			return nil
 		}
-		newpin = string(input)
 	}
-	err := libmyna.ChangeJPKISignPin(pin, newpin)
+	err = libmyna.ChangeJPKISignPin(pin, newpin)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("%sを変更しました", pinName)
 	return nil
+}
+
+func inputPin(prompt string) (string, error) {
+	fmt.Printf(prompt)
+	input, err := gopass.GetPasswdMasked()
+	if err != nil {
+		return "", err
+	}
+	pin := string(input)
+	return pin, err
 }
 
 func init() {
@@ -187,7 +185,7 @@ func init() {
 	pinChangeJPKIAuthCmd.Flags().String("newpin", "", "新しい暗証番号(4桁)")
 	pinChangeCmd.AddCommand(pinChangeJPKIAuthCmd)
 
-	pinChangeJPKISignCmd.Flags().String("pin", "", "現在のパスワード")
-	pinChangeJPKISignCmd.Flags().String("newpin", "", "新しいパスワード")
+	pinChangeJPKISignCmd.Flags().String("pin", "", "現在のパスワード(6-16文字)")
+	pinChangeJPKISignCmd.Flags().String("newpin", "", "新しいパスワード(6-16文字)")
 	pinChangeCmd.AddCommand(pinChangeJPKISignCmd)
 }

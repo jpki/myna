@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/howeyc/gopass"
 	"github.com/spf13/cobra"
 
 	"github.com/jpki/myna/libmyna"
@@ -22,16 +21,14 @@ func checkCard(cmd *cobra.Command, args []string) error {
 }
 
 func showCardInfo(cmd *cobra.Command, args []string) error {
-	pin, _ := cmd.Flags().GetString("pin")
+	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
-		fmt.Printf("暗証番号(4桁): ")
-		input, err := gopass.GetPasswdMasked()
+		pin, err = inputPin("暗証番号(4桁): ")
 		if err != nil {
 			return nil
 		}
-		pin = string(input)
 	}
-	err := libmyna.Validate4DigitPin(pin)
+	err = libmyna.Validate4DigitPin(pin)
 	if err != nil {
 		return err
 	}

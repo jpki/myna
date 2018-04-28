@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/howeyc/gopass"
 	"github.com/ianmcmahon/encoding_ssh"
 	"github.com/spf13/cobra"
 
@@ -51,14 +50,12 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 	case "AUTHCA":
 		cert, err = libmyna.GetJPKIAuthCACert()
 	case "SIGN":
-		pin, _ := cmd.Flags().GetString("pin")
+		pin, err := cmd.Flags().GetString("pin")
 		if pin == "" {
-			fmt.Printf("署名用パスワード(6-16桁): ")
-			input, err := gopass.GetPasswdMasked()
+			pin, err = inputPin("署名用パスワード(6-16桁): ")
 			if err != nil {
 				return nil
 			}
-			pin = string(input)
 		}
 		pin = strings.ToUpper(pin)
 

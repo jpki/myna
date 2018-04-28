@@ -2,10 +2,8 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
-	"github.com/howeyc/gopass"
 	"github.com/spf13/cobra"
 
 	"github.com/jpki/myna/libmyna"
@@ -34,18 +32,16 @@ func jpkiCmsSign(cmd *cobra.Command, args []string) error {
 		return errors.New("出力ファイルを指定してください")
 	}
 
-	pin, _ := cmd.Flags().GetString("pin")
+	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
-		fmt.Printf("署名用パスワード(6-16桁): ")
-		input, err := gopass.GetPasswdMasked()
+		pin, err = inputPin("署名用パスワード(6-16桁): ")
 		if err != nil {
 			return nil
 		}
-		pin = string(input)
 	}
 	pin = strings.ToUpper(pin)
 
-	err := libmyna.CmsSignJPKISign(pin, in, out)
+	err = libmyna.CmsSignJPKISign(pin, in, out)
 	if err != nil {
 		return err
 	}
