@@ -18,8 +18,7 @@ func test(cmd *cobra.Command, args []string) error {
 	fmt.Printf("SCardEstablishContext: ")
 	ctx, err := scard.EstablishContext()
 	if err != nil {
-		fmt.Printf("NG\n")
-		fmt.Printf("%s\n", err)
+		fmt.Printf("NG %s", err)
 		return nil
 	}
 	defer ctx.Release()
@@ -28,8 +27,7 @@ func test(cmd *cobra.Command, args []string) error {
 	fmt.Printf("SCardListReaders: ")
 	readers, err := ctx.ListReaders()
 	if err != nil {
-		fmt.Printf("NG\n")
-		fmt.Printf("%s\n", err)
+		fmt.Printf("NG %s", err)
 		return nil
 	}
 	fmt.Printf("OK\n")
@@ -43,8 +41,7 @@ func test(cmd *cobra.Command, args []string) error {
 	rs[0].Reader = readers[0]
 	err = ctx.GetStatusChange(rs, -1)
 	if err != nil {
-		fmt.Printf("NG\n")
-		fmt.Printf("%s\n", err)
+		fmt.Printf("NG %s", err)
 		return nil
 	}
 	fmt.Printf("OK\n")
@@ -52,8 +49,7 @@ func test(cmd *cobra.Command, args []string) error {
 	fmt.Printf("SCardConnect: ")
 	card, err := ctx.Connect(readers[0], scard.ShareExclusive, scard.ProtocolAny)
 	if err != nil {
-		fmt.Printf("NG\n")
-		fmt.Printf("%s\n", err)
+		fmt.Printf("NG %s", err)
 		return nil
 	}
 	fmt.Printf("OK\n")
@@ -61,23 +57,18 @@ func test(cmd *cobra.Command, args []string) error {
 	fmt.Printf("SCardStatus: ")
 	cs, err := card.Status()
 	if err != nil {
-		fmt.Printf("NG\n")
-		fmt.Printf("%s\n", err)
+		fmt.Printf("NG %s", err)
 		return nil
 	}
 	fmt.Printf("OK\n")
 
-	fmt.Printf("  Reader: %s\n", cs.Reader)
-	fmt.Printf("  State: 0x%08x\n", cs.State)
-	fmt.Printf("  ActiveProtocol: %d\n", cs.ActiveProtocol)
-	fmt.Printf("  Atr: % 02X\n", cs.Atr)
+	printCardState(cs)
 
 	fmt.Printf("SCardReleaseContext: ")
 
 	err = ctx.Release()
 	if err != nil {
-		fmt.Printf("NG\n")
-		fmt.Printf("%s\n", err)
+		fmt.Printf("NG %s", err)
 		return nil
 	}
 	fmt.Printf("OK\n")
@@ -105,6 +96,13 @@ func printEventState(eventState scard.StateFlag) {
 			fmt.Printf("    %s\n", flag[1])
 		}
 	}
+}
+
+func printCardState(cs *scard.CardStatus) {
+	fmt.Printf("  Reader: %s\n", cs.Reader)
+	fmt.Printf("  State: 0x%08x\n", cs.State)
+	fmt.Printf("  ActiveProtocol: %d\n", cs.ActiveProtocol)
+	fmt.Printf("  Atr: % 02X\n", cs.Atr)
 }
 
 func init() {
