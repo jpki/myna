@@ -9,10 +9,11 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
-	"github.com/mozilla-services/pkcs7"
 	"io"
 	"io/ioutil"
 	"strings"
+
+	"github.com/mozilla-services/pkcs7"
 )
 
 var Debug bool
@@ -393,7 +394,7 @@ func (self JPKISignSigner) Public() crypto.PublicKey {
 }
 
 func (self JPKISignSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
-	digestInfo := makeDigestInfo(digest)
+	digestInfo := makeDigestInfo(opts.HashFunc(), digest)
 	reader, err := NewReader()
 	if err != nil {
 		return nil, err
@@ -419,7 +420,24 @@ func (self JPKISignSigner) Sign(rand io.Reader, digest []byte, opts crypto.Signe
 	return signature, nil
 }
 
-func CmsSignJPKISign(pin string, in string, out string) error {
+func GetDigestOID(md string) (asn1.ObjectIdentifier, error) {
+	switch strings.ToUpper(md) {
+	case "SHA1":
+		return pkcs7.OIDDigestAlgorithmSHA1, nil
+	case "SHA256":
+		return pkcs7.OIDDigestAlgorithmSHA256, nil
+	case "SHA384":
+		return pkcs7.OIDDigestAlgorithmSHA384, nil
+	case "SHA512":
+		return pkcs7.OIDDigestAlgorithmSHA512, nil
+	default:
+		return nil, fmt.Errorf("サポートされていないハッシュアルゴリズムです: %s", md)
+	}
+}
+
+func CmsSignJPKISign(pin string, in string, out string, hash string) error {
+	digest, err := GetDigestOID(hash)
+
 	content, err := ioutil.ReadFile(in)
 	if err != nil {
 		return err
@@ -434,7 +452,7 @@ func CmsSignJPKISign(pin string, in string, out string) error {
 	privkey := JPKISignSigner{pin, cert.PublicKey}
 
 	toBeSigned, err := pkcs7.NewSignedData(content)
-
+	toBeSigned.SetDigestAlgorithm(digest)
 	err = toBeSigned.AddSigner(cert, privkey, pkcs7.SignerInfoConfig{})
 	if err != nil {
 		return err

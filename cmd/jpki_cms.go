@@ -41,7 +41,8 @@ func jpkiCmsSign(cmd *cobra.Command, args []string) error {
 	}
 	pin = strings.ToUpper(pin)
 
-	err = libmyna.CmsSignJPKISign(pin, in, out)
+	md, _ := cmd.Flags().GetString("md")
+	err = libmyna.CmsSignJPKISign(pin, in, out, md)
 	if err != nil {
 		return err
 	}
@@ -57,4 +58,6 @@ func init() {
 		"in", "i", "", "署名対象ファイル")
 	jpkiCmsSignCmd.Flags().StringP(
 		"out", "o", "", "出力ファイル")
+	jpkiCmsSignCmd.Flags().StringP(
+		"md", "m", "sha1", "ダイジェストアルゴリズム(sha1|sha256|sha512)")
 }
