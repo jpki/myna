@@ -113,7 +113,7 @@ func printCertText(cert *x509.Certificate) {
 func init() {
 	jpkiCmd.AddCommand(jpkiCertCmd)
 	jpkiCertCmd.Flags().StringP(
-		"form", "f", "pem", "出力形式(text|pem|der|ssh)")
+		"form", "f", "text", "出力形式(text|pem|der|ssh)")
 	jpkiCertCmd.Flags().StringP(
 		"pin", "p", "", "パスワード(署名用証明書のみ)")
 }
