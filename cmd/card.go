@@ -38,7 +38,7 @@ func showCardInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	info, err := libmyna.GetCardInfo(pin)
+	info, err := libmyna.GetAttrInfo(pin)
 	if err != nil {
 		return err
 	}
@@ -46,6 +46,7 @@ func showCardInfo(cmd *cobra.Command, args []string) error {
 	form, _ := cmd.Flags().GetString("form")
 	switch form {
 	case "json":
+		info["mynumber"] = mynumber
 		out, _ := json.MarshalIndent(info, "", "  ")
 		fmt.Printf("%s", out)
 	default:
