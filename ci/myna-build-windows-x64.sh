@@ -7,6 +7,8 @@ ln -sf $PWD $GOPATH/src/github.com/jpki/myna
 
 make get-deps
 
+go get -u github.com/inconshreveable/mousetrap
+
 make win
 
 mkdir -p ${DIST_DIR}
