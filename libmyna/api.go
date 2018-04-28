@@ -51,6 +51,7 @@ func CheckCard() error {
 	}
 }
 
+// 券面入力補助APのマイナンバーを取得します
 func GetMyNumber(pin string) (string, error) {
 	reader, err := NewReader()
 	if err != nil {
@@ -75,7 +76,8 @@ func GetMyNumber(pin string) (string, error) {
 	return string(mynumber.Bytes), nil
 }
 
-func GetCardInfo(pin string) (map[string]string, error) {
+// 券面入力補助APの4属性情報を取得します
+func GetAttrInfo(pin string) (map[string]string, error) {
 	reader, err := NewReader()
 	if err != nil {
 		return nil, err
