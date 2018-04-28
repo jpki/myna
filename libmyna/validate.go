@@ -12,3 +12,14 @@ func Validate4DigitPin(pin string) error {
 	}
 	return nil
 }
+
+func ValidateJPKISignPassword(pass string) error {
+	if len(pass) < 4 || 16 < len(pass) {
+		return errors.New("パスワードの長さが正しくありません")
+	}
+	match, _ := regexp.MatchString("^[A-Z0-9]+$", pass)
+	if !match {
+		return errors.New("パスワードの文字種が不正です")
+	}
+	return nil
+}

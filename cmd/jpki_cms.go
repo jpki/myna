@@ -45,7 +45,7 @@ func jpkiCmsSign(cmd *cobra.Command, args []string) error {
 	}
 	pin = strings.ToUpper(pin)
 
-	err := libmyna.SignCmsJPKI(pin, in, out)
+	err := libmyna.CmsSignJPKISign(pin, in, out)
 	if err != nil {
 		return err
 	}

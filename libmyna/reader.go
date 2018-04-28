@@ -4,29 +4,32 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ebfe/scard"
-	"github.com/urfave/cli"
 	"os"
 	"time"
 )
 
 type Reader struct {
-	ctx  *scard.Context
-	c    *cli.Context
-	name string
-	card *scard.Card
+	ctx   *scard.Context
+	name  string
+	card  *scard.Card
+	debug bool
 }
 
-func NewReader(c *cli.Context) *Reader {
+func NewReader() (*Reader, error) {
 	ctx, err := scard.EstablishContext()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s\n", err)
-		return nil
+		return nil, err
 	}
 
 	readers, err := ctx.ListReaders()
-	if err != nil || len(readers) == 0 {
-		return nil
+	if err != nil {
+		return nil, err
 	}
+
+	if len(readers) == 0 {
+		return nil, fmt.Errorf("リーダーが見つかりません")
+	}
+
 	if len(readers) >= 2 {
 		fmt.Fprintf(os.Stderr,
 			"警告: 複数のリーダーが見つかりました。最初のものを使います\n")
@@ -34,10 +37,13 @@ func NewReader(c *cli.Context) *Reader {
 
 	reader := new(Reader)
 	reader.ctx = ctx
-	reader.c = c
 	reader.name = readers[0]
 	reader.card = nil
-	return reader
+	return reader, nil
+}
+
+func (self *Reader) SetDebug(debug bool) {
+	self.debug = debug
 }
 
 func (self *Reader) Finalize() {
@@ -51,71 +57,82 @@ func (self *Reader) GetCard() *scard.Card {
 	return card
 }
 
-func (self *Reader) WaitForCard() error {
+func (self *Reader) Connect() error {
 	rs := make([]scard.ReaderState, 1)
 	rs[0].Reader = self.name
-	rs[0].CurrentState = scard.StateUnaware
+	rs[0].CurrentState = scard.StateUnaware // no need
+	var err error
 	for i := 0; i < 5; i++ {
-		err := self.ctx.GetStatusChange(rs, -1)
+		err = self.ctx.GetStatusChange(rs, -1)
 		if err != nil {
-			return fmt.Errorf("エラー: %s\n", err)
+			return err
 		}
+
 		if rs[0].EventState&scard.StatePresent != 0 {
-			card, err := self.ctx.Connect(
+			card, e := self.ctx.Connect(
 				self.name, scard.ShareExclusive, scard.ProtocolAny)
-			if err == nil {
+			if e == nil {
 				self.card = card
 				return nil
+			} else {
+				err = e
 			}
 		}
-		fmt.Fprintf(os.Stderr, "wait for card...\n")
+		fmt.Fprintf(os.Stderr, "connecting...\n")
 		time.Sleep(1 * time.Second)
+	}
+	if err != nil {
+		return err
 	}
 	return errors.New("カードが見つかりません")
 }
 
-func (self *Reader) SelectAP(aid string) bool {
+func (self *Reader) SelectAP(aid string) error {
 	return self.SelectDF(aid)
 }
 
-func (self *Reader) SelectCardInfoAP() bool {
+func (self *Reader) SelectCardInfoAP() error {
 	return self.SelectDF("D3 92 10 00 31 00 01 01 04 02")
 }
 
-func (self *Reader) SelectCardInputHelperAP() bool {
+func (self *Reader) SelectCardInputHelperAP() error {
 	return self.SelectDF("D3 92 10 00 31 00 01 01 04 08")
 }
 
-func (self *Reader) SelectJPKIAP() bool {
+func (self *Reader) SelectJPKIAP() error {
 	return self.SelectDF("D3 92 f0 00 26 01 00 00 00 01")
 }
 
-func (self *Reader) SelectDF(id string) bool {
-	if self.c.GlobalBool("debug") {
+func (self *Reader) SelectDF(id string) error {
+	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Select DF\n")
 	}
 	bid := ToBytes(id)
 	apdu := "00 A4 04 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
 	sw1, sw2, _ := self.Tx(apdu)
 	if sw1 == 0x90 && sw2 == 0x00 {
-		return true
+		return nil
 	} else {
-		return false
+		return NewAPDUError(sw1, sw2)
 	}
 }
 
-func (self *Reader) SelectEF(id string) (uint8, uint8) {
-	if self.c.GlobalBool("debug") {
+func (self *Reader) SelectEF(id string) error {
+	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Select EF\n")
 	}
 	bid := ToBytes(id)
 	apdu := fmt.Sprintf("00 A4 02 0C %02X % X", len(bid), bid)
 	sw1, sw2, _ := self.Tx(apdu)
-	return sw1, sw2
+	if sw1 == 0x90 && sw2 == 0x00 {
+		return nil
+	} else {
+		return NewAPDUError(sw1, sw2)
+	}
 }
 
 func (self *Reader) LookupPin() int {
-	if self.c.GlobalBool("debug") {
+	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
 	}
 	sw1, sw2, _ := self.Tx("00 20 00 80")
@@ -126,29 +143,36 @@ func (self *Reader) LookupPin() int {
 	}
 }
 
-func (self *Reader) Verify(pin string) (uint8, uint8) {
+func (self *Reader) Verify(pin string) error {
 	var apdu string
 	if pin == "" {
-		if self.c.GlobalBool("debug") {
-			fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
+		return errors.New("PINが空です")
+	}
+	if self.debug {
+		fmt.Fprintf(os.Stderr, "# Verify PIN\n")
+	}
+	bpin := []byte(pin)
+	apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
+	sw1, sw2, _ := self.Tx(apdu)
+	if sw1 == 0x90 && sw2 == 0x00 {
+		return nil
+	} else if sw1 == 0x63 {
+		counter := int(sw2 & 0x0F)
+		if counter == 0 {
+			return errors.New("暗証番号が間違っています。ブロックされました")
 		}
-		apdu = "00 20 00 80"
-		sw1, sw2, _ := self.Tx(apdu)
-		return sw1, sw2
+		return fmt.Errorf("暗証番号が間違っています。のこり%d回", counter)
+	} else if sw1 == 0x69 && sw2 == 0x84 {
+		return errors.New("暗証番号がブロックされています。")
 	} else {
-		if self.c.GlobalBool("debug") {
-			fmt.Fprintf(os.Stderr, "# Verify PIN\n")
-		}
-		bpin := []byte(pin)
-		apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
-		sw1, sw2, _ := self.Tx(apdu)
-		return sw1, sw2
+		return fmt.Errorf("暗証番号が間違っています SW1=%02X SW2=%02X",
+			sw1, sw2)
 	}
 }
 
 func (self *Reader) ChangePin(pin string) bool {
 	var apdu string
-	if self.c.GlobalBool("debug") {
+	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Change PIN\n")
 	}
 	bpin := []byte(pin)
@@ -176,7 +200,7 @@ func dumpBinary(bin []byte) {
 
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
-	if self.c.GlobalBool("debug") {
+	if self.debug {
 		fmt.Fprintf(os.Stderr, "< %v\n", apdu)
 	}
 	cmd := ToBytes(apdu)
@@ -186,7 +210,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 		return 0, 0, nil
 	}
 
-	if self.c.GlobalBool("debug") {
+	if self.debug {
 		dumpBinary(res)
 	}
 
@@ -200,7 +224,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 }
 
 func (self *Reader) ReadBinary(size uint16) []byte {
-	if self.c.GlobalBool("debug") {
+	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Read Binary\n")
 	}
 
@@ -229,7 +253,7 @@ func (self *Reader) ReadBinary(size uint16) []byte {
 }
 
 func (self *Reader) Signature(data []byte) ([]byte, error) {
-	if self.c.GlobalBool("debug") {
+	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Signature\n")
 	}
 

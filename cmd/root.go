@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -9,10 +10,18 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:          "myna",
-	Version:      libmyna.Version,
-	Short:        "マイナクライアント",
-	Long:         `マイナンバーカード・ユーティリティ・JPKI署名ツール`,
+	Use:     "myna",
+	Version: libmyna.Version,
+	Short:   "マイナクライアント",
+	Long: fmt.Sprintf(`Name:
+  myna %s - マイナクライアント
+
+  マイナンバーカード・ユーティリティ・JPKI署名ツール
+
+Author:
+  HAMANO Tsukasa <hamano@osstech.co.jp>
+
+`, libmyna.Version),
 	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		libmyna.Debug, _ = cmd.Flags().GetBool("debug")
