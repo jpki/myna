@@ -101,31 +101,23 @@ func GetAttrInfo(pin string) (map[string]string, error) {
 
 	reader.SelectEF("00 02")
 
-	// TODO: ファイルサイズがわからないのでDERデータの先頭5オクテット
+	// TODO: ファイルサイズがわからないのでDERデータの先頭7オクテット
 	// を読んで調べているが、FCIなどでファイルサイズを調べる方法があれ
 	// ばこんなことしなくても良い。
-	data := reader.ReadBinary(5)
-	if len(data) != 5 {
+	data := reader.ReadBinary(7)
+	if len(data) != 7 {
 		return nil, errors.New("Error at ReadBinary()")
 	}
 
-	var data_size uint16
-	var pos uint16
-	if data[2]&0x80 == 0 {
-		// データ長が1オクテット
-		data_size = uint16(data[2])
-		pos = 3
-	} else {
-		//データ長が2オクテット
-		data_size = uint16(data[3])<<8 | uint16(data[4])
-		pos = 5
+	offset, length, err := ReadASN1Length(data)
+	if err != nil {
+		return nil, err
 	}
-
-	data = reader.ReadBinary(pos + data_size)
+	data = reader.ReadBinary(uint16(offset + length))
 	var attr [5]asn1.RawValue
 	for i := 0; i < 5; i++ {
-		asn1.Unmarshal(data[pos:], &attr[i])
-		pos += uint16(len(attr[i].FullBytes))
+		asn1.Unmarshal(data[offset:], &attr[i])
+		offset += len(attr[i].FullBytes)
 	}
 
 	info := map[string]string{
@@ -280,12 +272,15 @@ func GetJPKICert(efid string, pin string) (*x509.Certificate, error) {
 	}
 
 	reader.SelectEF(efid)
-	data := reader.ReadBinary(4)
-	if len(data) != 4 {
+	data := reader.ReadBinary(7)
+	if len(data) != 7 {
 		return nil, errors.New("ReadBinary: invalid length")
 	}
-	data_size := uint16(data[2])<<8 | uint16(data[3])
-	data = reader.ReadBinary(4 + data_size)
+	offset, length, err := ReadASN1Length(data)
+	if err != nil {
+		return nil, err
+	}
+	data = reader.ReadBinary(uint16(offset + length))
 	cert, err := x509.ParseCertificate(data)
 	if err != nil {
 		return nil, err
