@@ -109,15 +109,17 @@ func GetAttrInfo(pin string) (map[string]string, error) {
 		return nil, errors.New("Error at ReadBinary()")
 	}
 
-	offset, length, err := ReadASN1Length(data)
+	parser := ASN1PartialParser{}
+	err = parser.Parse(data)
 	if err != nil {
 		return nil, err
 	}
-	data = reader.ReadBinary(uint16(offset + length))
+	data = reader.ReadBinary(parser.GetSize())
+	offset := parser.GetOffset()
 	var attr [5]asn1.RawValue
 	for i := 0; i < 5; i++ {
 		asn1.Unmarshal(data[offset:], &attr[i])
-		offset += len(attr[i].FullBytes)
+		offset += uint16(len(attr[i].FullBytes))
 	}
 
 	info := map[string]string{
@@ -276,11 +278,13 @@ func GetJPKICert(efid string, pin string) (*x509.Certificate, error) {
 	if len(data) != 7 {
 		return nil, errors.New("ReadBinary: invalid length")
 	}
-	offset, length, err := ReadASN1Length(data)
+
+	parser := ASN1PartialParser{}
+	err = parser.Parse(data)
 	if err != nil {
 		return nil, err
 	}
-	data = reader.ReadBinary(uint16(offset + length))
+	data = reader.ReadBinary(parser.GetSize())
 	cert, err := x509.ParseCertificate(data)
 	if err != nil {
 		return nil, err

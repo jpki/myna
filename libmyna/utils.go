@@ -33,42 +33,65 @@ func ToISO5218String(value string) string {
 	}
 }
 
-func ReadASN1Length(data []byte) (int, int, error) {
-	tagsize := 1
+type ASN1PartialParser struct {
+	offset uint16
+	length uint16
+}
+
+func (self *ASN1PartialParser) GetOffset() uint16 {
+	return self.offset
+}
+
+func (self *ASN1PartialParser) GetSize() uint16 {
+	return self.offset + self.length
+}
+
+func (self *ASN1PartialParser) parseTag(data []byte) error {
+	var tagsize uint16 = 1
 	if len(data) < 2 {
-		return 0, 0, errors.New("few data size")
+		return errors.New("few data size")
 	}
 	if data[0]&0x1f == 0x1f {
 		tagsize++
 		if len(data) < 2 || data[1]&0x80 != 0 {
-			return 0, 0, errors.New("unexpected tag size")
+			return errors.New("unexpected tag size")
 		}
 	}
+	self.offset = tagsize
+	return nil
+}
 
-	offset := tagsize
-	if offset >= len(data) {
-		return 0, 0, errors.New("few data size")
+func (self *ASN1PartialParser) parseLength(data []byte) error {
+	if int(self.offset) >= len(data) {
+		return errors.New("few data size")
 	}
-
-	b := data[offset]
-
-	offset++
-	var length int
+	b := data[self.offset]
+	self.offset++
 	if b&0x80 == 0 {
-		length = int(b)
+		self.length = uint16(b)
 	} else {
 		lol := int(b & 0x7f)
-		length = 0
 		for i := 0; i < lol; i++ {
-			if offset >= len(data) {
-				return 0, 0, errors.New("truncated tag or length")
+			if int(self.offset) >= len(data) {
+				return errors.New("truncated tag or length")
 			}
-			b = data[offset]
-			offset++
-			length <<= 8
-			length |= int(b)
+			b = data[self.offset]
+			self.offset++
+			self.length <<= 8
+			self.length |= uint16(int(b))
 		}
 	}
+	return nil
+}
 
-	return offset, length, nil
+func (self *ASN1PartialParser) Parse(data []byte) error {
+	err := self.parseTag(data)
+	if err != nil {
+		return err
+	}
+	err = self.parseLength(data)
+	if err != nil {
+		return err
+	}
+	return err
 }
