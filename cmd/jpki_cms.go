@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,6 +19,12 @@ var jpkiCmsSignCmd = &cobra.Command{
 	Use:   "sign",
 	Short: "CMS署名を行います",
 	RunE:  jpkiCmsSign,
+}
+
+var jpkiCmsVerifyCmd = &cobra.Command{
+	Use:   "verify",
+	Short: "CMS署名を検証します",
+	RunE:  jpkiCmsVerify,
 }
 
 func jpkiCmsSign(cmd *cobra.Command, args []string) error {
@@ -45,9 +52,20 @@ func jpkiCmsSign(cmd *cobra.Command, args []string) error {
 	form, _ := cmd.Flags().GetString("form")
 	opts := libmyna.CmsSignOpts{md, form}
 	err = libmyna.CmsSignJPKISign(pin, in, out, opts)
+	return err
+}
+
+func jpkiCmsVerify(cmd *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		cmd.Usage()
+		return errors.New("検証対象ファイルを指定してください")
+	}
+
+	err := libmyna.CmsVerifyJPKISign(args[0])
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Verification successful\n")
 	return nil
 }
 
@@ -63,4 +81,7 @@ func init() {
 	jpkiCmsSignCmd.Flags().StringP(
 		"md", "m", "sha1", "ダイジェストアルゴリズム(sha1|sha256|sha512)")
 	jpkiCmsSignCmd.Flags().String("form", "pem", "出力形式(pem,der)")
+
+	jpkiCmsCmd.AddCommand(jpkiCmsVerifyCmd)
+
 }

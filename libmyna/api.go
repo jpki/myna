@@ -462,3 +462,29 @@ func writeCms(out string, signed []byte, form string) error {
 	}
 	return nil
 }
+
+func CmsVerifyJPKISign(in string) error {
+	cacert, err := GetJPKISignCACert()
+	if err != nil {
+		return err
+	}
+
+	signed, err := ioutil.ReadFile(in)
+	if err != nil {
+		return err
+	}
+
+	p7, err := pkcs7.Parse(signed)
+	if err != nil {
+		return err
+	}
+
+	certPool := x509.NewCertPool()
+	certPool.AddCert(cacert)
+	err = p7.VerifyWithChain(certPool)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
