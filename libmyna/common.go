@@ -56,14 +56,15 @@ func GetPinStatus() (map[string]int, error) {
 
 	reader.SelectEF("00 1B") // IEF for SIGN
 	status["jpki_sign"] = reader.LookupPin()
+	/*
+		reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
+		reader.SelectEF("00 1C")
+		status["unknown1"] = reader.LookupPin()
 
-	reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
-	reader.SelectEF("00 1C")
-	status["unknown1"] = reader.LookupPin()
-
-	reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 謎AP
-	reader.SelectEF("00 1C")
-	status["unknown2"] = reader.LookupPin()
+		reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 謎AP
+		reader.SelectEF("00 1C")
+		status["unknown2"] = reader.LookupPin()
+	*/
 	return status, nil
 }
 
