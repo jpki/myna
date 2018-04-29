@@ -436,8 +436,13 @@ func GetDigestOID(md string) (asn1.ObjectIdentifier, error) {
 	}
 }
 
-func CmsSignJPKISign(pin string, in string, out string, hash string, form string) error {
-	digest, err := GetDigestOID(hash)
+type CmsSignOpts struct {
+	Hash string
+	Form string
+}
+
+func CmsSignJPKISign(pin string, in string, out string, opts CmsSignOpts) error {
+	digest, err := GetDigestOID(opts.Hash)
 	if err != nil {
 		return err
 	}
@@ -467,7 +472,7 @@ func CmsSignJPKISign(pin string, in string, out string, hash string, form string
 		return err
 	}
 
-	if err = writeCms(out, signed, form); err != nil {
+	if err = writeCms(out, signed, opts.Form); err != nil {
 		return err
 	}
 

@@ -43,7 +43,8 @@ func jpkiCmsSign(cmd *cobra.Command, args []string) error {
 
 	md, _ := cmd.Flags().GetString("md")
 	form, _ := cmd.Flags().GetString("form")
-	err = libmyna.CmsSignJPKISign(pin, in, out, md, form)
+	opts := libmyna.CmsSignOpts{md, form}
+	err = libmyna.CmsSignJPKISign(pin, in, out, opts)
 	if err != nil {
 		return err
 	}
