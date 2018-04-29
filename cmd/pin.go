@@ -97,7 +97,7 @@ var pinChangeJPKIAuthCmd = &cobra.Command{
 
 func pinChangeJPKIAuth(cmd *cobra.Command, args []string) error {
 	fmt.Println(cmd.Long)
-	pinName := "JPKI認証用パスワード"
+	pinName := "JPKI認証用PIN(4桁)"
 	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
 		pin, err = inputPin(fmt.Sprintf("現在の%s: ", pinName))

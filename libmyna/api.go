@@ -133,43 +133,15 @@ func GetAttrInfo(pin string) (map[string]string, error) {
 }
 
 func ChangeCardInputHelperPin(pin string, newpin string) error {
-	err := Validate4DigitPin(pin)
-	if err != nil {
-		return err
-	}
-
-	err = Validate4DigitPin(newpin)
-	if err != nil {
-		return err
-	}
-
-	reader, err := NewReader()
-	if err != nil {
-		return err
-	}
-	defer reader.Finalize()
-	reader.SetDebug(Debug)
-	err = reader.Connect()
-	if err != nil {
-		return err
-	}
-
-	reader.SelectCardInputHelperAP()
-	reader.SelectEF("00 11") // 券面入力補助PIN IEF
-
-	err = reader.Verify(pin)
-	if err != nil {
-		return err
-	}
-
-	res := reader.ChangePin(newpin)
-	if !res {
-		return errors.New("PINの変更に失敗しました")
-	}
-	return nil
+	return Change4DigitPin(pin, newpin, "CARD_INPUT_HELPER")
 }
 
 func ChangeJPKIAuthPin(pin string, newpin string) error {
+	return Change4DigitPin(pin, newpin, "JPKI_AUTH")
+}
+
+func Change4DigitPin(pin string, newpin string, pintype string) error {
+
 	err := Validate4DigitPin(pin)
 	if err != nil {
 		return err
@@ -191,8 +163,14 @@ func ChangeJPKIAuthPin(pin string, newpin string) error {
 		return err
 	}
 
-	reader.SelectJPKIAP()
-	reader.SelectEF("00 18")
+	switch pintype {
+	case "CARD_INPUT_HELPER":
+		reader.SelectCardInputHelperAP()
+		reader.SelectEF("00 11") // 券面入力補助PIN
+	case "JPKI_AUTH":
+		reader.SelectJPKIAP()
+		reader.SelectEF("00 18") //JPKI認証用PIN
+	}
 
 	err = reader.Verify(pin)
 	if err != nil {
