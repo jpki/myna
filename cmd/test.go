@@ -46,8 +46,25 @@ func test(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("OK\n")
 	printEventState(rs[0].EventState)
+
+	err = testCard(ctx, readers[0])
+	if err != nil {
+		return nil
+	}
+
+	fmt.Printf("SCardReleaseContext: ")
+	err = ctx.Release()
+	if err != nil {
+		fmt.Printf("NG %s", err)
+		return nil
+	}
+	fmt.Printf("OK\n")
+	return nil
+}
+
+func testCard(ctx *scard.Context, reader string) error {
 	fmt.Printf("SCardConnect: ")
-	card, err := ctx.Connect(readers[0], scard.ShareExclusive, scard.ProtocolAny)
+	card, err := ctx.Connect(reader, scard.ShareExclusive, scard.ProtocolAny)
 	if err != nil {
 		fmt.Printf("NG %s", err)
 		return nil
@@ -63,15 +80,6 @@ func test(cmd *cobra.Command, args []string) error {
 	fmt.Printf("OK\n")
 
 	printCardState(cs)
-
-	fmt.Printf("SCardReleaseContext: ")
-
-	err = ctx.Release()
-	if err != nil {
-		fmt.Printf("NG %s", err)
-		return nil
-	}
-	fmt.Printf("OK\n")
 	return nil
 }
 
