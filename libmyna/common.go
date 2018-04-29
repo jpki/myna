@@ -37,25 +37,18 @@ func GetPinStatus() (map[string]int, error) {
 
 	status := map[string]int{}
 
-	reader.SelectCardInfoAP()
-	reader.SelectEF("00 12")
-	status["card_info_pin_a"] = reader.LookupPin()
-	reader.SelectEF("00 13")
-	status["card_info_pin_b"] = reader.LookupPin()
-	reader.SelectCardInputHelperAP()
-	reader.SelectEF("00 11")
-	status["card_input_helper_pin"] = reader.LookupPin()
-	reader.SelectEF("00 14")
-	status["card_input_helper_pin_a"] = reader.LookupPin()
-	reader.SelectEF("00 15")
-	status["card_input_helper_pin_b"] = reader.LookupPin()
+	cardInfoAP, err := reader.SelectCardInfoAP()
+	status["card_info_pin_a"], err = cardInfoAP.LookupPinA()
+	status["card_info_pin_b"], err = cardInfoAP.LookupPinB()
 
-	reader.SelectJPKIAP()
-	reader.SelectEF("00 18") // IEF for AUTH
-	status["jpki_auth"] = reader.LookupPin()
+	cardInputHelperAP, err := reader.SelectCardInputHelperAP()
+	status["card_input_helper_pin"], err = cardInputHelperAP.LookupPin()
+	status["card_input_helper_pin_a"], err = cardInputHelperAP.LookupPinA()
+	status["card_input_helper_pin_b"], err = cardInputHelperAP.LookupPinB()
 
-	reader.SelectEF("00 1B") // IEF for SIGN
-	status["jpki_sign"] = reader.LookupPin()
+	jpkiAP, err := reader.SelectJPKIAP()
+	status["jpki_auth"], err = jpkiAP.LookupAuthPin()
+	status["jpki_sign"], err = jpkiAP.LookupSignPin()
 	/*
 		reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
 		reader.SelectEF("00 1C")

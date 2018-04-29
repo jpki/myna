@@ -3,7 +3,6 @@
 package libmyna
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/x509"
 	"encoding/asn1"
@@ -32,7 +31,7 @@ func CheckCard() error {
 		return err
 	}
 
-	err = reader.SelectJPKIAP()
+	jpkiAP, err := reader.SelectJPKIAP()
 	if err != nil {
 		return errors.New("個人番号カードではありません")
 	}
@@ -42,9 +41,7 @@ func CheckCard() error {
 		return errors.New("トークン情報を取得できません")
 	}
 
-	var data []byte
-	data = reader.ReadBinary(0x20)
-	token := string(bytes.TrimRight(data, " "))
+	token, err := jpkiAP.GetToken()
 	if token == "JPKIAPICCTOKEN2" {
 		return nil
 	} else if token == "JPKIAPICCTOKEN" {
@@ -234,39 +231,19 @@ func GetJPKICert(efid string, pin string) (*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = reader.SelectJPKIAP()
-	if err != nil {
-		return nil, err
-	}
-	err = reader.SelectEF(efid)
+
+	jpkiAP, err := reader.SelectJPKIAP()
 	if err != nil {
 		return nil, err
 	}
 
 	if pin != "" {
-		reader.SelectEF("00 1B") // VERIFY EF for SIGN
-		err = reader.Verify(pin)
+		err = jpkiAP.VerifySignPin(pin)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	reader.SelectEF(efid)
-	data := reader.ReadBinary(7)
-	if len(data) != 7 {
-		return nil, errors.New("ReadBinary: invalid length")
-	}
-
-	parser := ASN1PartialParser{}
-	err = parser.Parse(data)
-	if err != nil {
-		return nil, err
-	}
-	data = reader.ReadBinary(parser.GetSize())
-	cert, err := x509.ParseCertificate(data)
-	if err != nil {
-		return nil, err
-	}
+	cert, err := jpkiAP.ReadCertificate(efid)
 	return cert, nil
 }
 
