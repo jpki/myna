@@ -463,18 +463,36 @@ func writeCms(out string, signed []byte, form string) error {
 	return nil
 }
 
-func CmsVerifyJPKISign(in string) error {
+func readCMSFile(in string, form string) (*pkcs7.PKCS7, error) {
+	data, err := ioutil.ReadFile(in)
+	if err != nil {
+		return nil, err
+	}
+
+	var signedDer []byte
+	switch strings.ToUpper(form) {
+	case "PEM":
+		block, _ := pem.Decode(data)
+		signedDer = block.Bytes
+	case "BER":
+		signedDer = data
+	default:
+		return nil, fmt.Errorf("サポートされていない形式です: %s", form)
+	}
+
+	p7, err := pkcs7.Parse(signedDer)
+	if err != nil {
+		return nil, err
+	}
+	return p7, nil
+}
+
+func CmsVerifyJPKISign(in string, form string) error {
 	cacert, err := GetJPKISignCACert()
 	if err != nil {
 		return err
 	}
-
-	signed, err := ioutil.ReadFile(in)
-	if err != nil {
-		return err
-	}
-
-	p7, err := pkcs7.Parse(signed)
+	p7, err := readCMSFile(in, form)
 	if err != nil {
 		return err
 	}

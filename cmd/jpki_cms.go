@@ -61,7 +61,8 @@ func jpkiCmsVerify(cmd *cobra.Command, args []string) error {
 		return errors.New("検証対象ファイルを指定してください")
 	}
 
-	err := libmyna.CmsVerifyJPKISign(args[0])
+	form, _ := cmd.Flags().GetString("form")
+	err := libmyna.CmsVerifyJPKISign(args[0], form)
 	if err != nil {
 		return err
 	}
@@ -80,8 +81,8 @@ func init() {
 		"out", "o", "", "出力ファイル")
 	jpkiCmsSignCmd.Flags().StringP(
 		"md", "m", "sha1", "ダイジェストアルゴリズム(sha1|sha256|sha512)")
-	jpkiCmsSignCmd.Flags().String("form", "pem", "出力形式(pem,der)")
+	jpkiCmsSignCmd.Flags().String("form", "der", "出力形式(pem,der)")
 
 	jpkiCmsCmd.AddCommand(jpkiCmsVerifyCmd)
-
+	jpkiCmsVerifyCmd.Flags().String("form", "der", "入力形式(pem,der)")
 }
