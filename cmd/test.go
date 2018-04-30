@@ -36,29 +36,29 @@ func test(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Reader %d: %s\n", i, reader)
 	}
 
+	if testStatusChange(ctx, readers[0]); err != nil {
+		return nil
+	}
+
+	if err = testCard(ctx, readers[0]); err != nil {
+		return nil
+	}
+
+	err = testReleaseContext(ctx)
+	return err
+}
+
+func testStatusChange(ctx *scard.Context, reader string) error {
 	fmt.Printf("SCardGetStatusChange: ")
 	rs := make([]scard.ReaderState, 1)
-	rs[0].Reader = readers[0]
-	err = ctx.GetStatusChange(rs, -1)
+	rs[0].Reader = reader
+	err := ctx.GetStatusChange(rs, -1)
 	if err != nil {
 		fmt.Printf("NG %s", err)
 		return nil
 	}
 	fmt.Printf("OK\n")
 	printEventState(rs[0].EventState)
-
-	err = testCard(ctx, readers[0])
-	if err != nil {
-		return nil
-	}
-
-	fmt.Printf("SCardReleaseContext: ")
-	err = ctx.Release()
-	if err != nil {
-		fmt.Printf("NG %s", err)
-		return nil
-	}
-	fmt.Printf("OK\n")
 	return nil
 }
 
@@ -80,6 +80,17 @@ func testCard(ctx *scard.Context, reader string) error {
 	fmt.Printf("OK\n")
 
 	printCardState(cs)
+	return nil
+}
+
+func testReleaseContext(ctx *scard.Context) error {
+	fmt.Printf("SCardReleaseContext: ")
+	err := ctx.Release()
+	if err != nil {
+		fmt.Printf("NG %s", err)
+		return nil
+	}
+	fmt.Printf("OK\n")
 	return nil
 }
 
