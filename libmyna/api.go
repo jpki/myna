@@ -474,7 +474,7 @@ func readCMSFile(in string, form string) (*pkcs7.PKCS7, error) {
 	case "PEM":
 		block, _ := pem.Decode(data)
 		signedDer = block.Bytes
-	case "BER":
+	case "DER":
 		signedDer = data
 	default:
 		return nil, fmt.Errorf("サポートされていない形式です: %s", form)
