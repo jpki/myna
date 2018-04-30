@@ -38,26 +38,37 @@ func showCardInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	info, err := libmyna.GetAttrInfo(pin)
+	attr, err := libmyna.GetAttrInfo(pin)
 	if err != nil {
 		return err
 	}
 
 	form, _ := cmd.Flags().GetString("form")
+	outputCardInputHelperAttrs(mynumber, attr, form)
+	return nil
+}
+
+func outputCardInputHelperAttrs(mynumber string, attr *libmyna.CardInputHelperAttrs, form string) {
 	switch form {
 	case "json":
-		info["mynumber"] = mynumber
-		out, _ := json.MarshalIndent(info, "", "  ")
+		obj := map[string]string{
+			"mynumber": mynumber,
+			"header: ": attr.HeaderString(),
+			"name":     attr.Name,
+			"address":  attr.Address,
+			"birth":    attr.Birth,
+			"sex":      attr.SexString(),
+		}
+		out, _ := json.MarshalIndent(obj, "", "  ")
 		fmt.Printf("%s", out)
 	default:
 		fmt.Printf("個人番号: %s\n", mynumber)
-		fmt.Printf("謎ヘッダ: %s\n", info["header"])
-		fmt.Printf("氏名:     %s\n", info["name"])
-		fmt.Printf("住所:     %s\n", info["address"])
-		fmt.Printf("生年月日: %s\n", info["birth"])
-		fmt.Printf("性別:     %s\n", libmyna.ToISO5218String(info["sex"]))
+		fmt.Printf("謎ヘッダ: %s\n", attr.HeaderString())
+		fmt.Printf("氏名:     %s\n", attr.Name)
+		fmt.Printf("住所:     %s\n", attr.Address)
+		fmt.Printf("生年月日: %s\n", attr.Birth)
+		fmt.Printf("性別:     %s\n", attr.SexString())
 	}
-	return nil
 }
 
 func init() {

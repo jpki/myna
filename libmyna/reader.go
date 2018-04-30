@@ -87,21 +87,21 @@ func (self *Reader) Connect() error {
 	return errors.New("カードが見つかりません")
 }
 
-func (self *Reader) SelectCardInfoAP() (*CARD_INFO_AP, error) {
+func (self *Reader) SelectCardInfoAP() (*CardInfoAP, error) {
 	err := self.SelectDF("D3 92 10 00 31 00 01 01 04 02")
-	ap := CARD_INFO_AP{self}
+	ap := CardInfoAP{self}
 	return &ap, err
 }
 
-func (self *Reader) SelectCardInputHelperAP() (*CARD_INPUT_HELPER_AP, error) {
+func (self *Reader) SelectCardInputHelperAP() (*CardInputHelperAP, error) {
 	err := self.SelectDF("D3 92 10 00 31 00 01 01 04 08")
-	ap := CARD_INPUT_HELPER_AP{self}
+	ap := CardInputHelperAP{self}
 	return &ap, err
 }
 
-func (self *Reader) SelectJPKIAP() (*JPKI_AP, error) {
+func (self *Reader) SelectJPKIAP() (*JPKIAP, error) {
 	err := self.SelectDF("D3 92 f0 00 26 01 00 00 00 01")
-	ap := JPKI_AP{self}
+	ap := JPKIAP{self}
 	return &ap, err
 }
 

@@ -63,21 +63,24 @@ func GetMyNumber(pin string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	reader.SelectCardInputHelperAP()
-	reader.SelectEF("00 11") // 券面入力補助PIN
-	err = reader.Verify(pin)
+	helperAP, err := reader.SelectCardInputHelperAP()
 	if err != nil {
 		return "", err
 	}
-	reader.SelectEF("00 01")
-	data := reader.ReadBinary(16)
-	var mynumber asn1.RawValue
-	asn1.Unmarshal(data[1:], &mynumber)
-	return string(mynumber.Bytes), nil
+	helperAP.VerifyPin(pin)
+	if err != nil {
+		return "", err
+	}
+
+	mynumber, err := helperAP.ReadMyNumber()
+	if err != nil {
+		return "", err
+	}
+	return mynumber, nil
 }
 
 // 券面入力補助APの4属性情報を取得します
-func GetAttrInfo(pin string) (map[string]string, error) {
+func GetAttrInfo(pin string) (*CardInputHelperAttrs, error) {
 	reader, err := NewReader()
 	if err != nil {
 		return nil, err
@@ -89,44 +92,61 @@ func GetAttrInfo(pin string) (map[string]string, error) {
 		return nil, err
 	}
 
-	reader.SelectCardInputHelperAP()
-	reader.SelectEF("00 11") // 券面入力補助PIN
-	err = reader.Verify(pin)
+	helperAP, err := reader.SelectCardInputHelperAP()
+	if err != nil {
+		return nil, err
+	}
+	helperAP.VerifyPin(pin)
 	if err != nil {
 		return nil, err
 	}
 
-	reader.SelectEF("00 02")
+	attr, err := helperAP.ReadAttrInfo()
+	return attr, nil
+}
 
-	// TODO: ファイルサイズがわからないのでDERデータの先頭7オクテット
-	// を読んで調べているが、FCIなどでファイルサイズを調べる方法があれ
-	// ばこんなことしなくても良い。
-	data := reader.ReadBinary(7)
-	if len(data) != 7 {
-		return nil, errors.New("Error at ReadBinary()")
-	}
+type CardInfo struct {
+}
 
-	parser := ASN1PartialParser{}
-	err = parser.Parse(data)
+// 券面事項確認AP
+func GetCardInfo(pin string) (*CardInfo, error) {
+	reader, err := NewReader()
 	if err != nil {
 		return nil, err
 	}
-	data = reader.ReadBinary(parser.GetSize())
-	offset := parser.GetOffset()
-	var attr [5]asn1.RawValue
-	for i := 0; i < 5; i++ {
-		asn1.Unmarshal(data[offset:], &attr[i])
-		offset += uint16(len(attr[i].FullBytes))
+	defer reader.Finalize()
+	reader.SetDebug(Debug)
+	err = reader.Connect()
+	if err != nil {
+		return nil, err
 	}
 
-	info := map[string]string{
-		"header":  fmt.Sprintf("% X", attr[0].Bytes),
-		"name":    string(attr[1].Bytes),
-		"address": string(attr[2].Bytes),
-		"birth":   string(attr[3].Bytes),
-		"sex":     string(attr[4].Bytes),
+	helperAP, err := reader.SelectCardInputHelperAP()
+	if err != nil {
+		return nil, err
 	}
-	return info, nil
+	helperAP.VerifyPin(pin)
+	if err != nil {
+		return nil, err
+	}
+
+	mynumber, err := helperAP.ReadMyNumber()
+	if err != nil {
+		return nil, err
+	}
+
+	cardAP, err := reader.SelectCardInfoAP()
+	if err != nil {
+		return nil, err
+	}
+	cardAP.VerifyPinA(mynumber)
+	if err != nil {
+		return nil, err
+	}
+
+	cardAP.Test()
+
+	return nil, nil
 }
 
 func ChangeCardInputHelperPin(pin string, newpin string) error {
