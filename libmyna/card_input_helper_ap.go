@@ -1,9 +1,10 @@
 package libmyna
 
 import (
-	"encoding/asn1"
+	//"encoding/asn1"
 	"errors"
 	"fmt"
+	"github.com/hamano/brokenasn1"
 	"strconv"
 )
 
@@ -12,11 +13,11 @@ type CardInputHelperAP struct {
 }
 
 type CardInputHelperAttrs struct {
-	Header  []byte
-	Name    string
-	Address string
-	Birth   string
-	Sex     string
+	Header  []byte `asn1:"tag:33,private"`
+	Name    string `asn1:"tag:34,private,utf8"`
+	Address string `asn1:"tag:35,private,utf8"`
+	Birth   string `asn1:"tag:36,private"`
+	Sex     string `asn1:"tag:37,private"`
 }
 
 func (self *CardInputHelperAP) LookupPin() (int, error) {
@@ -80,7 +81,7 @@ func (self *CardInputHelperAP) ReadMyNumber() (string, error) {
 	}
 	data := self.reader.ReadBinary(16)
 	var mynumber asn1.RawValue
-	_, err = asn1.Unmarshal(data[1:], &mynumber)
+	_, err = asn1.UnmarshalWithParams(data, &mynumber, "private,tag:16")
 	if err != nil {
 		return "", err
 	}
@@ -104,21 +105,31 @@ func (self *CardInputHelperAP) ReadAttrInfo() (*CardInputHelperAttrs, error) {
 		return nil, err
 	}
 	data = self.reader.ReadBinary(parser.GetSize())
-	offset := parser.GetOffset()
-	var attrs [5]asn1.RawValue
-	for i := 0; i < 5; i++ {
-		asn1.Unmarshal(data[offset:], &attrs[i])
-		offset += uint16(len(attrs[i].FullBytes))
+	attrs := CardInputHelperAttrs{}
+	_, err = asn1.UnmarshalWithParams(data, &attrs, "private,tag:32")
+	if err != nil {
+		return nil, err
 	}
+	/*
+		offset := parser.GetOffset()
+		var attrs [5]asn1.RawValue
+		for i := 0; i < 5; i++ {
+			_, err = asn1.Unmarshal(data[offset:], &attrs[i])
+			if err != nil {
+				return nil, err
+			}
+			offset += uint16(len(attrs[i].FullBytes))
+		}
 
-	ret := CardInputHelperAttrs{
-		attrs[0].Bytes,
-		string(attrs[1].Bytes),
-		string(attrs[2].Bytes),
-		string(attrs[3].Bytes),
-		string(attrs[4].Bytes),
-	}
-	return &ret, nil
+		ret := CardInputHelperAttrs{
+			attrs[0].Bytes,
+			string(attrs[1].Bytes),
+			string(attrs[2].Bytes),
+			string(attrs[3].Bytes),
+			string(attrs[4].Bytes),
+		}
+	*/
+	return &attrs, nil
 }
 
 // ヘッダーをHEX文字列に変換
