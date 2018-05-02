@@ -1,3 +1,3 @@
 package libmyna
 
-var Version = "0.2"
+var Version = "0.3"
