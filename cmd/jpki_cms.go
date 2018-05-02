@@ -81,8 +81,8 @@ func init() {
 		"out", "o", "", "出力ファイル")
 	jpkiCmsSignCmd.Flags().StringP(
 		"md", "m", "sha1", "ダイジェストアルゴリズム(sha1|sha256|sha512)")
-	jpkiCmsSignCmd.Flags().String("form", "der", "出力形式(pem,der)")
+	jpkiCmsSignCmd.Flags().StringP("form", "f", "der", "出力形式(pem,der)")
 
 	jpkiCmsCmd.AddCommand(jpkiCmsVerifyCmd)
-	jpkiCmsVerifyCmd.Flags().String("form", "der", "入力形式(pem,der)")
+	jpkiCmsVerifyCmd.Flags().StringP("form", "f", "der", "入力形式(pem,der)")
 }
