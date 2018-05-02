@@ -44,13 +44,14 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 	}
 	var cert *x509.Certificate
 	var err error
+	var pin string
 	switch strings.ToUpper(args[0]) {
 	case "AUTH":
 		cert, err = libmyna.GetJPKIAuthCert()
 	case "AUTHCA":
 		cert, err = libmyna.GetJPKIAuthCACert()
 	case "SIGN":
-		pin, err := cmd.Flags().GetString("pin")
+		pin, err = cmd.Flags().GetString("pin")
 		if pin == "" {
 			pin, err = inputPin("署名用パスワード(6-16桁): ")
 			if err != nil {
@@ -61,7 +62,6 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 
 		cert, err = libmyna.GetJPKISignCert(pin)
 	case "SIGNCA":
-		fmt.Printf("sign ca cert\n")
 		cert, err = libmyna.GetJPKISignCACert()
 	default:
 		cmd.Usage()
@@ -71,6 +71,14 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	err = outputCert(cert, cmd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func outputCert(cert *x509.Certificate, cmd *cobra.Command) error {
 	form, _ := cmd.Flags().GetString("form")
 	switch form {
 	case "text":
