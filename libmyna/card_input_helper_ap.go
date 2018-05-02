@@ -1,7 +1,6 @@
 package libmyna
 
 import (
-	//"encoding/asn1"
 	"errors"
 	"fmt"
 	"github.com/hamano/brokenasn1"
@@ -13,11 +12,11 @@ type CardInputHelperAP struct {
 }
 
 type CardInputHelperAttrs struct {
-	Header  []byte `asn1:"tag:33,private"`
-	Name    string `asn1:"tag:34,private,utf8"`
-	Address string `asn1:"tag:35,private,utf8"`
-	Birth   string `asn1:"tag:36,private"`
-	Sex     string `asn1:"tag:37,private"`
+	Header  []byte `asn1:"private,tag:33"`
+	Name    string `asn1:"private,tag:34,utf8"`
+	Address string `asn1:"private,tag:35,utf8"`
+	Birth   string `asn1:"private,tag:36"`
+	Sex     string `asn1:"private,tag:37"`
 }
 
 func (self *CardInputHelperAP) LookupPin() (int, error) {
@@ -88,7 +87,7 @@ func (self *CardInputHelperAP) ReadMyNumber() (string, error) {
 	return string(mynumber.Bytes), nil
 }
 
-func (self *CardInputHelperAP) ReadAttrInfo() (*CardInputHelperAttrs, error) {
+func (self *CardInputHelperAP) ReadAttributes() (*CardInputHelperAttrs, error) {
 	err := self.reader.SelectEF("00 02")
 	if err != nil {
 		return nil, err
@@ -105,30 +104,11 @@ func (self *CardInputHelperAP) ReadAttrInfo() (*CardInputHelperAttrs, error) {
 		return nil, err
 	}
 	data = self.reader.ReadBinary(parser.GetSize())
-	attrs := CardInputHelperAttrs{}
+	var attrs CardInputHelperAttrs
 	_, err = asn1.UnmarshalWithParams(data, &attrs, "private,tag:32")
 	if err != nil {
 		return nil, err
 	}
-	/*
-		offset := parser.GetOffset()
-		var attrs [5]asn1.RawValue
-		for i := 0; i < 5; i++ {
-			_, err = asn1.Unmarshal(data[offset:], &attrs[i])
-			if err != nil {
-				return nil, err
-			}
-			offset += uint16(len(attrs[i].FullBytes))
-		}
-
-		ret := CardInputHelperAttrs{
-			attrs[0].Bytes,
-			string(attrs[1].Bytes),
-			string(attrs[2].Bytes),
-			string(attrs[3].Bytes),
-			string(attrs[4].Bytes),
-		}
-	*/
 	return &attrs, nil
 }
 

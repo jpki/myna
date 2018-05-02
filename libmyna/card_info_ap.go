@@ -1,9 +1,19 @@
 package libmyna
 
-import ()
+import (
+	"errors"
+
+	"github.com/hamano/brokenasn1"
+)
 
 type CardInfoAP struct {
 	reader *Reader
+}
+
+type CardFront struct {
+	Header []byte `asn1:"private,tag:33"`
+	Birth  string `asn1:"private,tag:34"`
+	Age    string `asn1:"private,tag:35"`
 }
 
 func (self *CardInfoAP) LookupPinA() (int, error) {
@@ -42,6 +52,27 @@ func (self *CardInfoAP) VerifyPinB(pin string) error {
 	return err
 }
 
-func (self *CardInfoAP) Test() error {
-	return nil
+func (self *CardInfoAP) GetCardFront(pin string) (*CardFront, error) {
+	err := self.reader.SelectEF("00 02")
+	if err != nil {
+		return nil, err
+	}
+	data := self.reader.ReadBinary(7)
+	if len(data) != 7 {
+		return nil, errors.New("Error at ReadBinary()")
+	}
+
+	parser := ASN1PartialParser{}
+	err = parser.Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	data = self.reader.ReadBinary(parser.GetSize())
+
+	var front CardFront
+	_, err = asn1.UnmarshalWithParams(data, &front, "private,tag:32")
+	if err != nil {
+		return nil, err
+	}
+	return &front, nil
 }
