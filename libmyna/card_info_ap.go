@@ -14,6 +14,13 @@ type CardFront struct {
 	Header []byte `asn1:"private,tag:33"`
 	Birth  string `asn1:"private,tag:34"`
 	Age    string `asn1:"private,tag:35"`
+	Tag36  []byte `asn1:"private,tag:36"`
+	Name   []byte `asn1:"private,tag:37"`
+	Addr   []byte `asn1:"private,tag:38"`
+	Photo  []byte `asn1:"private,tag:39"`
+	Tag40  []byte `asn1:"private,tag:40"`
+	Expire string `asn1:"private,tag:41"`
+	Code   []byte `asn1:"private,tag:42"`
 }
 
 func (self *CardInfoAP) LookupPinA() (int, error) {
@@ -52,7 +59,7 @@ func (self *CardInfoAP) VerifyPinB(pin string) error {
 	return err
 }
 
-func (self *CardInfoAP) GetCardFront(pin string) (*CardFront, error) {
+func (self *CardInfoAP) GetCardFront() (*CardFront, error) {
 	err := self.reader.SelectEF("00 02")
 	if err != nil {
 		return nil, err

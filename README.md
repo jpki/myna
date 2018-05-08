@@ -1,11 +1,19 @@
 myna - マイナンバーカード・ユーティリティ
-==============================================
+=========================================
 
 [![Build Status](https://travis-ci.org/jpki/myna.svg?branch=master)](https://travis-ci.org/jpki/myna)
 [![codebeat](https://codebeat.co/badges/0bbab46f-5683-4848-92e7-eed36e660b0f)](https://codebeat.co/projects/github-com-jpki-myna-master)
 [![Go Report Card](https://goreportcard.com/badge/jpki/myna)](https://goreportcard.com/report/jpki/myna)
 
-## サポートOS
+## できること
+
+- 券面AP・券面事項入力補助APの読み取り
+- 公的個人認証の各種証明書の読み取り
+- 公的個人認証の署名
+- 各種PINステータスの確認
+- 各種PINの変更
+
+## 動作プラットホーム
 
 - Windows
 - OS X
@@ -18,7 +26,7 @@ myna - マイナンバーカード・ユーティリティ
 
 ## 使い方
 
-詳しくは `myna --help` や myna `サブコマンド --help` `孫コマンド --help` を実行してください。
+詳しくは `myna --help` や `サブコマンド --help` `孫コマンド --help` を実行してください。
 
 ~~~
 Usage:
@@ -36,6 +44,12 @@ Usage:
 
 ~~~
 $ myna card attr
+~~~
+
+### 顔写真を取得
+
+~~~
+$ myna card photo -o photo.jpg
 ~~~
 
 ### PINのステータスを確認
@@ -76,7 +90,7 @@ $ openssl cms -verify -CAfile 署名用CA証明書 -inform der -in 署名ファ�
 ~~~
 
 
-## GUI版もあるよ
+## GUI版(バージョン0.2)
 
 ![mynaqt](mynaqt.png)
 

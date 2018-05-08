@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -28,6 +29,13 @@ var showAttributesCmd = &cobra.Command{
 	PreRunE: checkCard,
 }
 
+var cardFrontPhotoCmd = &cobra.Command{
+	Use:     "photo -o [output.jpg|-]",
+	Short:   "券面APの顔写真を取得",
+	RunE:    showCardFrontPhoto,
+	PreRunE: checkCard,
+}
+
 func checkCard(cmd *cobra.Command, args []string) error {
 	return libmyna.CheckCard()
 }
@@ -50,7 +58,7 @@ func showMyNumber(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("マイナンバー: %s\n", mynumber)
+	fmt.Printf("%s\n", mynumber)
 	return nil
 }
 
@@ -98,7 +106,12 @@ func outputCardInputHelperAttrs(attr *libmyna.CardInputHelperAttrs, form string)
 	}
 }
 
-func showCardSurfaces(cmd *cobra.Command, args []string) error {
+func showCardFrontPhoto(cmd *cobra.Command, args []string) error {
+	output, err := cmd.Flags().GetString("output")
+	if output == "" {
+		cmd.Usage()
+		return nil
+	}
 	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
 		pin, err = inputPin("暗証番号(4桁): ")
@@ -106,7 +119,33 @@ func showCardSurfaces(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
-	libmyna.GetCardInfo(pin)
+	err = libmyna.Validate4DigitPin(pin)
+	if err != nil {
+		return err
+	}
+
+	mynumber, err := libmyna.GetMyNumber(pin)
+	if err != nil {
+		return err
+	}
+
+	info, err := libmyna.GetCardFront(mynumber)
+	if err != nil {
+		return err
+	}
+
+	var file *os.File
+	if output == "-" {
+		file = os.Stdout
+	} else {
+		file, err = os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		defer file.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	file.Write(info.Photo)
 	return nil
 }
 
@@ -116,4 +155,7 @@ func init() {
 	cardCmd.AddCommand(showAttributesCmd)
 	showAttributesCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 	showAttributesCmd.Flags().StringP("form", "f", "text", "出力形式(txt,json)")
+	cardCmd.AddCommand(cardFrontPhotoCmd)
+	cardFrontPhotoCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
+	cardFrontPhotoCmd.Flags().StringP("output", "o", "", "出力ファイル(JPEG2000)")
 }

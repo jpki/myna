@@ -108,8 +108,8 @@ func GetAttrInfo(pin string) (*CardInputHelperAttrs, error) {
 type CardInfo struct {
 }
 
-// 券面AP
-func GetCardInfo(pin string) (*CardInfo, error) {
+// 券面AP表面
+func GetCardFront(mynumber string) (*CardFront, error) {
 	reader, err := NewReader()
 	if err != nil {
 		return nil, err
@@ -117,20 +117,6 @@ func GetCardInfo(pin string) (*CardInfo, error) {
 	defer reader.Finalize()
 	reader.SetDebug(Debug)
 	err = reader.Connect()
-	if err != nil {
-		return nil, err
-	}
-
-	helperAP, err := reader.SelectCardInputHelperAP()
-	if err != nil {
-		return nil, err
-	}
-	helperAP.VerifyPin(pin)
-	if err != nil {
-		return nil, err
-	}
-
-	mynumber, err := helperAP.ReadMyNumber()
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +130,12 @@ func GetCardInfo(pin string) (*CardInfo, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	info, err := cardAP.GetCardFront()
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
 }
 
 func ChangeCardInputHelperPin(pin string, newpin string) error {
