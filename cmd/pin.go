@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/howeyc/gopass"
 	"github.com/spf13/cobra"
@@ -164,8 +165,7 @@ func pinChangeJPKISign(cmd *cobra.Command, args []string) error {
 }
 
 func inputPin(prompt string) (string, error) {
-	fmt.Printf(prompt)
-	input, err := gopass.GetPasswdMasked()
+	input, err := gopass.GetPasswdPrompt(prompt, true, os.Stdin, os.Stderr)
 	if err != nil {
 		return "", err
 	}
