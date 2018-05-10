@@ -206,7 +206,7 @@ func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
 	cmd := ToBytes(apdu)
 	if self.debug {
-		if cmd[0] == 0x00 && cmd[1] == 0x20 {
+		if len(cmd) > 4 && cmd[0] == 0x00 && cmd[1] == 0x20 {
 			len := int(cmd[4])
 			mask := strings.Repeat(" XX", len)
 			fmt.Fprintf(os.Stderr, "< % X XX%s\n", cmd[:4], mask)
