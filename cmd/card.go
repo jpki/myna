@@ -12,26 +12,26 @@ import (
 
 var cardCmd = &cobra.Command{
 	Use:   "card",
-	Short: "券面APおよび券面事項入力補助AP",
+	Short: "券面確認APおよび券面入力補助AP",
 }
 
 var showMyNumberCmd = &cobra.Command{
 	Use:     "mynumber",
-	Short:   "券面事項入力補助APのマイナンバーを表示します",
+	Short:   "券面入力補助APのマイナンバーを表示します",
 	RunE:    showMyNumber,
 	PreRunE: checkCard,
 }
 
 var showAttributesCmd = &cobra.Command{
 	Use:     "attr",
-	Short:   "券面事項入力補助APの4属性を表示します",
+	Short:   "券面入力補助APの4属性を表示します",
 	RunE:    showAttributes,
 	PreRunE: checkCard,
 }
 
 var cardFrontPhotoCmd = &cobra.Command{
 	Use:     "photo -o [output.jpg|-]",
-	Short:   "券面APの顔写真を取得",
+	Short:   "券面確認APの顔写真を取得",
 	RunE:    showCardFrontPhoto,
 	PreRunE: checkCard,
 }
