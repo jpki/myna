@@ -3,9 +3,11 @@ package libmyna
 import (
 	"errors"
 	"fmt"
-	"github.com/ebfe/scard"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/ebfe/scard"
 )
 
 type Reader struct {
@@ -202,10 +204,16 @@ func dumpBinary(bin []byte) {
 
 func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
 	card := self.card
-	if self.debug {
-		fmt.Fprintf(os.Stderr, "< %v\n", apdu)
-	}
 	cmd := ToBytes(apdu)
+	if self.debug {
+		if cmd[0] == 0x00 && cmd[1] == 0x20 {
+			len := int(cmd[4])
+			mask := strings.Repeat(" XX", len)
+			fmt.Fprintf(os.Stderr, "< % X XX%s\n", cmd[:4], mask)
+		} else {
+			fmt.Fprintf(os.Stderr, "< % X\n", cmd)
+		}
+	}
 	res, err := card.Transmit(cmd)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "err: %s\n", err)
