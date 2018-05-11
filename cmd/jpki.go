@@ -80,9 +80,10 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 
 func outputCert(cert *x509.Certificate, cmd *cobra.Command) error {
 	form, _ := cmd.Flags().GetString("form")
+	jpkiCert := &libmyna.JPKICertificate{cert}
 	switch form {
 	case "text":
-		printCertText(cert)
+		println(jpkiCert.ToString())
 	case "pem":
 		printCertPem(cert)
 	case "der":
@@ -107,15 +108,6 @@ func printCertSsh(cert *x509.Certificate) {
 	rsaPubkey := cert.PublicKey.(*rsa.PublicKey)
 	sshPubkey, _ := ssh.EncodePublicKey(*rsaPubkey, "")
 	fmt.Println(sshPubkey)
-}
-
-func printCertText(cert *x509.Certificate) {
-	fmt.Printf("SerialNumber: %s\n", cert.SerialNumber)
-	fmt.Printf("Subject: %s\n", libmyna.Name2String(cert.Subject))
-	fmt.Printf("Issuer: %s\n", libmyna.Name2String(cert.Issuer))
-	fmt.Printf("NotBefore: %s\n", cert.NotBefore)
-	fmt.Printf("NotAfter: %s\n", cert.NotAfter)
-	fmt.Printf("KeyUsage: %v\n", cert.KeyUsage)
 }
 
 func init() {
