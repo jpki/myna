@@ -49,11 +49,13 @@ func beep(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	var apdu *libmyna.APDU
 	if args[0] != "on" {
-		reader.Tx("FF 00 52 FF 00")
+		apdu, _ = libmyna.NewAPDU("FF 00 52 FF 00")
 	} else if args[0] != "off" {
-		reader.Tx("FF 00 52 00 00")
+		apdu, _ = libmyna.NewAPDU("FF 00 52 00 00")
 	}
+	reader.Trans(apdu)
 	return nil
 }
 

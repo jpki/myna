@@ -5,7 +5,7 @@ import (
 )
 
 type APDU struct {
-	cmd []byte
+	cmd []uint8
 }
 
 func NewAPDU(s string) (*APDU, error) {
@@ -17,24 +17,24 @@ func NewAPDU(s string) (*APDU, error) {
 	return &apdu, nil
 }
 
-func NewAPDUCase1(cla byte, ins byte, p1 byte, p2 byte) *APDU {
-	apdu := APDU{[]byte{cla, ins, p1, p2}}
+func NewAPDUCase1(cla uint8, ins uint8, p1 uint8, p2 uint8) *APDU {
+	apdu := APDU{[]uint8{cla, ins, p1, p2}}
 	return &apdu
 }
 
-func NewAPDUCase2(cla byte, ins byte, p1 byte, p2 byte, le byte) *APDU {
-	apdu := APDU{[]byte{cla, ins, p1, p2, le}}
+func NewAPDUCase2(cla uint8, ins uint8, p1 uint8, p2 uint8, le uint8) *APDU {
+	apdu := APDU{[]uint8{cla, ins, p1, p2, le}}
 	return &apdu
 }
 
-func NewAPDUCase3(cla byte, ins byte, p1 byte, p2 byte, data []byte) *APDU {
-	cmd := append([]byte{cla, ins, p1, p2, byte(len(data))}, data...)
+func NewAPDUCase3(cla uint8, ins uint8, p1 uint8, p2 uint8, data []uint8) *APDU {
+	cmd := append([]uint8{cla, ins, p1, p2, uint8(len(data))}, data...)
 	apdu := APDU{cmd}
 	return &apdu
 }
 
-func NewAPDUCase4(cla byte, ins byte, p1 byte, p2 byte, data []byte, le byte) *APDU {
-	cmd := append([]byte{cla, ins, p1, p2, byte(len(data))}, data...)
+func NewAPDUCase4(cla uint8, ins uint8, p1 uint8, p2 uint8, data []uint8, le uint8) *APDU {
+	cmd := append([]uint8{cla, ins, p1, p2, uint8(len(data))}, data...)
 	cmd = append(cmd, le)
 	apdu := APDU{cmd}
 	return &apdu

@@ -112,8 +112,8 @@ func (self *Reader) SelectDF(id string) error {
 		fmt.Fprintf(os.Stderr, "# Select DF\n")
 	}
 	bid := ToBytes(id)
-	apdu := "00 A4 04 0C" + fmt.Sprintf(" %02X % X", len(bid), bid)
-	sw1, sw2, _ := self.Tx(apdu)
+	apdu := NewAPDUCase3(0x00, 0xA4, 0x04, 0x0C, bid)
+	sw1, sw2, _ := self.Trans(apdu)
 	if sw1 == 0x90 && sw2 == 0x00 {
 		return nil
 	} else {
@@ -126,8 +126,8 @@ func (self *Reader) SelectEF(id string) error {
 		fmt.Fprintf(os.Stderr, "# Select EF\n")
 	}
 	bid := ToBytes(id)
-	apdu := fmt.Sprintf("00 A4 02 0C %02X % X", len(bid), bid)
-	sw1, sw2, _ := self.Tx(apdu)
+	apdu := NewAPDUCase3(0x00, 0xA4, 0x02, 0x0C, bid)
+	sw1, sw2, _ := self.Trans(apdu)
 	if sw1 == 0x90 && sw2 == 0x00 {
 		return nil
 	} else {
@@ -136,10 +136,11 @@ func (self *Reader) SelectEF(id string) error {
 }
 
 func (self *Reader) LookupPin() int {
+	apdu := NewAPDUCase1(0x00, 0x20, 0x00, 0x80)
 	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Lookup PIN\n")
 	}
-	sw1, sw2, _ := self.Tx("00 20 00 80")
+	sw1, sw2, _ := self.Trans(apdu)
 	if sw1 == 0x63 {
 		return int(sw2 & 0x0F)
 	} else {
@@ -148,7 +149,6 @@ func (self *Reader) LookupPin() int {
 }
 
 func (self *Reader) Verify(pin string) error {
-	var apdu string
 	if pin == "" {
 		return errors.New("PINが空です")
 	}
@@ -156,8 +156,8 @@ func (self *Reader) Verify(pin string) error {
 		fmt.Fprintf(os.Stderr, "# Verify PIN\n")
 	}
 	bpin := []byte(pin)
-	apdu = fmt.Sprintf("00 20 00 80 %02X % X", len(bpin), bpin)
-	sw1, sw2, _ := self.Tx(apdu)
+	apdu := NewAPDUCase3(0x00, 0x20, 0x00, 0x80, bpin)
+	sw1, sw2, _ := self.Trans(apdu)
 	if sw1 == 0x90 && sw2 == 0x00 {
 		return nil
 	} else if sw1 == 0x63 {
@@ -175,13 +175,12 @@ func (self *Reader) Verify(pin string) error {
 }
 
 func (self *Reader) ChangePin(pin string) bool {
-	var apdu string
 	if self.debug {
 		fmt.Fprintf(os.Stderr, "# Change PIN\n")
 	}
 	bpin := []byte(pin)
-	apdu = fmt.Sprintf("00 24 01 80 %02X % X", len(bpin), bpin)
-	sw1, sw2, _ := self.Tx(apdu)
+	apdu := NewAPDUCase3(0x00, 0x24, 0x01, 0x80, bpin)
+	sw1, sw2, _ := self.Trans(apdu)
 	if sw1 == 0x90 && sw2 == 0x00 {
 		return true
 	} else {
@@ -202,9 +201,9 @@ func dumpBinary(bin []byte) {
 	fmt.Fprintln(os.Stderr)
 }
 
-func (self *Reader) Tx(apdu string) (uint8, uint8, []byte) {
+func (self *Reader) Trans(apdu *APDU) (uint8, uint8, []byte) {
 	card := self.card
-	cmd := ToBytes(apdu)
+	cmd := apdu.cmd
 	if self.debug {
 		if len(cmd) > 4 && cmd[0] == 0x00 && cmd[1] == 0x20 {
 			len := int(cmd[4])
@@ -239,7 +238,6 @@ func (self *Reader) ReadBinary(size uint16) []byte {
 	}
 
 	var l uint8
-	var apdu string
 	var pos uint16
 	pos = 0
 	var res []byte
@@ -250,9 +248,8 @@ func (self *Reader) ReadBinary(size uint16) []byte {
 		} else {
 			l = uint8(size - pos)
 		}
-		apdu = fmt.Sprintf("00 B0 %02X %02X %02X",
-			pos>>8&0xFF, pos&0xFF, l)
-		sw1, sw2, data := self.Tx(apdu)
+		apdu := NewAPDUCase2(0x00, 0xB0, uint8(pos>>8&0xFF), uint8(pos&0xFF), l)
+		sw1, sw2, data := self.Trans(apdu)
 		if sw1 != 0x90 || sw2 != 0x00 {
 			return nil
 		}
@@ -267,8 +264,8 @@ func (self *Reader) Signature(data []byte) ([]byte, error) {
 		fmt.Fprintf(os.Stderr, "# Signature\n")
 	}
 
-	apdu := fmt.Sprintf("80 2a 00 80 %02X % X 00", len(data), data)
-	sw1, sw2, res := self.Tx(apdu)
+	apdu := NewAPDUCase4(0x80, 0x2A, 0x00, 0x80, data, 0)
+	sw1, sw2, res := self.Trans(apdu)
 	if sw1 == 0x90 && sw2 == 0x00 {
 		return res, nil
 	} else {
