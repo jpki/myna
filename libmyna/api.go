@@ -67,7 +67,7 @@ func GetMyNumber(pin string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	helperAP.VerifyPin(pin)
+	err = helperAP.VerifyPin(pin)
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +96,7 @@ func GetAttrInfo(pin string) (*CardInputHelperAttrs, error) {
 	if err != nil {
 		return nil, err
 	}
-	helperAP.VerifyPin(pin)
+	err = helperAP.VerifyPin(pin)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func GetCardFront(mynumber string) (*CardFront, error) {
 	if err != nil {
 		return nil, err
 	}
-	cardAP.VerifyPinA(mynumber)
+	err = cardAP.VerifyPinA(mynumber)
 	if err != nil {
 		return nil, err
 	}
