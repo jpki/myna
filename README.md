@@ -127,6 +127,10 @@ PS> choco install -y git golang
 
 - OSX
 
+~~~
+# brew install go
+~~~
+
 - FreeBSD
 
 ~~~
