@@ -1,14 +1,13 @@
 language: go
 sudo: false
-
 go:
   - "1.11"
-
+env:
+  - GO111MODULE=on
 addons:
   apt:
     packages:
       - libpcsclite-dev
-
 os:
   - linux
   - osx
