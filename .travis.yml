@@ -2,10 +2,7 @@ language: go
 sudo: false
 
 go:
-  - "1.7"
-  - "1.8"
-  - "1.9"
-  - "1.10"
+  - "1.11"
 
 addons:
   apt:
@@ -21,5 +18,5 @@ os:
 #  - export TRAVIS_BUILD_DIR=$HOME/build/
 #  - cd $HOME/build/
 
-install:
-  - make get-deps
+#install:
+#  - make get-deps
