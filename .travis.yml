@@ -2,8 +2,8 @@ language: go
 sudo: false
 go:
   - "1.12.13"
-#env:
-#  - GO111MODULE=on
+env:
+  - GO111MODULE=on
 addons:
   apt:
     packages:
