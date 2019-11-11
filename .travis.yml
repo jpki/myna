@@ -1,9 +1,9 @@
 language: go
 sudo: false
 go:
-  - "1.11"
-env:
-  - GO111MODULE=on
+  - "1.12"
+#env:
+#  - GO111MODULE=on
 addons:
   apt:
     packages:
@@ -12,10 +12,3 @@ os:
   - linux
   - osx
 
-#before_install:
-#  - rsync -az ${TRAVIS_BUILD_DIR}/ $HOME/build/
-#  - export TRAVIS_BUILD_DIR=$HOME/build/
-#  - cd $HOME/build/
-
-#install:
-#  - make get-deps
