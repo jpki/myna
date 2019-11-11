@@ -40,8 +40,13 @@ func Execute() {
 func init() {
 	cobra.EnableCommandSorting = false
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "デバッグ出力")
-	rootCmd.AddCommand(cardCmd)
+	rootCmd.AddCommand(textCmd)
+	rootCmd.AddCommand(imageCmd)
 	rootCmd.AddCommand(jpkiCmd)
 	rootCmd.AddCommand(pinCmd)
 	rootCmd.AddCommand(testCmd)
+}
+
+func checkCard(cmd *cobra.Command, args []string) error {
+	return libmyna.CheckCard()
 }
