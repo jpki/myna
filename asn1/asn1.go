@@ -539,11 +539,6 @@ func parseTagAndLength(bytes []byte, initOffset int) (ret tagAndLength, offset i
 		if err != nil {
 			return
 		}
-		// Tags should be encoded in minimal form.
-		if ret.tag < 0x1f {
-			err = SyntaxError{"non-minimal tag"}
-			return
-		}
 	}
 	if offset >= len(bytes) {
 		err = SyntaxError{"truncated tag or length"}
@@ -577,11 +572,6 @@ func parseTagAndLength(bytes []byte, initOffset int) (ret tagAndLength, offset i
 			}
 			ret.length <<= 8
 			ret.length |= int(b)
-			if ret.length == 0 {
-				// DER requires that lengths be minimal.
-				err = StructuralError{"superfluous leading zeros in length"}
-				return
-			}
 		}
 		// Short lengths must be encoded in short form.
 		if ret.length < 0x80 {
