@@ -2,6 +2,8 @@ github.com/andlabs/ui v0.0.0-20180902183112-867a9e5a498d h1:4ianvxb8s3oyizgjuWWx
 github.com/andlabs/ui v0.0.0-20180902183112-867a9e5a498d/go.mod h1:5G2EjwzgZUPnnReoKvPWVneT8APYbyKkihDVAHUi0II=
 github.com/ebfe/scard v0.0.0-20180227193839-136eebbd7d74 h1:exKu3+Dy2xiQ0uyc3mIfaxAr5JQGRpGCHA3lyRAicfs=
 github.com/ebfe/scard v0.0.0-20180227193839-136eebbd7d74/go.mod h1:8hHvF8DlEq5kE3KWOsZQezdWq1OTOVxZArZMscS954E=
+github.com/ebfe/scard v0.0.0-20180829124254-7c31d2fd1987 h1:KjkkybvhDJ7GCp7AM8pX1EjyaR5PMaaj3JqCFziro9s=
+github.com/ebfe/scard v0.0.0-20180829124254-7c31d2fd1987/go.mod h1:8hHvF8DlEq5kE3KWOsZQezdWq1OTOVxZArZMscS954E=
 github.com/hamano/brokenasn1 v0.0.0-20180502062416-554372bc8d4c h1:jAdZfn3CJo53BNc8XfW61DoQ40DQT9skKPHmgNyXP4M=
 github.com/hamano/brokenasn1 v0.0.0-20180502062416-554372bc8d4c/go.mod h1:EWgLcLUaRbo1Amnt1Sn/pDflEuorEIt7FipdhC6jUXs=
 github.com/howeyc/gopass v0.0.0-20170109162249-bf9dde6d0d2c h1:kQWxfPIHVLbgLzphqk3QUflDy9QdksZR4ygR807bpy0=
@@ -18,6 +20,8 @@ github.com/mattn/go-pointer v0.0.0-20180825124634-49522c3f3791 h1:PfHMsLQJwoc0cc
 github.com/mattn/go-pointer v0.0.0-20180825124634-49522c3f3791/go.mod h1:2zXcozF6qYGgmsG+SeTZz3oAbFLdD3OWqnUbNvJZAlc=
 github.com/mozilla-services/pkcs7 v0.0.0-20180612145454-90dc71fe0d79 h1:O3NDgqRbTWhNsJJo4pmaSfYewHLcEuLYM5yADAzTlgc=
 github.com/mozilla-services/pkcs7 v0.0.0-20180612145454-90dc71fe0d79/go.mod h1:6QGmIL+cu5Oqi6IAREwiDuwNbk0dbupiOghMk7YjglM=
+github.com/mozilla-services/pkcs7 v0.0.0-20181029144607-24857c352dd8 h1:emd4qjvarntxOO49gllt63OnB6x7PYtlCzKce9ePldw=
+github.com/mozilla-services/pkcs7 v0.0.0-20181029144607-24857c352dd8/go.mod h1:6QGmIL+cu5Oqi6IAREwiDuwNbk0dbupiOghMk7YjglM=
 github.com/spf13/cobra v0.0.3 h1:ZlrZ4XsMRm04Fr5pSFxBgfND2EBVa1nLpiy1stUsX/8=
 github.com/spf13/cobra v0.0.3/go.mod h1:1l0Ry5zgKvJasoi3XT1TypsSe7PqH0Sj9dhYf7v3XqQ=
 github.com/spf13/pflag v1.0.3 h1:zPAT6CGy6wXeQ7NtTnaTerfKOsV6V6F8agHXFiazDkg=
