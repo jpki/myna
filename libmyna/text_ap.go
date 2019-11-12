@@ -26,6 +26,7 @@ type TextSignature struct {
 }
 
 type TextCertificate struct {
+	Raw []byte `asn1:"application,tag:78"`
 }
 
 type TextBasicInfo struct {
@@ -140,8 +141,24 @@ func (self *TextAP) ReadSignature() (*TextSignature, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &signature, nil
+}
+
+func (self *TextAP) ReadCertificate() (*TextCertificate, error) {
+	err := self.reader.SelectEF("0004")
+	if err != nil {
+		return nil, err
+	}
+	data := self.reader.ReadBinary(568)
+	if len(data) != 568 {
+		return nil, errors.New("Error at ReadBinary()")
+	}
+	var certificate TextCertificate
+	_, err = asn1.UnmarshalWithParams(data, &certificate, "application,tag:33")
+	if err != nil {
+		return nil, err
+	}
+	return &certificate, nil
 }
 
 func (self *TextAP) ReadBasicInfo() (*TextBasicInfo, error) {

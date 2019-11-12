@@ -155,6 +155,25 @@ func showSignature(cmd *cobra.Command, args []string) error {
 }
 
 func showCertificate(cmd *cobra.Command, args []string) error {
+	debug, _ := cmd.Flags().GetBool("debug")
+	reader, err := libmyna.NewReader(libmyna.Debug(debug))
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	err = reader.Connect()
+	if err != nil {
+		return err
+	}
+	textAP, err := reader.SelectTextAP()
+	if err != nil {
+		return err
+	}
+	certificate, err := textAP.ReadCertificate()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("cert: %v\n", certificate)
 	return nil
 }
 
@@ -196,7 +215,5 @@ func init() {
 	textCmd.AddCommand(showSignatureCmd)
 	showSignatureCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 	textCmd.AddCommand(showCertificateCmd)
-	showCertificateCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 	textCmd.AddCommand(showBasicInfoCmd)
-	//showBasicInfoCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 }
