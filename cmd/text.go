@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/spf13/cobra"
-
 	"github.com/jpki/myna/libmyna"
+	"github.com/spf13/cobra"
 )
 
 var textCmd = &cobra.Command{
@@ -69,11 +68,11 @@ func showAttributes(cmd *cobra.Command, args []string) error {
 	}
 
 	form, _ := cmd.Flags().GetString("form")
-	outputCardInputHelperAttrs(attr, form)
+	outputTextAttrs(attr, form)
 	return nil
 }
 
-func outputCardInputHelperAttrs(attr *libmyna.CardInputHelperAttrs, form string) {
+func outputTextAttrs(attr *libmyna.TextAttrs, form string) {
 	switch form {
 	case "json":
 		obj := map[string]string{

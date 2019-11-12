@@ -90,19 +90,19 @@ func (self *Reader) Connect() error {
 }
 
 func (self *Reader) SelectCardInfoAP() (*CardInfoAP, error) {
-	err := self.SelectDF("D3 92 10 00 31 00 01 01 04 02")
+	err := self.SelectDF("D3921000310001010402")
 	ap := CardInfoAP{self}
 	return &ap, err
 }
 
-func (self *Reader) SelectCardInputHelperAP() (*CardInputHelperAP, error) {
-	err := self.SelectDF("D3 92 10 00 31 00 01 01 04 08")
-	ap := CardInputHelperAP{self}
+func (self *Reader) SelectTextAP() (*TextAP, error) {
+	err := self.SelectDF("D3921000310001010408")
+	ap := TextAP{self}
 	return &ap, err
 }
 
 func (self *Reader) SelectJPKIAP() (*JPKIAP, error) {
-	err := self.SelectDF("D3 92 f0 00 26 01 00 00 00 01")
+	err := self.SelectDF("D392F000260100000001")
 	ap := JPKIAP{self}
 	return &ap, err
 }

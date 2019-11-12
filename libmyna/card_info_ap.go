@@ -3,7 +3,7 @@ package libmyna
 import (
 	"errors"
 
-	"github.com/hamano/brokenasn1"
+	"github.com/jpki/myna/asn1"
 )
 
 type CardInfoAP struct {

@@ -3,15 +3,15 @@ package libmyna
 import (
 	"errors"
 	"fmt"
-	"github.com/hamano/brokenasn1"
+	"github.com/jpki/myna/asn1"
 	"strconv"
 )
 
-type CardInputHelperAP struct {
+type TextAP struct {
 	reader *Reader
 }
 
-type CardInputHelperAttrs struct {
+type TextAttrs struct {
 	Header  []byte `asn1:"private,tag:33"`
 	Name    string `asn1:"private,tag:34,utf8"`
 	Address string `asn1:"private,tag:35,utf8"`
@@ -19,8 +19,11 @@ type CardInputHelperAttrs struct {
 	Sex     string `asn1:"private,tag:37"`
 }
 
-func (self *CardInputHelperAP) LookupPin() (int, error) {
-	err := self.reader.SelectEF("00 11") // 券面事項入力補助用PIN
+type TextSignature struct {
+}
+
+func (self *TextAP) LookupPin() (int, error) {
+	err := self.reader.SelectEF("0011") // 券面事項入力補助用PIN
 	if err != nil {
 		return 0, err
 	}
@@ -28,8 +31,8 @@ func (self *CardInputHelperAP) LookupPin() (int, error) {
 	return count, nil
 }
 
-func (self *CardInputHelperAP) VerifyPin(pin string) error {
-	err := self.reader.SelectEF("00 11")
+func (self *TextAP) VerifyPin(pin string) error {
+	err := self.reader.SelectEF("0011")
 	if err != nil {
 		return err
 	}
@@ -37,8 +40,8 @@ func (self *CardInputHelperAP) VerifyPin(pin string) error {
 	return err
 }
 
-func (self *CardInputHelperAP) LookupPinA() (int, error) {
-	err := self.reader.SelectEF("00 14")
+func (self *TextAP) LookupPinA() (int, error) {
+	err := self.reader.SelectEF("0014")
 	if err != nil {
 		return 0, err
 	}
@@ -46,8 +49,8 @@ func (self *CardInputHelperAP) LookupPinA() (int, error) {
 	return count, nil
 }
 
-func (self *CardInputHelperAP) VerifyPinA(pin string) error {
-	err := self.reader.SelectEF("00 14")
+func (self *TextAP) VerifyPinA(pin string) error {
+	err := self.reader.SelectEF("0014")
 	if err != nil {
 		return err
 	}
@@ -55,8 +58,8 @@ func (self *CardInputHelperAP) VerifyPinA(pin string) error {
 	return err
 }
 
-func (self *CardInputHelperAP) LookupPinB() (int, error) {
-	err := self.reader.SelectEF("00 15")
+func (self *TextAP) LookupPinB() (int, error) {
+	err := self.reader.SelectEF("0015")
 	if err != nil {
 		return 0, err
 	}
@@ -64,8 +67,8 @@ func (self *CardInputHelperAP) LookupPinB() (int, error) {
 	return count, nil
 }
 
-func (self *CardInputHelperAP) VerifyPinB(pin string) error {
-	err := self.reader.SelectEF("00 15")
+func (self *TextAP) VerifyPinB(pin string) error {
+	err := self.reader.SelectEF("0015")
 	if err != nil {
 		return err
 	}
@@ -73,12 +76,12 @@ func (self *CardInputHelperAP) VerifyPinB(pin string) error {
 	return err
 }
 
-func (self *CardInputHelperAP) ReadMyNumber() (string, error) {
-	err := self.reader.SelectEF("00 01")
+func (self *TextAP) ReadMyNumber() (string, error) {
+	err := self.reader.SelectEF("0001")
 	if err != nil {
 		return "", err
 	}
-	data := self.reader.ReadBinary(16)
+	data := self.reader.ReadBinary(17)
 	var mynumber asn1.RawValue
 	_, err = asn1.UnmarshalWithParams(data, &mynumber, "private,tag:16")
 	if err != nil {
@@ -87,8 +90,8 @@ func (self *CardInputHelperAP) ReadMyNumber() (string, error) {
 	return string(mynumber.Bytes), nil
 }
 
-func (self *CardInputHelperAP) ReadAttributes() (*CardInputHelperAttrs, error) {
-	err := self.reader.SelectEF("00 02")
+func (self *TextAP) ReadAttributes() (*TextAttrs, error) {
+	err := self.reader.SelectEF("0002")
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +107,7 @@ func (self *CardInputHelperAP) ReadAttributes() (*CardInputHelperAttrs, error) {
 		return nil, err
 	}
 	data = self.reader.ReadBinary(parser.GetSize())
-	var attrs CardInputHelperAttrs
+	var attrs TextAttrs
 	_, err = asn1.UnmarshalWithParams(data, &attrs, "private,tag:32")
 	if err != nil {
 		return nil, err
@@ -112,13 +115,28 @@ func (self *CardInputHelperAP) ReadAttributes() (*CardInputHelperAttrs, error) {
 	return &attrs, nil
 }
 
+func (self *TextAP) ReadSignature() (*TextSignature, error) {
+	err := self.reader.SelectEF("0003")
+	if err != nil {
+		return nil, err
+	}
+	data := self.reader.ReadBinary(336)
+	if len(data) != 336 {
+		return nil, errors.New("Error at ReadBinary()")
+	}
+	var signature TextSignature
+
+	fmt.Printf("% X", data)
+	return &signature, nil
+}
+
 // ヘッダーをHEX文字列に変換
-func (self *CardInputHelperAttrs) HeaderString() string {
+func (self *TextAttrs) HeaderString() string {
 	return fmt.Sprintf("% X", self.Header)
 }
 
 // ISO5218コードから日本語文字列に変換
-func (self *CardInputHelperAttrs) SexString() string {
+func (self *TextAttrs) SexString() string {
 	n, err := strconv.Atoi(self.Sex)
 	if err != nil {
 		return "エラー"

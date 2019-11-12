@@ -8,8 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"errors"
 	"fmt"
-
-	asn1 "github.com/hamano/brokenasn1"
+	"github.com/jpki/myna/asn1"
 )
 
 type JPKIAP struct {

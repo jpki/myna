@@ -63,16 +63,16 @@ func GetMyNumber(pin string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	helperAP, err := reader.SelectCardInputHelperAP()
+	textAP, err := reader.SelectTextAP()
 	if err != nil {
 		return "", err
 	}
-	err = helperAP.VerifyPin(pin)
+	err = textAP.VerifyPin(pin)
 	if err != nil {
 		return "", err
 	}
 
-	mynumber, err := helperAP.ReadMyNumber()
+	mynumber, err := textAP.ReadMyNumber()
 	if err != nil {
 		return "", err
 	}
@@ -80,7 +80,7 @@ func GetMyNumber(pin string) (string, error) {
 }
 
 // 券面入力補助APの4属性情報を取得します
-func GetAttrInfo(pin string) (*CardInputHelperAttrs, error) {
+func GetAttrInfo(pin string) (*TextAttrs, error) {
 	reader, err := NewReader()
 	if err != nil {
 		return nil, err
@@ -92,16 +92,16 @@ func GetAttrInfo(pin string) (*CardInputHelperAttrs, error) {
 		return nil, err
 	}
 
-	helperAP, err := reader.SelectCardInputHelperAP()
+	textAP, err := reader.SelectTextAP()
 	if err != nil {
 		return nil, err
 	}
-	err = helperAP.VerifyPin(pin)
+	err = textAP.VerifyPin(pin)
 	if err != nil {
 		return nil, err
 	}
 
-	attr, err := helperAP.ReadAttributes()
+	attr, err := textAP.ReadAttributes()
 	return attr, err
 }
 
@@ -171,11 +171,11 @@ func Change4DigitPin(pin string, newpin string, pintype string) error {
 
 	switch pintype {
 	case "CARD_INPUT_HELPER":
-		reader.SelectCardInputHelperAP()
-		reader.SelectEF("00 11") // 券面入力補助PIN
+		reader.SelectTextAP()
+		reader.SelectEF("0011") // 券面入力補助PIN
 	case "JPKI_AUTH":
 		reader.SelectJPKIAP()
-		reader.SelectEF("00 18") //JPKI認証用PIN
+		reader.SelectEF("0018") //JPKI認証用PIN
 	}
 
 	err = reader.Verify(pin)
