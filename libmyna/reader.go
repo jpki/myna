@@ -17,7 +17,15 @@ type Reader struct {
 	debug bool
 }
 
-func NewReader() (*Reader, error) {
+func Debug(d bool) func(*Reader) {
+	return func(r *Reader) {
+		r.debug = d
+	}
+}
+
+var OptionDebug = Debug(false)
+
+func NewReader(opts ...func(*Reader)) (*Reader, error) {
 	ctx, err := scard.EstablishContext()
 	if err != nil {
 		return nil, err
@@ -41,6 +49,9 @@ func NewReader() (*Reader, error) {
 	reader.ctx = ctx
 	reader.name = readers[0]
 	reader.card = nil
+	for _, opt := range opts {
+		opt(reader)
+	}
 	return reader, nil
 }
 

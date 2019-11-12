@@ -24,7 +24,8 @@ Author:
 `, libmyna.Version),
 	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		libmyna.Debug, _ = cmd.Flags().GetBool("debug")
+		debug, _ := cmd.Flags().GetBool("debug")
+		libmyna.OptionDebug = libmyna.Debug(debug)
 	},
 }
 

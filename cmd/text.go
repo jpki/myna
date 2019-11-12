@@ -34,6 +34,20 @@ var showSignatureCmd = &cobra.Command{
 	PreRunE: checkCard,
 }
 
+var showCertificateCmd = &cobra.Command{
+	Use:     "cert",
+	Short:   "券面入力補助APの証明書を表示します",
+	RunE:    showCertificate,
+	PreRunE: checkCard,
+}
+
+var showBasicInfoCmd = &cobra.Command{
+	Use:     "info",
+	Short:   "券面入力補助APの基本情報を表示します",
+	RunE:    showBasicInfo,
+	PreRunE: checkCard,
+}
+
 func showMyNumber(cmd *cobra.Command, args []string) error {
 	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
@@ -113,8 +127,8 @@ func showSignature(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	reader, err := libmyna.NewReader()
-	reader.SetDebug(debug)
+	reader, err := libmyna.NewReader(libmyna.Debug(debug))
+	//reader.SetDebug(debug)
 	if err != nil {
 		return err
 	}
@@ -132,9 +146,17 @@ func showSignature(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	signature, err := textAP.ReadSignature()
-	fmt.Printf("DigestMyNum: %X\n", signature.DigestMyNum)
-	fmt.Printf("DigestAttrs: %X\n", signature.DigestAttrs)
+	fmt.Printf("MyNumHash: %X\n", signature.MyNumDigest)
+	fmt.Printf("AttrsHash: %X\n", signature.AttrsDigest)
 	fmt.Printf("Signature: %X\n", signature.Signature)
+	return nil
+}
+
+func showCertificate(cmd *cobra.Command, args []string) error {
+	return nil
+}
+
+func showBasicInfo(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
@@ -146,4 +168,8 @@ func init() {
 	showAttributesCmd.Flags().StringP("form", "f", "text", "出力形式(txt,json)")
 	textCmd.AddCommand(showSignatureCmd)
 	showSignatureCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
+	textCmd.AddCommand(showCertificateCmd)
+	showCertificateCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
+	textCmd.AddCommand(showBasicInfoCmd)
+	showBasicInfoCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 }

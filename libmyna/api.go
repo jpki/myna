@@ -17,15 +17,12 @@ import (
 	"github.com/mozilla-services/pkcs7"
 )
 
-var Debug bool
-
 func CheckCard() error {
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return err
@@ -53,12 +50,11 @@ func CheckCard() error {
 
 // 券面入力補助APのマイナンバーを取得します
 func GetMyNumber(pin string) (string, error) {
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return "", err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return "", err
@@ -81,12 +77,11 @@ func GetMyNumber(pin string) (string, error) {
 
 // 券面入力補助APの4属性情報を取得します
 func GetAttrInfo(pin string) (*TextAttrs, error) {
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return nil, err
@@ -109,12 +104,11 @@ type CardInfo struct {
 
 // 券面AP表面
 func GetImageInfo(mynumber string) (*ImageInfo, error) {
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return nil, err
@@ -157,12 +151,11 @@ func Change4DigitPin(pin string, newpin string, pintype string) error {
 		return err
 	}
 
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return err
@@ -202,12 +195,11 @@ func ChangeJPKISignPin(pin string, newpin string) error {
 		return err
 	}
 
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return err
@@ -229,12 +221,11 @@ func ChangeJPKISignPin(pin string, newpin string) error {
 }
 
 func GetJPKICert(efid string, pin string) (*x509.Certificate, error) {
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return nil, err
@@ -298,12 +289,11 @@ func CmsSignJPKISignOld(pin string, in string, out string) error {
 		return err
 	}
 
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return err
@@ -359,12 +349,11 @@ func (self JPKISignSigner) Public() crypto.PublicKey {
 
 func (self JPKISignSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	digestInfo := makeDigestInfo(opts.HashFunc(), digest)
-	reader, err := NewReader()
+	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Finalize()
-	reader.SetDebug(Debug)
 	err = reader.Connect()
 	if err != nil {
 		return nil, err
@@ -513,4 +502,41 @@ func CmsVerifyJPKISign(in string, form string) error {
 	}
 
 	return nil
+}
+
+func GetPinStatus() (map[string]int, error) {
+	reader, err := NewReader(OptionDebug)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Finalize()
+	err = reader.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	status := map[string]int{}
+
+	imageAP, err := reader.SelectImageAP()
+	status["image_pin_a"], err = imageAP.LookupPinA()
+	status["image_pin_b"], err = imageAP.LookupPinB()
+
+	textAP, err := reader.SelectTextAP()
+	status["text_pin"], err = textAP.LookupPin()
+	status["text_pin_a"], err = textAP.LookupPinA()
+	status["text_pin_b"], err = textAP.LookupPinB()
+
+	jpkiAP, err := reader.SelectJPKIAP()
+	status["jpki_auth"], err = jpkiAP.LookupAuthPin()
+	status["jpki_sign"], err = jpkiAP.LookupSignPin()
+	/*
+		reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
+		reader.SelectEF("00 1C")
+		status["unknown1"] = reader.LookupPin()
+
+		reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 謎AP
+		reader.SelectEF("00 1C")
+		status["unknown2"] = reader.LookupPin()
+	*/
+	return status, nil
 }

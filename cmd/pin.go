@@ -16,9 +16,10 @@ var pinCmd = &cobra.Command{
 }
 
 var pinStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "PINステータスを表示",
-	RunE:  pinStatus,
+	Use:     "status",
+	Short:   "PINステータスを表示",
+	RunE:    pinStatus,
+	PreRunE: checkCard,
 }
 
 func pinStatus(cmd *cobra.Command, args []string) error {
@@ -28,15 +29,15 @@ func pinStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("券面事項PIN(A):\tのこり%2d回\n",
-		status["card_info_pin_a"])
+		status["image_pin_a"])
 	fmt.Printf("券面事項PIN(B):\tのこり%2d回\n",
-		status["card_info_pin_b"])
+		status["image_pin_b"])
 	fmt.Printf("入力補助PIN:\tのこり%2d回\n",
-		status["card_input_helper_pin"])
+		status["text_pin"])
 	fmt.Printf("入力補助PIN(A):\tのこり%2d回\n",
-		status["card_input_helper_pin_a"])
+		status["text_pin_a"])
 	fmt.Printf("入力補助PIN(B):\tのこり%2d回\n",
-		status["card_input_helper_pin_b"])
+		status["text_pin_b"])
 	fmt.Printf("JPKI認証用PIN:\tのこり%2d回\n", status["jpki_auth"])
 	fmt.Printf("JPKI署名用PIN:\tのこり%2d回\n", status["jpki_sign"])
 	/*
