@@ -20,9 +20,17 @@ type TextAttrs struct {
 }
 
 type TextSignature struct {
-	DigestMyNum []byte `asn1:"private,tag:49"`
-	DigestAttrs []byte `asn1:"private,tag:50"`
+	MyNumDigest []byte `asn1:"private,tag:49"`
+	AttrsDigest []byte `asn1:"private,tag:50"`
 	Signature   []byte `asn1:"private,tag:51"`
+}
+
+type TextCertificate struct {
+}
+
+type TextBasicInfo struct {
+	APInfo []byte `asn1:"private,tag:65"`
+	KeyID  []byte `asn1:"private,tag:66"`
 }
 
 func (self *TextAP) LookupPin() (int, error) {
@@ -132,7 +140,32 @@ func (self *TextAP) ReadSignature() (*TextSignature, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &signature, nil
+}
+
+func (self *TextAP) ReadBasicInfo() (*TextBasicInfo, error) {
+	err := self.reader.SelectEF("0005")
+	if err != nil {
+		return nil, err
+	}
+	data := self.reader.ReadBinary(256)
+	if len(data) != 256 {
+		return nil, errors.New("Error at ReadBinary()")
+	}
+	var basicInfo TextBasicInfo
+	_, err = asn1.UnmarshalWithParams(data, &basicInfo, "private,tag:64")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(basicInfo.APInfo) != 4 {
+		return nil, errors.New("invalid APInfo length")
+	}
+	if len(basicInfo.KeyID) != 16 {
+		return nil, errors.New("invalid KeyID length")
+	}
+	return &basicInfo, nil
 }
 
 // ヘッダーをHEX文字列に変換

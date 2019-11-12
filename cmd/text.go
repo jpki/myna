@@ -128,7 +128,6 @@ func showSignature(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	reader, err := libmyna.NewReader(libmyna.Debug(debug))
-	//reader.SetDebug(debug)
 	if err != nil {
 		return err
 	}
@@ -146,6 +145,9 @@ func showSignature(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	signature, err := textAP.ReadSignature()
+	if err != nil {
+		return err
+	}
 	fmt.Printf("MyNumHash: %X\n", signature.MyNumDigest)
 	fmt.Printf("AttrsHash: %X\n", signature.AttrsDigest)
 	fmt.Printf("Signature: %X\n", signature.Signature)
@@ -157,6 +159,31 @@ func showCertificate(cmd *cobra.Command, args []string) error {
 }
 
 func showBasicInfo(cmd *cobra.Command, args []string) error {
+	debug, _ := cmd.Flags().GetBool("debug")
+	reader, err := libmyna.NewReader(libmyna.Debug(debug))
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	err = reader.Connect()
+	if err != nil {
+		return err
+	}
+	textAP, err := reader.SelectTextAP()
+	if err != nil {
+		return err
+	}
+	basicInfo, err := textAP.ReadBasicInfo()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("APInfo: %X\n", basicInfo.APInfo)
+	fmt.Printf("KeyID: %X\n", basicInfo.KeyID)
+	fmt.Printf("Version: %d\n", basicInfo.APInfo[0])
+	fmt.Printf("ExtAPDU: %d\n", basicInfo.APInfo[1])
+	fmt.Printf("Vendor: %d\n", basicInfo.APInfo[2])
+	fmt.Printf("Option: %d\n", basicInfo.APInfo[3])
 	return nil
 }
 
@@ -171,5 +198,5 @@ func init() {
 	textCmd.AddCommand(showCertificateCmd)
 	showCertificateCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 	textCmd.AddCommand(showBasicInfoCmd)
-	showBasicInfoCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
+	//showBasicInfoCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 }
