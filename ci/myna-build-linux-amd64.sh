@@ -2,10 +2,6 @@
 set -eu
 set -x
 
-mkdir -p $GOPATH/src/github.com/jpki/
-ln -sf $PWD $GOPATH/src/github.com/jpki/myna
-
-make get-deps
 make
 
 mkdir -p ${DIST_DIR}
