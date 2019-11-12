@@ -27,6 +27,13 @@ var showAttributesCmd = &cobra.Command{
 	PreRunE: checkCard,
 }
 
+var showSignatureCmd = &cobra.Command{
+	Use:     "signature",
+	Short:   "券面入力補助APの署名値を表示します",
+	RunE:    showSignature,
+	PreRunE: checkCard,
+}
+
 func showMyNumber(cmd *cobra.Command, args []string) error {
 	pin, err := cmd.Flags().GetString("pin")
 	if pin == "" {
@@ -93,10 +100,50 @@ func outputTextAttrs(attr *libmyna.TextAttrs, form string) {
 	}
 }
 
+func showSignature(cmd *cobra.Command, args []string) error {
+	debug, _ := cmd.Flags().GetBool("debug")
+	pin, err := cmd.Flags().GetString("pin")
+	if pin == "" {
+		pin, err = inputPin("暗証番号(4桁): ")
+		if err != nil {
+			return nil
+		}
+	}
+	err = libmyna.Validate4DigitPin(pin)
+	if err != nil {
+		return err
+	}
+	reader, err := libmyna.NewReader()
+	reader.SetDebug(debug)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	err = reader.Connect()
+	if err != nil {
+		return err
+	}
+	textAP, err := reader.SelectTextAP()
+	if err != nil {
+		return err
+	}
+	err = textAP.VerifyPin(pin)
+	if err != nil {
+		return err
+	}
+	signature, err := textAP.ReadSignature()
+	fmt.Printf("DigestMyNum: %X\n", signature.DigestMyNum)
+	fmt.Printf("DigestAttrs: %X\n", signature.DigestAttrs)
+	fmt.Printf("Signature: %X\n", signature.Signature)
+	return nil
+}
+
 func init() {
 	textCmd.AddCommand(showMyNumberCmd)
 	showMyNumberCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 	textCmd.AddCommand(showAttributesCmd)
 	showAttributesCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 	showAttributesCmd.Flags().StringP("form", "f", "text", "出力形式(txt,json)")
+	textCmd.AddCommand(showSignatureCmd)
+	showSignatureCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 }

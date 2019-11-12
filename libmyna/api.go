@@ -100,7 +100,6 @@ func GetAttrInfo(pin string) (*TextAttrs, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	attr, err := textAP.ReadAttributes()
 	return attr, err
 }

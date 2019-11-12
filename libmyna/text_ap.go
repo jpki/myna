@@ -20,6 +20,9 @@ type TextAttrs struct {
 }
 
 type TextSignature struct {
+	DigestMyNum []byte `asn1:"private,tag:49"`
+	DigestAttrs []byte `asn1:"private,tag:50"`
+	Signature   []byte `asn1:"private,tag:51"`
 }
 
 func (self *TextAP) LookupPin() (int, error) {
@@ -125,8 +128,10 @@ func (self *TextAP) ReadSignature() (*TextSignature, error) {
 		return nil, errors.New("Error at ReadBinary()")
 	}
 	var signature TextSignature
-
-	fmt.Printf("% X", data)
+	_, err = asn1.UnmarshalWithParams(data, &signature, "private,tag:48")
+	if err != nil {
+		return nil, err
+	}
 	return &signature, nil
 }
 
