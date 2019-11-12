@@ -43,7 +43,7 @@ func showCardFrontPhoto(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	info, err := libmyna.GetCardFront(mynumber)
+	info, err := libmyna.GetImageInfo(mynumber)
 	if err != nil {
 		return err
 	}

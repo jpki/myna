@@ -89,9 +89,9 @@ func (self *Reader) Connect() error {
 	return errors.New("カードが見つかりません")
 }
 
-func (self *Reader) SelectCardInfoAP() (*CardInfoAP, error) {
+func (self *Reader) SelectImageAP() (*ImageAP, error) {
 	err := self.SelectDF("D3921000310001010402")
-	ap := CardInfoAP{self}
+	ap := ImageAP{self}
 	return &ap, err
 }
 

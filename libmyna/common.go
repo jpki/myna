@@ -37,14 +37,14 @@ func GetPinStatus() (map[string]int, error) {
 
 	status := map[string]int{}
 
-	cardInfoAP, err := reader.SelectCardInfoAP()
-	status["card_info_pin_a"], err = cardInfoAP.LookupPinA()
-	status["card_info_pin_b"], err = cardInfoAP.LookupPinB()
+	imageAP, err := reader.SelectImageAP()
+	status["image_pin_a"], err = imageAP.LookupPinA()
+	status["image_pin_b"], err = imageAP.LookupPinB()
 
 	textAP, err := reader.SelectTextAP()
-	status["card_input_helper_pin"], err = textAP.LookupPin()
-	status["card_input_helper_pin_a"], err = textAP.LookupPinA()
-	status["card_input_helper_pin_b"], err = textAP.LookupPinB()
+	status["text_pin"], err = textAP.LookupPin()
+	status["text_pin_a"], err = textAP.LookupPinA()
+	status["text_pin_b"], err = textAP.LookupPinB()
 
 	jpkiAP, err := reader.SelectJPKIAP()
 	status["jpki_auth"], err = jpkiAP.LookupAuthPin()

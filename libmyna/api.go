@@ -108,7 +108,7 @@ type CardInfo struct {
 }
 
 // 券面AP表面
-func GetCardFront(mynumber string) (*CardFront, error) {
+func GetImageInfo(mynumber string) (*ImageInfo, error) {
 	reader, err := NewReader()
 	if err != nil {
 		return nil, err
@@ -120,21 +120,21 @@ func GetCardFront(mynumber string) (*CardFront, error) {
 		return nil, err
 	}
 
-	cardAP, err := reader.SelectCardInfoAP()
+	imageAP, err := reader.SelectImageAP()
 	if err != nil {
 		return nil, err
 	}
-	err = cardAP.VerifyPinA(mynumber)
-	if err != nil {
-		return nil, err
-	}
-
-	info, err := cardAP.GetCardFront()
+	err = imageAP.VerifyPinA(mynumber)
 	if err != nil {
 		return nil, err
 	}
 
-	return info, nil
+	front, err := imageAP.GetImageInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	return front, nil
 }
 
 func ChangeCardInputHelperPin(pin string, newpin string) error {
