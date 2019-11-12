@@ -2,14 +2,7 @@
 set -eu
 set -x
 
-mkdir -p $GOPATH/src/github.com/jpki/
-ln -sf $PWD $GOPATH/src/github.com/jpki/myna
-
-make get-deps
-
-go get -u github.com/inconshreveable/mousetrap
-
-make win
+make windows
 
 mkdir -p ${DIST_DIR}
 

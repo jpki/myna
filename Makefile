@@ -5,7 +5,7 @@ native:
 linux:
 	GOOS=linux GOARCH=amd64 go build -o myna_linux
 
-win:
+windows:
 	GOOS=windows GOARCH=amd64 go build -o myna.exe
 
 osx:
