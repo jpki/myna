@@ -1,46 +1,35 @@
 package main
 
 import (
-	_ "errors"
 	"fmt"
 	"github.com/andlabs/ui"
 	"github.com/jpki/myna/libmyna"
-	"github.com/urfave/cli"
+	"github.com/spf13/cobra"
 	"os"
 )
 
-var ctx *cli.Context
 var window *ui.Window
 
-func main() {
-	cli.VersionFlag = cli.BoolFlag{
-		Name:  "version, V",
-		Usage: "print version",
-	}
-	app := cli.NewApp()
-	app.Name = "myna"
-	app.Usage = "個人番号カードユーティリティ(GUI)"
-	app.Author = "HAMANO Tsukasa"
-	app.Email = "hamano@osstech.co.jp"
-	app.Version = libmyna.Version
-	app.Flags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "debug, d",
-			Usage: "詳細出力",
-		},
-	}
-	app.Action = func(c *cli.Context) error {
-		ctx = c
-		err := ui.Main(gmain)
+var rootCmd = &cobra.Command{
+	Use:   "mynaui",
+	Short: fmt.Sprintf("マイナクライアント(GUI) - %s", libmyna.Version),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		libmyna.Debug, _ = cmd.Flags().GetBool("debug")
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		err := ui.Main(uiMain)
 		if err != nil {
 			panic(err)
 		}
-		return nil
-	}
-	app.Run(os.Args)
+	},
 }
 
-func gmain() {
+func main() {
+	rootCmd.PersistentFlags().BoolP("debug", "d", false, "デバッグ出力")
+	rootCmd.Execute()
+}
+
+func uiMain() {
 	label := ui.NewLabel("マイナクライアント")
 	buttonCheck := ui.NewButton("動作確認")
 	buttonCardInfo := ui.NewButton("券面事項確認")
@@ -111,7 +100,7 @@ func showPinPrompt() string {
 func onClickCheck(b *ui.Button) {
 	b.Disable()
 	defer b.Enable()
-	err := libmyna.CheckCard(ctx)
+	err := libmyna.CheckCard()
 	if err != nil {
 		ui.MsgBoxError(window, "エラー", err.Error())
 		return
@@ -165,7 +154,7 @@ func onClickSign(b *ui.Button) {
 func onClickPinStatus(b *ui.Button) {
 	b.Disable()
 	defer b.Enable()
-	status, err := libmyna.GetPinStatus(ctx)
+	status, err := libmyna.GetPinStatus()
 	if err != nil {
 		ui.MsgBoxError(window, "エラー", err.Error())
 		return
