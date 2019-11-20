@@ -42,7 +42,7 @@ func init() {
 	cobra.EnableCommandSorting = false
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "デバッグ出力")
 	rootCmd.AddCommand(textCmd)
-	rootCmd.AddCommand(imageCmd)
+	rootCmd.AddCommand(visualCmd)
 	rootCmd.AddCommand(jpkiCmd)
 	rootCmd.AddCommand(pinCmd)
 	rootCmd.AddCommand(testCmd)

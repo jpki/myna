@@ -6,11 +6,11 @@ import (
 	"github.com/jpki/myna/asn1"
 )
 
-type ImageAP struct {
+type VisualAP struct {
 	reader *Reader
 }
 
-type ImageInfo struct {
+type VisualInfo struct {
 	Header    []byte `asn1:"private,tag:33"`
 	Birth     string `asn1:"private,tag:34"`
 	Sex       string `asn1:"private,tag:35"`
@@ -23,7 +23,7 @@ type ImageInfo struct {
 	Code      []byte `asn1:"private,tag:42"`
 }
 
-func (self *ImageAP) LookupPinA() (int, error) {
+func (self *VisualAP) LookupPinA() (int, error) {
 	err := self.reader.SelectEF("0013")
 	if err != nil {
 		return 0, err
@@ -32,7 +32,7 @@ func (self *ImageAP) LookupPinA() (int, error) {
 	return count, nil
 }
 
-func (self *ImageAP) VerifyPinA(pin string) error {
+func (self *VisualAP) VerifyPinA(pin string) error {
 	err := self.reader.SelectEF("0013")
 	if err != nil {
 		return err
@@ -41,7 +41,7 @@ func (self *ImageAP) VerifyPinA(pin string) error {
 	return err
 }
 
-func (self *ImageAP) LookupPinB() (int, error) {
+func (self *VisualAP) LookupPinB() (int, error) {
 	err := self.reader.SelectEF("0012")
 	if err != nil {
 		return 0, err
@@ -50,7 +50,7 @@ func (self *ImageAP) LookupPinB() (int, error) {
 	return count, nil
 }
 
-func (self *ImageAP) VerifyPinB(pin string) error {
+func (self *VisualAP) VerifyPinB(pin string) error {
 	err := self.reader.SelectEF("0012")
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (self *ImageAP) VerifyPinB(pin string) error {
 	return err
 }
 
-func (self *ImageAP) GetImageInfo() (*ImageInfo, error) {
+func (self *VisualAP) GetVisualInfo() (*VisualInfo, error) {
 	err := self.reader.SelectEF("0002")
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (self *ImageAP) GetImageInfo() (*ImageInfo, error) {
 	}
 	data = self.reader.ReadBinary(parser.GetSize())
 
-	var front ImageInfo
+	var front VisualInfo
 	_, err = asn1.UnmarshalWithParams(data, &front, "private,tag:32")
 	if err != nil {
 		return nil, err

@@ -8,8 +8,8 @@ import (
 	"github.com/jpki/myna/libmyna"
 )
 
-var imageCmd = &cobra.Command{
-	Use:   "image",
+var visualCmd = &cobra.Command{
+	Use:   "visual",
 	Short: "券面確認AP",
 }
 
@@ -43,7 +43,7 @@ func showCardFrontPhoto(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	info, err := libmyna.GetImageInfo(mynumber)
+	info, err := libmyna.GetVisualInfo(mynumber)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func showCardFrontPhoto(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	imageCmd.AddCommand(cardFrontPhotoCmd)
+	visualCmd.AddCommand(cardFrontPhotoCmd)
 	cardFrontPhotoCmd.Flags().StringP("pin", "p", "", "暗証番号(4桁)")
 	cardFrontPhotoCmd.Flags().StringP("output", "o", "", "出力ファイル(JPEG2000)")
 }

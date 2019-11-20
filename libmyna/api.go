@@ -103,7 +103,7 @@ type CardInfo struct {
 }
 
 // 券面AP表面
-func GetImageInfo(mynumber string) (*ImageInfo, error) {
+func GetVisualInfo(mynumber string) (*VisualInfo, error) {
 	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return nil, err
@@ -114,16 +114,16 @@ func GetImageInfo(mynumber string) (*ImageInfo, error) {
 		return nil, err
 	}
 
-	imageAP, err := reader.SelectImageAP()
+	visualAP, err := reader.SelectVisualAP()
 	if err != nil {
 		return nil, err
 	}
-	err = imageAP.VerifyPinA(mynumber)
+	err = visualAP.VerifyPinA(mynumber)
 	if err != nil {
 		return nil, err
 	}
 
-	front, err := imageAP.GetImageInfo()
+	front, err := visualAP.GetVisualInfo()
 	if err != nil {
 		return nil, err
 	}
@@ -517,9 +517,9 @@ func GetPinStatus() (map[string]int, error) {
 
 	status := map[string]int{}
 
-	imageAP, err := reader.SelectImageAP()
-	status["image_pin_a"], err = imageAP.LookupPinA()
-	status["image_pin_b"], err = imageAP.LookupPinB()
+	visualAP, err := reader.SelectVisualAP()
+	status["visual_pin_a"], err = visualAP.LookupPinA()
+	status["visual_pin_b"], err = visualAP.LookupPinB()
 
 	textAP, err := reader.SelectTextAP()
 	status["text_pin"], err = textAP.LookupPin()
