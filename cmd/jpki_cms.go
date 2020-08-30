@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -50,19 +51,38 @@ func jpkiCmsSign(cmd *cobra.Command, args []string) error {
 
 	md, _ := cmd.Flags().GetString("md")
 	form, _ := cmd.Flags().GetString("form")
-	opts := libmyna.CmsSignOpts{md, form}
+	detached, _ := cmd.Flags().GetBool("detached")
+	opts := libmyna.CmsSignOpts{md, form, detached}
 	err = libmyna.CmsSignJPKISign(pin, in, out, opts)
 	return err
 }
 
 func jpkiCmsVerify(cmd *cobra.Command, args []string) error {
+	detached, _ := cmd.Flags().GetBool("detached")
+
 	if len(args) != 1 {
 		cmd.Usage()
-		return errors.New("検証対象ファイルを指定してください")
+
+		if detached {
+			return errors.New("署名ファイルを指定してください")
+		} else {
+			return errors.New("検証対象ファイルを指定してください")
+		}
 	}
 
 	form, _ := cmd.Flags().GetString("form")
-	err := libmyna.CmsVerifyJPKISign(args[0], form)
+
+	content, _ := cmd.Flags().GetString("content")
+	if detached && content == "" {
+		cmd.Usage()
+		return errors.New("検証対象ファイルを-cで指定してください")
+	} else if !detached && content != "" {
+		fmt.Fprintf(os.Stderr,
+			"警告: -c は --detached時のみ有効です。'%s'の内容は無視されます。\n", content)
+	}
+
+	opts := libmyna.CmsVerifyOpts{form, detached, content}
+	err := libmyna.CmsVerifyJPKISign(args[0], opts)
 	if err != nil {
 		return err
 	}
@@ -82,7 +102,10 @@ func init() {
 	jpkiCmsSignCmd.Flags().StringP(
 		"md", "m", "sha1", "ダイジェストアルゴリズム(sha1|sha256|sha512)")
 	jpkiCmsSignCmd.Flags().StringP("form", "f", "der", "出力形式(pem,der)")
+	jpkiCmsSignCmd.Flags().Bool("detached", false, "デタッチ署名 (Detached Signature)")
 
 	jpkiCmsCmd.AddCommand(jpkiCmsVerifyCmd)
+	jpkiCmsVerifyCmd.Flags().StringP("content", "c", "", "デタッチ署名の検証対象ファイル (--detached時のみ有効)")
+	jpkiCmsVerifyCmd.Flags().Bool("detached", false, "デタッチ署名 (Detached Signature)")
 	jpkiCmsVerifyCmd.Flags().StringP("form", "f", "der", "入力形式(pem,der)")
 }
