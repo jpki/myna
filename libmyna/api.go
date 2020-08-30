@@ -14,7 +14,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mozilla-services/pkcs7"
+	"github.com/yu-ichiro/pkcs7"
 )
 
 func CheckCard() error {

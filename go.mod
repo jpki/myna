@@ -1,12 +1,14 @@
 module github.com/jpki/myna
 
+go 1.14
+
 require (
-	github.com/ebfe/scard v0.0.0-20180829124254-7c31d2fd1987
-	github.com/howeyc/gopass v0.0.0-20170109162249-bf9dde6d0d2c
-	github.com/ianmcmahon/encoding_ssh v0.0.0-20140307011951-dda221cd386d
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/mozilla-services/pkcs7 v0.0.0-20181029144607-24857c352dd8
-	github.com/spf13/cobra v0.0.3
+	github.com/ebfe/scard v0.0.0-20190212122703-c3d1b1916a95
+	github.com/howeyc/gopass v0.0.0-20190910152052-7cb4b85ec19c
+	github.com/ianmcmahon/encoding_ssh v0.0.0-20190330023458-31ed23ea1a8a
+	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/crypto v0.0.0-20191111213947-16651526fdb4 // indirect
+	github.com/yu-ichiro/pkcs7 v0.0.0-20200830110910-e894b1924126
+	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a // indirect
+	golang.org/x/sys v0.0.0-20200828194041-157a740278f4 // indirect
 )
