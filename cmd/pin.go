@@ -29,9 +29,9 @@ func pinStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("券面事項PIN(A):\tのこり%2d回\n",
-		status["image_pin_a"])
+		status["visual_pin_a"])
 	fmt.Printf("券面事項PIN(B):\tのこり%2d回\n",
-		status["image_pin_b"])
+		status["visual_pin_b"])
 	fmt.Printf("入力補助PIN:\tのこり%2d回\n",
 		status["text_pin"])
 	fmt.Printf("入力補助PIN(A):\tのこり%2d回\n",
