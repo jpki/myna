@@ -518,15 +518,24 @@ func GetPinStatus() (map[string]int, error) {
 	status := map[string]int{}
 
 	visualAP, err := reader.SelectVisualAP()
+	if err != nil {
+		return nil, err
+	}
 	status["visual_pin_a"], err = visualAP.LookupPinA()
 	status["visual_pin_b"], err = visualAP.LookupPinB()
 
 	textAP, err := reader.SelectTextAP()
+	if err != nil {
+		return nil, err
+	}
 	status["text_pin"], err = textAP.LookupPin()
 	status["text_pin_a"], err = textAP.LookupPinA()
 	status["text_pin_b"], err = textAP.LookupPinB()
 
 	jpkiAP, err := reader.SelectJPKIAP()
+	if err != nil {
+		return nil, err
+	}
 	status["jpki_auth"], err = jpkiAP.LookupAuthPin()
 	status["jpki_sign"], err = jpkiAP.LookupSignPin()
 	/*
