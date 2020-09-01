@@ -14,7 +14,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mozilla-services/pkcs7"
+	"github.com/yu-ichiro/pkcs7"
 )
 
 func CheckCard() error {
@@ -389,8 +389,15 @@ func GetDigestOID(md string) (asn1.ObjectIdentifier, error) {
 }
 
 type CmsSignOpts struct {
-	Hash string
-	Form string
+	Hash     string
+	Form     string
+	Detached bool
+}
+
+type CmsVerifyOpts struct {
+	Form     string
+	Detached bool
+	Content  string
 }
 
 func CmsSignJPKISign(pin string, in string, out string, opts CmsSignOpts) error {
@@ -417,6 +424,10 @@ func CmsSignJPKISign(pin string, in string, out string, opts CmsSignOpts) error 
 	err = toBeSigned.AddSigner(cert, privkey, pkcs7.SignerInfoConfig{})
 	if err != nil {
 		return err
+	}
+
+	if opts.Detached {
+		toBeSigned.Detach()
 	}
 
 	signed, err := toBeSigned.Finish()
@@ -484,14 +495,22 @@ func readCMSFile(in string, form string) (*pkcs7.PKCS7, error) {
 	return p7, nil
 }
 
-func CmsVerifyJPKISign(in string, form string) error {
+func CmsVerifyJPKISign(in string, opts CmsVerifyOpts) error {
 	cacert, err := GetJPKISignCACert()
 	if err != nil {
 		return err
 	}
-	p7, err := readCMSFile(in, form)
+	p7, err := readCMSFile(in, opts.Form)
 	if err != nil {
 		return err
+	}
+
+	if opts.Detached {
+		content, err := ioutil.ReadFile(opts.Content)
+		if err != nil {
+			return err
+		}
+		p7.Content = content
 	}
 
 	certPool := x509.NewCertPool()
