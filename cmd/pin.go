@@ -28,22 +28,27 @@ func pinStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("券面事項PIN(A):\tのこり%2d回\n",
-		status["visual_pin_a"])
-	fmt.Printf("券面事項PIN(B):\tのこり%2d回\n",
-		status["visual_pin_b"])
-	fmt.Printf("入力補助PIN:\tのこり%2d回\n",
-		status["text_pin"])
-	fmt.Printf("入力補助PIN(A):\tのこり%2d回\n",
-		status["text_pin_a"])
-	fmt.Printf("入力補助PIN(B):\tのこり%2d回\n",
-		status["text_pin_b"])
-	fmt.Printf("JPKI認証用PIN:\tのこり%2d回\n", status["jpki_auth"])
-	fmt.Printf("JPKI署名用PIN:\tのこり%2d回\n", status["jpki_sign"])
-	/*
-		fmt.Printf("謎のPIN1:\tのこり%d回\n", status["unknown1"])
-		fmt.Printf("謎のPIN2:\tのこり%d回\n", status["unknown2"])
-	*/
+	if visual_pin_a, ok := status["visual_pin_a"]; ok {
+		fmt.Printf("券面事項PIN(A):\tのこり%2d回\n", visual_pin_a)
+	}
+	if visual_pin_b, ok := status["visual_pin_b"]; ok {
+		fmt.Printf("券面事項PIN(B):\tのこり%2d回\n", visual_pin_b)
+	}
+	if text_pin, ok := status["text_pin"]; ok {
+		fmt.Printf("入力補助PIN:\tのこり%2d回\n", text_pin)
+	}
+	if text_pin_a, ok := status["text_pin_a"]; ok {
+		fmt.Printf("入力補助PIN(A):\tのこり%2d回\n", text_pin_a)
+	}
+	if text_pin_b, ok := status["text_pin_b"]; ok {
+		fmt.Printf("入力補助PIN(B):\tのこり%2d回\n", text_pin_b)
+	}
+	if jpki_auth, ok := status["jpki_auth"]; ok {
+		fmt.Printf("JPKI認証用PIN:\tのこり%2d回\n", jpki_auth)
+	}
+	if jpki_sign, ok := status["jpki_sign"]; ok {
+		fmt.Printf("JPKI署名用PIN:\tのこり%2d回\n", jpki_sign)
+	}
 	return nil
 }
 

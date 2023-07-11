@@ -548,6 +548,23 @@ func GetPinStatus() (map[string]int, error) {
 
 	status := map[string]int{}
 
+	jpkiAP, err := reader.SelectJPKIAP()
+	if err != nil {
+		return nil, err
+	}
+	status["jpki_auth"], err = jpkiAP.LookupAuthPin()
+	status["jpki_sign"], err = jpkiAP.LookupSignPin()
+
+	token, err := jpkiAP.GetToken()
+	if err != nil {
+		return nil, err
+	}
+
+	if token == "JPKIAPGPSETOKEN" {
+		// スマホJPKI
+		return status, nil
+	}
+
 	visualAP, err := reader.SelectVisualAP()
 	if err != nil {
 		return nil, err
@@ -563,20 +580,5 @@ func GetPinStatus() (map[string]int, error) {
 	status["text_pin_a"], err = textAP.LookupPinA()
 	status["text_pin_b"], err = textAP.LookupPinB()
 
-	jpkiAP, err := reader.SelectJPKIAP()
-	if err != nil {
-		return nil, err
-	}
-	status["jpki_auth"], err = jpkiAP.LookupAuthPin()
-	status["jpki_sign"], err = jpkiAP.LookupSignPin()
-	/*
-		reader.SelectAP("D3 92 10 00 31 00 01 01 01 00") // 謎AP
-		reader.SelectEF("00 1C")
-		status["unknown1"] = reader.LookupPin()
-
-		reader.SelectAP("D3 92 10 00 31 00 01 01 04 01") // 謎AP
-		reader.SelectEF("00 1C")
-		status["unknown2"] = reader.LookupPin()
-	*/
 	return status, nil
 }
