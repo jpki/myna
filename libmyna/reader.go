@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/ebfe/scard"
 )
@@ -73,31 +72,27 @@ func (self *Reader) GetCard() *scard.Card {
 func (self *Reader) Connect() error {
 	rs := make([]scard.ReaderState, 1)
 	rs[0].Reader = self.name
-	rs[0].CurrentState = scard.StateUnaware // no need
-	var err error
-	for i := 0; i < 5; i++ {
-		err = self.ctx.GetStatusChange(rs, -1)
+	rs[0].CurrentState = scard.StateUnaware
+
+	for true {
+		err := self.ctx.GetStatusChange(rs, -1)
 		if err != nil {
 			return err
 		}
-
-		if rs[0].EventState&scard.StatePresent != 0 {
-			card, e := self.ctx.Connect(
-				self.name, scard.ShareExclusive, scard.ProtocolAny)
-			if e == nil {
-				self.card = card
-				return nil
-			} else {
-				err = e
-			}
+		rs[0].CurrentState = rs[0].EventState
+		if rs[0].EventState&scard.StatePresent != scard.StatePresent {
+			continue
 		}
-		fmt.Fprintf(os.Stderr, "connecting...\n")
-		time.Sleep(1 * time.Second)
+		card, err := self.ctx.Connect(
+			self.name, scard.ShareExclusive, scard.ProtocolAny)
+		if err != nil {
+			return err
+		} else {
+			self.card = card
+			break
+		}
 	}
-	if err != nil {
-		return err
-	}
-	return errors.New("カードが見つかりません")
+	return nil
 }
 
 func (self *Reader) SelectVisualAP() (*VisualAP, error) {
