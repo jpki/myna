@@ -41,6 +41,8 @@ func CheckCard() error {
 	token, err := jpkiAP.GetToken()
 	if token == "JPKIAPICCTOKEN2" {
 		return nil
+	} else if token == "JPKIAPGPSETOKEN" {
+		return nil
 	} else if token == "JPKIAPICCTOKEN" {
 		return errors.New("これは住基カードですね?")
 	} else {
@@ -220,7 +222,7 @@ func ChangeJPKISignPin(pin string, newpin string) error {
 	return nil
 }
 
-func GetJPKICert(efid string, pin string) (*x509.Certificate, error) {
+func GetJPKICert(efid string, pin string, pass string) (*x509.Certificate, error) {
 	reader, err := NewReader(OptionDebug)
 	if err != nil {
 		return nil, err
@@ -237,7 +239,13 @@ func GetJPKICert(efid string, pin string) (*x509.Certificate, error) {
 	}
 
 	if pin != "" {
-		err = jpkiAP.VerifySignPin(pin)
+		err = jpkiAP.VerifyAuthPin(pin)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if pass != "" {
+		err = jpkiAP.VerifySignPin(pass)
 		if err != nil {
 			return nil, err
 		}
@@ -247,19 +255,23 @@ func GetJPKICert(efid string, pin string) (*x509.Certificate, error) {
 }
 
 func GetJPKIAuthCert() (*x509.Certificate, error) {
-	return GetJPKICert("00 0A", "")
+	return GetJPKICert("00 0A", "", "")
+}
+
+func GetJPKIMobileAuthCert(pin string) (*x509.Certificate, error) {
+	return GetJPKICert("00 0A", pin, "")
 }
 
 func GetJPKIAuthCACert() (*x509.Certificate, error) {
-	return GetJPKICert("00 0B", "")
+	return GetJPKICert("00 0B", "", "")
 }
 
 func GetJPKISignCert(pass string) (*x509.Certificate, error) {
-	return GetJPKICert("00 01", pass)
+	return GetJPKICert("00 01", "", pass)
 }
 
 func GetJPKISignCACert() (*x509.Certificate, error) {
-	return GetJPKICert("00 02", "")
+	return GetJPKICert("00 02", "", "")
 }
 
 /*

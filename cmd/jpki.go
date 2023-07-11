@@ -31,6 +31,7 @@ var jpkiCertCmd = &cobra.Command{
  - authca 利用者認証用CA証明書
  - sign   電子署名用証明書
  - signca 電子署名用CA証明書
+ - mauth  モバイルJPKI利用者認証用証明書(要PIN入力)
 
 署名用証明書を取得する場合のみパスワードが必要です。
 `,
@@ -63,6 +64,15 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 		cert, err = libmyna.GetJPKISignCert(pin)
 	case "SIGNCA":
 		cert, err = libmyna.GetJPKISignCACert()
+	case "MAUTH":
+		pin, err = cmd.Flags().GetString("pin")
+		if pin == "" {
+			pin, err = inputPin("認証用パスワード(4桁): ")
+			if err != nil {
+				return nil
+			}
+		}
+		cert, err = libmyna.GetJPKIMobileAuthCert(pin)
 	default:
 		cmd.Usage()
 		return nil
