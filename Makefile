@@ -15,8 +15,4 @@ clean:
 	rm -rf myna myna.exe
 
 get-deps:
-	go get -u github.com/spf13/cobra
-	go get -u github.com/howeyc/gopass
-	go get -u github.com/ebfe/scard
-	go get -u github.com/ianmcmahon/encoding_ssh
-	go get -u go.mozilla.org/pkcs7
+	go mod download
