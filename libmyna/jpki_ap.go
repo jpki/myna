@@ -1,4 +1,4 @@
-// AP Specific API
+// JPKIAP Operation API
 
 package libmyna
 
@@ -15,7 +15,7 @@ type JPKIAP struct {
 	reader *Reader
 }
 
-func (self *JPKIAP) GetToken() (string, error) {
+func (self *JPKIAP) ReadToken() (string, error) {
 	err := self.reader.SelectEF("00 06") // トークン情報EF
 	if err != nil {
 		return "", err
@@ -86,6 +86,22 @@ func (self *JPKIAP) ReadCertificate(efid string) (*x509.Certificate, error) {
 		return nil, err
 	}
 	return cert, nil
+}
+
+func (self *JPKIAP) ReadSignCert() (*x509.Certificate, error) {
+	return self.ReadCertificate("00 01")
+}
+
+func (self *JPKIAP) ReadSignCACert() (*x509.Certificate, error) {
+	return self.ReadCertificate("00 02")
+}
+
+func (self *JPKIAP) ReadAuthCert() (*x509.Certificate, error) {
+	return self.ReadCertificate("00 0A")
+}
+
+func (self *JPKIAP) ReadAuthCACert() (*x509.Certificate, error) {
+	return self.ReadCertificate("00 0B")
 }
 
 type JPKICertificate struct {

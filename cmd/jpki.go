@@ -27,13 +27,10 @@ var jpkiCertCmd = &cobra.Command{
 	Short: "JPKI証明書を表示",
 	Long: `公的個人認証の証明書を表示します。
 
- - auth   利用者認証用証明書
+ - auth   利用者認証用証明書(スマホJPKIの場合PIN入力が必要)
  - authca 利用者認証用CA証明書
- - sign   電子署名用証明書
+ - sign   電子署名用証明書(署名用パスワードが必要)
  - signca 電子署名用CA証明書
- - mauth  モバイルJPKI利用者認証用証明書(要PIN入力)
-
-署名用証明書を取得する場合のみパスワードが必要です。
 `,
 	RunE: jpkiCert,
 }
@@ -46,11 +43,45 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 	var cert *x509.Certificate
 	var err error
 	var pin string
+	reader, err := libmyna.NewReader(libmyna.OptionDebug)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	err = reader.Connect()
+	if err != nil {
+		return err
+	}
+
+	jpkiAP, err := reader.SelectJPKIAP()
+	if err != nil {
+		return err
+	}
+	token, err := jpkiAP.ReadToken()
+	if err != nil {
+		return err
+	}
+
 	switch strings.ToUpper(args[0]) {
 	case "AUTH":
-		cert, err = libmyna.GetJPKIAuthCert()
+		if token == "JPKIAPGPSETOKEN" {
+			// スマホJPKI
+			pin, err = cmd.Flags().GetString("pin")
+			if pin == "" {
+				pin, err = inputPin("認証用パスワード(4桁): ")
+				if err != nil {
+					return nil
+				}
+			}
+			pin = strings.ToUpper(pin)
+			err = jpkiAP.VerifyAuthPin(pin)
+			if err != nil {
+				return nil
+			}
+		}
+		cert, err = jpkiAP.ReadAuthCert()
 	case "AUTHCA":
-		cert, err = libmyna.GetJPKIAuthCACert()
+		cert, err = jpkiAP.ReadAuthCACert()
 	case "SIGN":
 		pin, err = cmd.Flags().GetString("pin")
 		if pin == "" {
@@ -60,19 +91,10 @@ func jpkiCert(cmd *cobra.Command, args []string) error {
 			}
 		}
 		pin = strings.ToUpper(pin)
-
-		cert, err = libmyna.GetJPKISignCert(pin)
+		err = jpkiAP.VerifySignPin(pin)
+		cert, err = jpkiAP.ReadSignCert()
 	case "SIGNCA":
-		cert, err = libmyna.GetJPKISignCACert()
-	case "MAUTH":
-		pin, err = cmd.Flags().GetString("pin")
-		if pin == "" {
-			pin, err = inputPin("認証用パスワード(4桁): ")
-			if err != nil {
-				return nil
-			}
-		}
-		cert, err = libmyna.GetJPKIMobileAuthCert(pin)
+		cert, err = jpkiAP.ReadSignCACert()
 	default:
 		cmd.Usage()
 		return nil

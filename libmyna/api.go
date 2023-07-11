@@ -38,7 +38,7 @@ func CheckCard() error {
 		return errors.New("トークン情報を取得できません")
 	}
 
-	token, err := jpkiAP.GetToken()
+	token, err := jpkiAP.ReadToken()
 	if token == "JPKIAPICCTOKEN2" {
 		return nil
 	} else if token == "JPKIAPGPSETOKEN" {
@@ -252,18 +252,6 @@ func GetJPKICert(efid string, pin string, pass string) (*x509.Certificate, error
 	}
 	cert, err := jpkiAP.ReadCertificate(efid)
 	return cert, nil
-}
-
-func GetJPKIAuthCert() (*x509.Certificate, error) {
-	return GetJPKICert("00 0A", "", "")
-}
-
-func GetJPKIMobileAuthCert(pin string) (*x509.Certificate, error) {
-	return GetJPKICert("00 0A", pin, "")
-}
-
-func GetJPKIAuthCACert() (*x509.Certificate, error) {
-	return GetJPKICert("00 0B", "", "")
 }
 
 func GetJPKISignCert(pass string) (*x509.Certificate, error) {
@@ -555,7 +543,7 @@ func GetPinStatus() (map[string]int, error) {
 	status["jpki_auth"], err = jpkiAP.LookupAuthPin()
 	status["jpki_sign"], err = jpkiAP.LookupSignPin()
 
-	token, err := jpkiAP.GetToken()
+	token, err := jpkiAP.ReadToken()
 	if err != nil {
 		return nil, err
 	}
