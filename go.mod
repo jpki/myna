@@ -7,6 +7,6 @@ require (
 	github.com/howeyc/gopass v0.0.0-20210920133722-c8aef6fb66ef
 	github.com/ianmcmahon/encoding_ssh v0.0.0-20190330023458-31ed23ea1a8a
 	github.com/spf13/cobra v1.7.0
-	github.com/yu-ichiro/pkcs7 v0.0.0-20200830110910-e894b1924126
+	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
 	golang.org/x/crypto v0.11.0 // indirect
 )
