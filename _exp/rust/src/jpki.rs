@@ -9,9 +9,27 @@ use openssl::x509::X509;
 use std::fs;
 use std::io::Write;
 
+#[derive(Clone, Debug, ValueEnum)]
+#[clap(rename_all = "snake_case")]
+enum CertType {
+    /// 署名用証明書
+    #[value(alias = "signature", alias = "digital_signature")]
+    Sign,
+    /// 署名用CA証明書
+    SignCa,
+    /// 認証用証明書
+    Auth,
+    /// 認証用CA証明書
+    AuthCa,
+}
+
 #[derive(Debug, Args)]
-pub struct PasswordArgs {
-    /// 署名用パスワード(6-16桁)
+#[command(arg_required_else_help = true)]
+pub struct CertArgs {
+    /// 証明書の種類 [sign, sign-ca, auth, auth-ca]
+    #[arg(short = 't', long = "type", value_enum)]
+    cert_type: CertType,
+    /// 署名用パスワード(6-16桁) signの場合に必要
     #[arg(short, long)]
     password: Option<String>,
     /// フォーマット
@@ -19,25 +37,17 @@ pub struct PasswordArgs {
     format: EnumFormat,
 }
 
-#[derive(Debug, Args)]
-pub struct PinArgs {
-    /// 認証用パスワード(4桁)
-    #[arg(short, long)]
-    pin: Option<String>,
-    /// フォーマット
-    #[arg(short, long, value_enum, default_value = "text")]
-    format: EnumFormat,
-}
-
-#[derive(Debug, Args)]
-pub struct FormatArgs {
-    /// フォーマット
-    #[arg(short, long, value_enum, default_value = "text")]
-    format: EnumFormat,
+#[derive(Clone, Debug, ValueEnum)]
+enum SignType {
+    /// 署名用証明書
+    Sign,
 }
 
 #[derive(Debug, Args)]
 pub struct CmsSignArgs {
+    /// 署名の種類
+    #[arg(short = 't', long = "type", value_enum, default_value = "sign")]
+    sign_type: SignType,
     /// 署名用パスワード(6-16桁)
     #[arg(short, long)]
     password: Option<String>,
@@ -108,14 +118,8 @@ pub enum CmsSubcommand {
 
 #[derive(Subcommand)]
 pub enum JPKI {
-    /// Show Sign Certificate
-    ReadSignCert(PasswordArgs),
-    /// Show Sign CA Certificate
-    ReadSignCACert(FormatArgs),
-    /// Show Auth Certificate
-    ReadAuthCert(FormatArgs),
-    /// Show Auth CA Certificate
-    ReadAuthCACert(FormatArgs),
+    /// 証明書を表示します
+    Cert(CertArgs),
     /// CMS署名と検証
     #[command(subcommand)]
     Cms(CmsSubcommand),
@@ -123,10 +127,7 @@ pub enum JPKI {
 
 pub fn main(_app: &crate::App, subcommand: &JPKI) {
     match subcommand {
-        JPKI::ReadSignCert(args) => read_sign_cert(args),
-        JPKI::ReadSignCACert(args) => read_sign_ca_cert(args),
-        JPKI::ReadAuthCert(args) => read_auth_cert(args),
-        JPKI::ReadAuthCACert(args) => read_auth_ca_cert(args),
+        JPKI::Cert(args) => jpki_cert(args),
         JPKI::Cms(cms_cmd) => cms_main(cms_cmd),
     }
 }
@@ -155,48 +156,31 @@ fn output_cert(cert: &X509, format: &EnumFormat) {
     }
 }
 
-fn input_password(args: &PasswordArgs) -> String {
-    let pass = utils::prompt_input("パスワード(6-16桁): ", &args.password);
-    let pass = pass.to_uppercase();
-    utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
-    pass
-}
-
-fn read_sign_cert(args: &PasswordArgs) {
-    let password = input_password(args);
+fn jpki_cert(args: &CertArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
-    reader.select_ef("001b").unwrap();
-    reader.verify_pin(&password).expect("verify pin failed");
-    reader.select_ef("0001").unwrap();
-    let cert = X509::from_der(&reader.read_binary_all()).unwrap();
-    output_cert(&cert, &args.format);
-}
 
-fn read_sign_ca_cert(args: &FormatArgs) {
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader.select_ef("0002").unwrap();
-    let cert = X509::from_der(&reader.read_binary_all()).unwrap();
-    output_cert(&cert, &args.format);
-}
+    match args.cert_type {
+        CertType::Sign => {
+            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
+            let pass = pass.to_uppercase();
+            utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
+            reader.select_ef("001b").unwrap();
+            reader.verify_pin(&pass).expect("パスワード認証に失敗しました");
+            reader.select_ef("0001").unwrap();
+        }
+        CertType::SignCa => {
+            reader.select_ef("0002").unwrap();
+        }
+        CertType::Auth => {
+            reader.select_ef("000a").unwrap();
+        }
+        CertType::AuthCa => {
+            reader.select_ef("000b").unwrap();
+        }
+    }
 
-fn read_auth_cert(args: &FormatArgs) {
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader.select_ef("000a").unwrap();
-    let cert = X509::from_der(&reader.read_binary_all()).unwrap();
-    output_cert(&cert, &args.format);
-}
-
-fn read_auth_ca_cert(args: &FormatArgs) {
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader.select_ef("000B").unwrap();
     let cert = X509::from_der(&reader.read_binary_all()).unwrap();
     output_cert(&cert, &args.format);
 }
