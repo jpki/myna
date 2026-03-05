@@ -32,6 +32,9 @@ pub struct CertArgs {
     /// 署名用パスワード(6-16桁) signの場合に必要
     #[arg(short, long)]
     password: Option<String>,
+    /// 認証用PIN(4桁数字) スマホJPKIのauth時に必要
+    #[arg(long)]
+    pin: Option<String>,
     /// フォーマット
     #[arg(short, long, value_enum, default_value = "text")]
     format: EnumFormat,
@@ -156,10 +159,17 @@ fn output_cert(cert: &X509, format: &EnumFormat) {
     }
 }
 
+fn read_token(reader: &mut MynaReader) -> String {
+    reader.select_ef("0006").unwrap();
+    let data = reader.read_binary(0, 0x20);
+    String::from_utf8_lossy(&data).trim_end().to_string()
+}
+
 fn jpki_cert(args: &CertArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
+    let token = read_token(&mut reader);
 
     match args.cert_type {
         CertType::Sign => {
@@ -174,6 +184,13 @@ fn jpki_cert(args: &CertArgs) {
             reader.select_ef("0002").unwrap();
         }
         CertType::Auth => {
+            if token == "JPKIAPGPSETOKEN" {
+                let pin = utils::prompt_input("認証用PIN(4桁): ", &args.pin);
+                let pin = pin.to_uppercase();
+                utils::validate_4digit_pin(&pin).expect("PINが不正です");
+                reader.select_ef("0018").unwrap();
+                reader.verify_pin(&pin).expect("PIN認証に失敗しました");
+            }
             reader.select_ef("000a").unwrap();
         }
         CertType::AuthCa => {
