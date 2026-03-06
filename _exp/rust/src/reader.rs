@@ -120,25 +120,35 @@ impl MynaReader {
         self.select_df(&bid);
     }
 
-    pub fn read_binary(&mut self, pos: u16, len: u16) -> Vec<u8> {
+    pub fn read_binary(&mut self, pos: u16, size: u16) -> Vec<u8> {
         log::debug!("# READ BINARY");
-        let p1: u8 = (pos >> 8) as u8;
-        let p2: u8 = (pos & 0xff) as u8;
-        let cmd = CommandAPDU::case2(0x00, 0xB0, p1, p2, len);
-        log::debug!("< {}", cmd);
-        let res = self.transmit(cmd);
-        log::debug!("> {}", res);
-        res.data
+        let mut result = Vec::new();
+        let mut pos = pos;
+        let end = pos + size;
+        while pos < end {
+            let remaining = end - pos;
+            let le: u16 = if remaining > 0xff { 0 } else { remaining };
+            let p1: u8 = (pos >> 8) as u8;
+            let p2: u8 = (pos & 0xff) as u8;
+            let cmd = CommandAPDU::case2(0x00, 0xB0, p1, p2, le);
+            log::debug!("< {}", cmd);
+            let res = self.transmit(cmd);
+            log::debug!("> {}", res);
+            let n = res.data.len() as u16;
+            result.extend(res.data);
+            pos += n;
+        }
+        result
     }
 
     pub fn read_binary_all(&mut self) -> Vec<u8> {
-        let mut head = self.read_binary(0, 5);
+        let mut head = self.read_binary(0, 7);
         let res = asn1_rs::Any::from_ber(&head);
         let len: u16 = match res {
             Err(asn1_rs::Err::Incomplete(nom::Needed::Size(size))) => size.get() as u16,
             _ => 0,
         };
-        let data = self.read_binary(5, len);
+        let data = self.read_binary(7, len);
         head.extend(data);
         head
     }
