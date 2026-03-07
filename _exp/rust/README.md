@@ -9,17 +9,18 @@ myna - マイナンバーカード・ユーティリティ
 - 公的個人認証の署名
 - 各種PINステータスの確認
 - 各種PINの変更(未テスト)
+- スマホJPKI対応
 
 ## 動作プラットホーム
 
-- Windows
-- OS X
+- Windows(未検証)
+- OS X(未検証)
 - Linux
-- FreeBSD
+- FreeBSD(未検証)
 
 ## ダウンロード
 
-<https://github.com/jpki/myna/releases>
+TODO
 
 ## 使い方
 
