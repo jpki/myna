@@ -22,6 +22,12 @@ var jpkiCmsSignCmd = &cobra.Command{
 	RunE:  jpkiCmsSign,
 }
 
+var jpkiCmsSignUserCmd = &cobra.Command{
+	Use:   "signuser",
+	Short: "利用者証明書でCMS署名を行います",
+	RunE:  jpkiCmsSignUser,
+}
+
 var jpkiCmsVerifyCmd = &cobra.Command{
 	Use:   "verify",
 	Short: "CMS署名を検証します",
@@ -57,6 +63,33 @@ func jpkiCmsSign(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+func jpkiCmsSignUser(cmd *cobra.Command, args []string) error {
+	in, _ := cmd.Flags().GetString("in")
+	if in == "" {
+		cmd.Usage()
+		return errors.New("署名対象ファイルを指定してください")
+	}
+	out, _ := cmd.Flags().GetString("out")
+	if out == "" {
+		cmd.Usage()
+		return errors.New("出力ファイルを指定してください")
+	}
+
+	pin, err := cmd.Flags().GetString("pin")
+	if pin == "" {
+		pin, err = inputPin("認証用パスワード(4桁): ")
+		if err != nil {
+			return nil
+		}
+	}
+
+	md, _ := cmd.Flags().GetString("md")
+	form, _ := cmd.Flags().GetString("form")
+	detached, _ := cmd.Flags().GetBool("detached")
+	opts := libmyna.CmsSignOpts{md, form, detached}
+	err = libmyna.CmsSignJPKISignUser(pin, in, out, opts)
+	return err
+}
 func jpkiCmsVerify(cmd *cobra.Command, args []string) error {
 	detached, _ := cmd.Flags().GetBool("detached")
 
@@ -108,4 +141,16 @@ func init() {
 	jpkiCmsVerifyCmd.Flags().StringP("content", "c", "", "デタッチ署名の検証対象ファイル (--detached時のみ有効)")
 	jpkiCmsVerifyCmd.Flags().Bool("detached", false, "デタッチ署名 (Detached Signature)")
 	jpkiCmsVerifyCmd.Flags().StringP("form", "f", "der", "入力形式(pem,der)")
+
+	jpkiCmsCmd.AddCommand(jpkiCmsSignUserCmd)
+	jpkiCmsSignUserCmd.Flags().StringP(
+		"pin", "p", "", "認証用パスワード(4桁)")
+	jpkiCmsSignUserCmd.Flags().StringP(
+		"in", "i", "", "署名対象ファイル")
+	jpkiCmsSignUserCmd.Flags().StringP(
+		"out", "o", "", "出力ファイル")
+	jpkiCmsSignUserCmd.Flags().StringP(
+		"md", "m", "sha1", "ダイジェストアルゴリズム(sha1|sha256|sha512)")
+	jpkiCmsSignUserCmd.Flags().StringP("form", "f", "der", "出力形式(pem,der)")
+	jpkiCmsSignUserCmd.Flags().Bool("detached", false, "デタッチ署名 (Detached Signature)")
 }

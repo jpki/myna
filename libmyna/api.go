@@ -442,6 +442,39 @@ func CmsSignJPKISign(pin string, in string, out string, opts CmsSignOpts) error 
 	return nil
 }
 
+func CmsSignJPKISignUser(pin string, in string, out string, opts CmsSignOpts) error {
+	content, err := os.ReadFile(in)
+	if err != nil {
+		return err
+	}
+
+	// 利用者証明書の取得
+	reader, err := NewReader(OptionDebug)
+	if err != nil {
+		return err
+	}
+	defer reader.Finalize()
+	err = reader.Connect()
+	if err != nil {
+		return err
+	}
+
+	reader.SelectJPKIAP()
+	reader.SelectEF("00 18")
+	err = reader.Verify(pin)
+	if err != nil {
+		return err
+	}
+
+	reader.SelectEF("00 17") // Select SIGN USER EF
+	signature, err := reader.Signature(content)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(out, signature, 0644)
+}
+
 func writeCms(out string, signed []byte, form string) error {
 	var file *os.File
 	var err error
