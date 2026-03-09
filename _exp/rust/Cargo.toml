@@ -12,8 +12,6 @@ colored = "2.0.0"
 env_logger = "0.9.1"
 hex = "0.4.3"
 log = "0.4.17"
-nom = "7.1.1"
 openssl = { version = "0.10.42", features = ["vendored"] }
 pcsc = "2.7.0"
 rpassword = "7.1.0"
-base64 = "0.21"

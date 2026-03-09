@@ -145,7 +145,7 @@ impl MynaReader {
         let mut head = self.read_binary(0, 7);
         let res = asn1_rs::Any::from_ber(&head);
         let len: u16 = match res {
-            Err(asn1_rs::Err::Incomplete(nom::Needed::Size(size))) => size.get() as u16,
+            Err(asn1_rs::Err::Incomplete(asn1_rs::Needed::Size(size))) => size.get() as u16,
             _ => 0,
         };
         let data = self.read_binary(7, len);
@@ -213,7 +213,7 @@ fn partial_decode() {
     let bytes = [0xff, 0x40, 0x82, 0x00, 0x9f];
     let res = asn1_rs::Any::from_ber(&bytes);
     let len = match res {
-        Err(asn1_rs::Err::Incomplete(nom::Needed::Size(size))) => size.get(),
+        Err(asn1_rs::Err::Incomplete(asn1_rs::Needed::Size(size))) => size.get(),
         _ => 0,
     };
     assert_eq!(159, len);

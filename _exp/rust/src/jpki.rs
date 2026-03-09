@@ -253,15 +253,8 @@ fn cms_sign(args: &CmsSignArgs) {
         CmsFormat::Der => pkcs7_der,
         CmsFormat::Pem => {
             let b64 =
-                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &pkcs7_der);
-            // 76文字ごとに改行を挿入
-            let wrapped: String = b64
-                .as_bytes()
-                .chunks(76)
-                .map(|chunk| std::str::from_utf8(chunk).unwrap())
-                .collect::<Vec<&str>>()
-                .join("\n");
-            format!("-----BEGIN PKCS7-----\n{}\n-----END PKCS7-----\n", wrapped).into_bytes()
+                openssl::base64::encode_block(&pkcs7_der);
+            format!("-----BEGIN PKCS7-----\n{}\n-----END PKCS7-----\n", b64.trim_end()).into_bytes()
         }
     };
 
