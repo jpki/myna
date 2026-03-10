@@ -1,5 +1,6 @@
 mod apdu;
 mod jpki;
+mod pdf;
 mod pin;
 mod pkcs7;
 mod prompt;

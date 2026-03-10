@@ -10,6 +10,7 @@ asn1-rs = "0.5.2"
 clap = { version = "4.5.60", features = ["cargo", "derive"] }
 colored = "2.2.0"
 env_logger = "0.9.3"
+flate2 = "1"
 hex = "0.4.3"
 log = "0.4.29"
 openssl = { version = "0.10.75", features = ["vendored"] }

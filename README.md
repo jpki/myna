@@ -130,25 +130,13 @@ $ myna pin status
 ### JPKI認証用証明書を取得
 
 ~~~
-$ myna jpki cert auth
+$ myna jpki cert -t auth
 ~~~
 
 ### JPKI署名用証明書を取得
 
 ~~~
-$ myna jpki cert sign
-~~~
-
-### JPKI署名用鍵で低レベルRSA署名
-
-~~~
-$ myna jpki pkey sign -t sign -i 入力ファイル -o 署名ファイル
-~~~
-
-### JPKI低レベルRSA署名を検証
-
-~~~
-$ myna jpki pkey verify -t sign -i 署名ファイル -o 出力ファイル
+$ myna jpki cert -t sign
 ~~~
 
 ### JPKI署名用証明書でCMS署名
@@ -167,4 +155,16 @@ OpenSSLコマンドで検証
 
 ~~~
 $ openssl cms -verify -CAfile 署名用CA証明書 -inform der -in 署名ファイル
+~~~
+
+### PDFに電子署名を付与
+
+~~~
+$ myna jpki pdf sign -i input.pdf -o signed.pdf
+~~~
+
+### PDF電子署名を検証
+
+~~~
+$ myna jpki pdf verify -i signed.pdf
 ~~~

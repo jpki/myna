@@ -143,7 +143,7 @@ enum EnumFormat {
 }
 
 #[derive(Clone, ValueEnum, Debug)]
-enum DigestAlgorithm {
+pub enum DigestAlgorithm {
     Sha1,
     Sha256,
     Sha384,
@@ -164,6 +164,34 @@ pub enum CmsSubcommand {
     Verify(CmsVerifyArgs),
 }
 
+#[derive(Debug, Args)]
+pub struct PdfSignArgs {
+    /// 入力PDFファイル
+    #[arg(short, long)]
+    pub input: String,
+    /// 出力PDFファイル
+    #[arg(short, long)]
+    pub output: String,
+    /// 署名用パスワード(6-16桁)
+    #[arg(short, long)]
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct PdfVerifyArgs {
+    /// 署名済みPDFファイル
+    #[arg(short, long)]
+    pub input: String,
+}
+
+#[derive(Subcommand)]
+pub enum PdfSubcommand {
+    /// PDFに電子署名を付与します
+    Sign(PdfSignArgs),
+    /// PDF電子署名を検証します
+    Verify(PdfVerifyArgs),
+}
+
 #[derive(Subcommand)]
 pub enum JPKI {
     /// 証明書を表示します
@@ -174,6 +202,9 @@ pub enum JPKI {
     /// CMS署名・検証
     #[command(subcommand)]
     Cms(CmsSubcommand),
+    /// PDF電子署名
+    #[command(subcommand)]
+    Pdf(PdfSubcommand),
 }
 
 pub fn main(_app: &crate::App, subcommand: &JPKI) {
@@ -181,6 +212,7 @@ pub fn main(_app: &crate::App, subcommand: &JPKI) {
         JPKI::Cert(args) => jpki_cert(args),
         JPKI::Pkey(cmd) => pkey_main(cmd),
         JPKI::Cms(cms_cmd) => cms_main(cms_cmd),
+        JPKI::Pdf(pdf_cmd) => crate::pdf::pdf_main(pdf_cmd),
     }
 }
 
@@ -332,7 +364,7 @@ fn input_cms_password(args: &CmsSignArgs) -> String {
     pass
 }
 
-fn to_message_digest(alg: &DigestAlgorithm) -> MessageDigest {
+pub fn to_message_digest(alg: &DigestAlgorithm) -> MessageDigest {
     match alg {
         DigestAlgorithm::Sha1 => MessageDigest::sha1(),
         DigestAlgorithm::Sha256 => MessageDigest::sha256(),
@@ -385,7 +417,7 @@ fn cms_sign(args: &CmsSignArgs) {
     println!("署名を保存しました: {}", args.output);
 }
 
-fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
+pub fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
     let prefix = match alg {
         DigestAlgorithm::Sha1 => vec![
             0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04,

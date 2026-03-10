@@ -245,6 +245,26 @@ pub fn build_signed_data(
     der_sequence(&[&OID_SIGNED_DATA, &explicit_signed_data])
 }
 
+/// 事前計算されたハッシュを使って署名準備する（PDF署名用）
+///
+/// prepare_signing と同じだが、content の代わりに既にハッシュ済みの値を受け取る。
+pub fn prepare_signing_with_hash(content_hash: &[u8], md: MessageDigest) -> (Vec<u8>, Vec<u8>) {
+    let signing_time = der_utc_time_now();
+    let attrs_set = build_auth_attrs(content_hash, &signing_time);
+    let attrs_digest = hash(md, &attrs_set).unwrap().to_vec();
+    (attrs_set, attrs_digest)
+}
+
+/// detached モード専用の SignedData 構築（コンテンツなし、PDF署名用）
+pub fn build_signed_data_detached(
+    cert: &X509,
+    signature: &[u8],
+    md: MessageDigest,
+    attrs_set: &[u8],
+) -> Vec<u8> {
+    build_signed_data(&[], cert, signature, md, attrs_set, true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
