@@ -41,6 +41,33 @@ pub struct CertArgs {
 }
 
 #[derive(Clone, Debug, ValueEnum)]
+enum RsaKeyType {
+    /// 署名用鍵
+    Sign,
+    /// 認証用鍵
+    Auth,
+}
+
+#[derive(Debug, Args)]
+pub struct RsaSignArgs {
+    /// 鍵の種類 [sign, auth]
+    #[arg(short = 't', long = "type", value_enum)]
+    key_type: RsaKeyType,
+    /// 署名用パスワード(6-16桁) / 認証用PIN(4桁)
+    #[arg(short, long)]
+    password: Option<String>,
+    /// 署名対象ファイル
+    #[arg(short, long)]
+    input: String,
+    /// 出力ファイル
+    #[arg(short, long)]
+    output: String,
+    /// ダイジェストアルゴリズム
+    #[arg(short, long, value_enum, default_value = "sha256")]
+    digest: DigestAlgorithm,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
 enum SignType {
     /// 署名用証明書
     Sign,
@@ -123,6 +150,8 @@ pub enum CmsSubcommand {
 pub enum JPKI {
     /// 証明書を表示します
     Cert(CertArgs),
+    /// 生のRSA署名を行います(openssl rsautl相当)
+    Sign(RsaSignArgs),
     /// CMS署名と検証
     #[command(subcommand)]
     Cms(CmsSubcommand),
@@ -131,6 +160,7 @@ pub enum JPKI {
 pub fn main(_app: &crate::App, subcommand: &JPKI) {
     match subcommand {
         JPKI::Cert(args) => jpki_cert(args),
+        JPKI::Sign(args) => rsa_sign(args),
         JPKI::Cms(cms_cmd) => cms_main(cms_cmd),
     }
 }
@@ -200,6 +230,44 @@ fn jpki_cert(args: &CertArgs) {
 
     let cert = X509::from_der(&reader.read_binary_all()).unwrap();
     output_cert(&cert, &args.format);
+}
+
+fn rsa_sign(args: &RsaSignArgs) {
+    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
+    reader.connect().expect("カードへの接続に失敗しました");
+    reader.select_jpki_ap();
+
+    match args.key_type {
+        RsaKeyType::Sign => {
+            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
+            let pass = pass.to_uppercase();
+            utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
+            reader.select_ef("001b").unwrap();
+            reader.verify_pin(&pass).expect("パスワード認証に失敗しました");
+        }
+        RsaKeyType::Auth => {
+            let pin = utils::prompt_input("認証用PIN(4桁): ", &args.password);
+            utils::validate_4digit_pin(&pin).expect("PINが不正です");
+            reader.select_ef("0018").unwrap();
+            reader.verify_pin(&pin).expect("PIN認証に失敗しました");
+        }
+    }
+
+    // 署名対象ファイルを読み込み、ハッシュしてDigestInfoを作成
+    let content = fs::read(&args.input).expect("署名対象ファイルを読み込めませんでした");
+    let md = to_message_digest(&args.digest);
+    let hash = openssl::hash::hash(md, &content).expect("ハッシュの計算に失敗しました");
+    let digest_info = make_digest_info(&args.digest, &hash);
+
+    // 鍵EFを選択して署名
+    match args.key_type {
+        RsaKeyType::Sign => reader.select_ef("001a").unwrap(),
+        RsaKeyType::Auth => reader.select_ef("0017").unwrap(),
+    };
+    let signature = reader.signature(&digest_info).expect("署名に失敗しました");
+
+    fs::write(&args.output, &signature).expect("出力ファイルへの書き込みに失敗しました");
+    println!("署名を保存しました: {}", args.output);
 }
 
 fn input_cms_password(args: &CmsSignArgs) -> String {
