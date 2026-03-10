@@ -14,4 +14,4 @@ hex = "0.4.3"
 log = "0.4.29"
 openssl = { version = "0.10.75", features = ["vendored"] }
 pcsc = "2.9.0"
-rpassword = "7.4.0"
+libc = "0.2"

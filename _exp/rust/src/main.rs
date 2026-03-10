@@ -2,6 +2,7 @@ mod apdu;
 mod jpki;
 mod pin;
 mod pkcs7;
+mod prompt;
 mod reader;
 mod test;
 mod text;

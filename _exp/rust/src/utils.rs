@@ -4,7 +4,7 @@
 pub fn prompt_input(prompt: &str, existing: &Option<String>) -> String {
     match existing {
         Some(v) => v.clone(),
-        None => rpassword::prompt_password(prompt).unwrap(),
+        None => crate::prompt::password_masked(prompt).unwrap(),
     }
 }
 
