@@ -49,22 +49,40 @@ enum RsaKeyType {
 }
 
 #[derive(Debug, Args)]
-pub struct RsaSignArgs {
+pub struct PkeySignArgs {
     /// 鍵の種類 [sign, auth]
     #[arg(short = 't', long = "type", value_enum)]
     key_type: RsaKeyType,
     /// 署名用パスワード(6-16桁) / 認証用PIN(4桁)
     #[arg(short, long)]
     password: Option<String>,
-    /// 署名対象ファイル
+    /// 入力ファイル
     #[arg(short, long)]
     input: String,
     /// 出力ファイル
     #[arg(short, long)]
     output: String,
-    /// ダイジェストアルゴリズム
-    #[arg(short, long, value_enum, default_value = "sha256")]
-    digest: DigestAlgorithm,
+}
+
+#[derive(Debug, Args)]
+pub struct PkeyVerifyArgs {
+    /// 鍵の種類 [sign, auth]
+    #[arg(short = 't', long = "type", value_enum)]
+    key_type: RsaKeyType,
+    /// 署名ファイル
+    #[arg(short, long)]
+    input: String,
+    /// 出力ファイル (省略時はstdout)
+    #[arg(short, long)]
+    output: Option<String>,
+}
+
+#[derive(Subcommand)]
+pub enum PkeySubcommand {
+    /// 低レベルRSA署名を行います
+    Sign(PkeySignArgs),
+    /// 低レベルRSA署名を検証します
+    Verify(PkeyVerifyArgs),
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -150,9 +168,10 @@ pub enum CmsSubcommand {
 pub enum JPKI {
     /// 証明書を表示します
     Cert(CertArgs),
-    /// 生のRSA署名を行います(openssl rsautl相当)
-    Sign(RsaSignArgs),
-    /// CMS署名と検証
+    /// 低レベルRSA署名・検証
+    #[command(subcommand)]
+    Pkey(PkeySubcommand),
+    /// CMS署名・検証
     #[command(subcommand)]
     Cms(CmsSubcommand),
 }
@@ -160,8 +179,15 @@ pub enum JPKI {
 pub fn main(_app: &crate::App, subcommand: &JPKI) {
     match subcommand {
         JPKI::Cert(args) => jpki_cert(args),
-        JPKI::Sign(args) => rsa_sign(args),
+        JPKI::Pkey(cmd) => pkey_main(cmd),
         JPKI::Cms(cms_cmd) => cms_main(cms_cmd),
+    }
+}
+
+fn pkey_main(subcommand: &PkeySubcommand) {
+    match subcommand {
+        PkeySubcommand::Sign(args) => pkey_sign(args),
+        PkeySubcommand::Verify(args) => pkey_verify(args),
     }
 }
 
@@ -232,7 +258,7 @@ fn jpki_cert(args: &CertArgs) {
     output_cert(&cert, &args.format);
 }
 
-fn rsa_sign(args: &RsaSignArgs) {
+fn pkey_sign(args: &PkeySignArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
@@ -253,21 +279,50 @@ fn rsa_sign(args: &RsaSignArgs) {
         }
     }
 
-    // 署名対象ファイルを読み込み、ハッシュしてDigestInfoを作成
-    let content = fs::read(&args.input).expect("署名対象ファイルを読み込めませんでした");
-    let md = to_message_digest(&args.digest);
-    let hash = openssl::hash::hash(md, &content).expect("ハッシュの計算に失敗しました");
-    let digest_info = make_digest_info(&args.digest, &hash);
+    let content = fs::read(&args.input).expect("入力ファイルを読み込めませんでした");
 
     // 鍵EFを選択して署名
     match args.key_type {
         RsaKeyType::Sign => reader.select_ef("001a").unwrap(),
         RsaKeyType::Auth => reader.select_ef("0017").unwrap(),
     };
-    let signature = reader.signature(&digest_info).expect("署名に失敗しました");
+    let signature = reader.signature(&content).expect("署名に失敗しました");
 
     fs::write(&args.output, &signature).expect("出力ファイルへの書き込みに失敗しました");
     println!("署名を保存しました: {}", args.output);
+}
+
+fn pkey_verify(args: &PkeyVerifyArgs) {
+    // カードから証明書を取得して公開鍵を得る
+    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
+    reader.connect().expect("カードへの接続に失敗しました");
+    reader.select_jpki_ap();
+
+    let cert_ef = match args.key_type {
+        RsaKeyType::Sign => "0001",
+        RsaKeyType::Auth => "000a",
+    };
+    reader.select_ef(cert_ef).unwrap();
+    let cert_der = reader.read_binary_all();
+    let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
+    let pubkey = cert.public_key().expect("公開鍵の取得に失敗しました");
+
+    let sig = fs::read(&args.input).expect("署名ファイルを読み込めませんでした");
+
+    // RSA公開鍵演算の結果をそのまま出力
+    let rsa = pubkey.rsa().expect("RSA鍵の取得に失敗しました");
+    let mut buf = vec![0u8; rsa.size() as usize];
+    let len = rsa
+        .public_decrypt(&sig, &mut buf, openssl::rsa::Padding::PKCS1)
+        .expect("RSA公開鍵演算に失敗しました");
+    let result = &buf[..len];
+    if let Some(ref path) = args.output {
+        fs::write(path, result).expect("出力ファイルへの書き込みに失敗しました");
+    } else {
+        std::io::stdout()
+            .write_all(result)
+            .expect("標準出力への書き込みに失敗しました");
+    }
 }
 
 fn input_cms_password(args: &CmsSignArgs) -> String {

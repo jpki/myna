@@ -139,6 +139,18 @@ $ myna jpki cert auth
 $ myna jpki cert sign
 ~~~
 
+### JPKI署名用鍵で低レベルRSA署名
+
+~~~
+$ myna jpki pkey sign -t sign -i 入力ファイル -o 署名ファイル
+~~~
+
+### JPKI低レベルRSA署名を検証
+
+~~~
+$ myna jpki pkey verify -t sign -i 署名ファイル -o 出力ファイル
+~~~
+
 ### JPKI署名用証明書でCMS署名
 
 ~~~
