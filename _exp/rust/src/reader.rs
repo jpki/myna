@@ -49,7 +49,7 @@ impl MynaReader {
                 let atr = hex::encode(rs.atr());
 
                 // FIDOデバイス?
-                if atr.starts_with("3b888001") {
+                if !atr.starts_with("3b888001") {
                     continue;
                 }
 
