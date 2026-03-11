@@ -1,39 +1,108 @@
 myna - マイナンバーカード・ユーティリティ
 =========================================
 
-[![Build Status](https://travis-ci.org/jpki/myna.svg?branch=master)](https://travis-ci.org/jpki/myna)
-[![codebeat](https://codebeat.co/badges/0bbab46f-5683-4848-92e7-eed36e660b0f)](https://codebeat.co/projects/github-com-jpki-myna-master)
-[![Go Report Card](https://goreportcard.com/badge/jpki/myna)](https://goreportcard.com/report/jpki/myna)
+> **Note:** バージョン0.6よりRust実装に置き換わりました。
+> コマンドラインオプションが一部変更されていますので、以下の利用方法を確認してください。
 
 ## できること
 
-- 券面確認AP・券面入力補助APの読み取り
+- 券面入力補助APの読み取り
+- 券面確認APの読み取り
 - 公的個人認証の各種証明書の読み取り
 - 公的個人認証の署名
 - 各種PINステータスの確認
-- 各種PINの変更
+- 各種PINの変更(未テスト)
+- スマホJPKI対応
 
 ## 動作プラットホーム
 
-- Windows
-- OS X
 - Linux
+- macOS(未検証)
+- Windows(未検証)
+- FreeBSD(未検証)
+
+## ビルド環境
+
+Rust (Edition 2021)
+
+### Rustツールチェインのインストール
+
+[rustup](https://rustup.rs/) を使用してRustツールチェインをインストールします。
+
+~~~
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+~~~
+
+macOSではHomebrewでもインストールできます。
+
+~~~
+$ brew install rustup-init
+$ rustup-init
+~~~
+
+インストール後、シェルを再起動するか以下を実行してパスを通します。
+
+~~~
+$ source "$HOME/.cargo/env"
+~~~
+
+### 依存パッケージのインストール
+
+PC/SCライブラリの開発パッケージが必要です。
+
+- Debian/Ubuntu
+
+~~~
+$ sudo apt-get install libpcsclite-dev
+~~~
+
+- RHEL/CentOS/Fedora
+
+~~~
+$ sudo yum install pcsc-lite-devel
+~~~
+
 - FreeBSD
 
-## ダウンロード
+~~~
+# pkg install pcsc-lite ccid pkgconf
+~~~
 
-<https://github.com/jpki/myna/releases>
+- macOS
+
+追加パッケージは不要です(PCSC.frameworkが標準搭載)。
+
+- Windows
+
+追加パッケージは不要です(WinSCardが標準搭載)。
+
+## ビルド
+
+~~~
+$ cargo build --release
+~~~
+
+ビルド成果物は `target/release/myna` に生成されます。
+
+## インストール
+
+~~~
+$ cargo install --path .
+~~~
+
+`~/.cargo/bin/myna` にインストールされます。`~/.cargo/bin` にパスが通っていれば `myna` コマンドが使えます。
 
 ## 使い方
 
-詳しくは `myna --help` や `サブコマンド --help` `孫コマンド --help` を実行してください。
+詳しくは `myna --help` や `サブコマンド --help` `サブサブコマンド --help` を実行してください。
 
 ~~~
 Usage:
   myna [command]
 
   Available Commands:
-    card        券面APおよび券面事項入力補助AP
+    text        券面事項入力補助AP
+    visual      券面AP
     jpki        公的個人認証関連コマンド
     pin         PIN関連操作
     test        リーダーの動作確認
@@ -43,13 +112,13 @@ Usage:
 ### 4属性を取得
 
 ~~~
-$ myna card attr
+$ myna text attr
 ~~~
 
 ### 顔写真を取得
 
 ~~~
-$ myna card photo -o photo.jpg
+$ myna visual photo -o photo.jp2
 ~~~
 
 ### PINのステータスを確認
@@ -58,17 +127,16 @@ $ myna card photo -o photo.jpg
 $ myna pin status
 ~~~
 
-
 ### JPKI認証用証明書を取得
 
 ~~~
-$ myna jpki cert auth
+$ myna jpki cert -t auth
 ~~~
 
 ### JPKI署名用証明書を取得
 
 ~~~
-$ myna jpki cert sign
+$ myna jpki cert -t sign
 ~~~
 
 ### JPKI署名用証明書でCMS署名
@@ -89,50 +157,14 @@ OpenSSLコマンドで検証
 $ openssl cms -verify -CAfile 署名用CA証明書 -inform der -in 署名ファイル
 ~~~
 
-
-## GUI版(バージョン0.2)
-
-![mynaqt](mynaqt.png)
-
-## ビルド環境
-
-golang 1.7 or later
-
-## mynaコマンドのビルド・インストール
+### PDFに電子署名を付与
 
 ~~~
-% go get -u github.com/jpki/myna
+$ myna jpki pdf sign -i input.pdf -o signed.pdf
 ~~~
 
-
-### 依存パッケージのインストール
-
-- Debian/Ubuntu
+### PDF電子署名を検証
 
 ~~~
-# apt-get install libpcsclite-dev
-~~~
-
-- RHEL/CentOS
-
-~~~
-# yum install pcsc-lite-devel
-~~~
-
-- Windows
-
-~~~
-PS> choco install -y git golang
-~~~
-
-- OSX
-
-~~~
-# brew install go
-~~~
-
-- FreeBSD
-
-~~~
-# pkg install pcsc-lite ccid pkgconf
+$ myna jpki pdf verify -i signed.pdf
 ~~~
