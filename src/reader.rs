@@ -192,6 +192,25 @@ impl MynaReader {
         }
     }
 
+    pub fn read_record(&mut self, record: u8, sfi: u8) -> Result<Vec<u8>, APDUError> {
+        log::debug!("# READ RECORD");
+        let p2 = (sfi << 3) | 0x04;
+        let cmd = CommandAPDU::case2(0x00, 0xB2, record, p2, 0);
+        log::debug!("< {}", cmd);
+        let res = self.transmit(cmd);
+        log::debug!("> {}", res);
+        if res.sw() == 0x9000 {
+            Ok(res.data)
+        } else {
+            Err(APDUError { res })
+        }
+    }
+
+    pub fn select_ap(&mut self, aid: &str) {
+        let bid = hex::decode(aid).unwrap();
+        self.select_df(&bid);
+    }
+
     pub fn signature(&mut self, data: &[u8]) -> Result<Vec<u8>, APDUError> {
         log::debug!("# SIGNATURE");
         let cmd = CommandAPDU::case4(0x80, 0x2A, 0x00, 0x80, data, 0);

@@ -7,12 +7,14 @@ mod prompt;
 mod reader;
 mod test;
 mod text;
+mod unknown;
 mod utils;
 mod visual;
 use clap::{Args, Parser, Subcommand};
 use jpki::JPKI;
 use pin::Pin;
 use text::TextSubcommand;
+use unknown::UnknownCommand;
 use visual::VisualSubcommand;
 
 #[derive(Parser)]
@@ -43,6 +45,9 @@ impl App {
             Commands::Test(_command) => {
                 test::test(self);
             }
+            Commands::Unknown(command) => {
+                unknown::main(self, command);
+            }
         }
     }
 }
@@ -57,12 +62,15 @@ enum Commands {
     Visual(VisualSubcommand),
     /// Test card reader
     Test(TestArgs),
-    /// JPKI
+    /// 公的個人認証
     #[command(subcommand)]
     JPKI(JPKI),
     /// Pin operation
     #[command(subcommand)]
     Pin(Pin),
+    /// 謎のAP
+    #[command(subcommand)]
+    Unknown(UnknownCommand),
 }
 
 #[derive(Args)]
