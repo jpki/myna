@@ -16,7 +16,7 @@ use text::TextSubcommand;
 use visual::VisualSubcommand;
 
 #[derive(Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, long_version = long_version(), about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct App {
     #[command(subcommand)]
@@ -68,6 +68,18 @@ enum Commands {
 #[derive(Args)]
 struct TestArgs {
     name: Option<String>,
+}
+
+fn long_version() -> &'static str {
+    use std::sync::OnceLock;
+    static VERSION: OnceLock<String> = OnceLock::new();
+    VERSION.get_or_init(|| {
+        format!(
+            "{}\n{}",
+            env!("CARGO_PKG_VERSION"),
+            openssl::version::version()
+        )
+    })
 }
 
 fn main() {
