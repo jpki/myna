@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-asn1-rs = "0.5.2"
+asn1-rs = "0.7.1"
 clap = { version = "4.5.60", features = ["cargo", "derive"] }
-colored = "2.2.0"
-env_logger = "0.9.3"
+colored = "3.1.1"
+env_logger = "0.11.9"
 flate2 = "1"
 hex = "0.4.3"
 log = "0.4.29"
