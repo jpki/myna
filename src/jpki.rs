@@ -11,7 +11,7 @@ use std::io::Write;
 
 #[derive(Clone, Debug, ValueEnum)]
 #[clap(rename_all = "snake_case")]
-enum CertType {
+pub enum CertType {
     /// 署名用証明書
     #[value(alias = "signature", alias = "digital_signature")]
     Sign,
@@ -41,7 +41,7 @@ pub struct CertArgs {
 }
 
 #[derive(Clone, Debug, ValueEnum)]
-enum RsaKeyType {
+pub enum RsaKeyType {
     /// 署名用鍵
     Sign,
     /// 認証用鍵
@@ -207,26 +207,26 @@ pub enum JPKI {
     Pdf(PdfSubcommand),
 }
 
-pub fn main(_app: &crate::App, subcommand: &JPKI) {
+pub fn main(subcommand: &JPKI) {
     match subcommand {
-        JPKI::Cert(args) => jpki_cert(args),
-        JPKI::Pkey(cmd) => pkey_main(cmd),
-        JPKI::Cms(cms_cmd) => cms_main(cms_cmd),
+        JPKI::Cert(args) => run_cert(args),
+        JPKI::Pkey(cmd) => run_pkey_subcommand(cmd),
+        JPKI::Cms(cms_cmd) => run_cms_subcommand(cms_cmd),
         JPKI::Pdf(pdf_cmd) => crate::pdf::pdf_main(pdf_cmd),
     }
 }
 
-fn pkey_main(subcommand: &PkeySubcommand) {
+fn run_pkey_subcommand(subcommand: &PkeySubcommand) {
     match subcommand {
-        PkeySubcommand::Sign(args) => pkey_sign(args),
-        PkeySubcommand::Verify(args) => pkey_verify(args),
+        PkeySubcommand::Sign(args) => run_pkey_sign(args),
+        PkeySubcommand::Verify(args) => run_pkey_verify(args),
     }
 }
 
-fn cms_main(subcommand: &CmsSubcommand) {
+fn run_cms_subcommand(subcommand: &CmsSubcommand) {
     match subcommand {
-        CmsSubcommand::Sign(args) => cms_sign(args),
-        CmsSubcommand::Verify(args) => cms_verify(args),
+        CmsSubcommand::Sign(args) => run_cms_sign(args),
+        CmsSubcommand::Verify(args) => run_cms_verify(args),
     }
 }
 
@@ -253,15 +253,20 @@ fn read_token(reader: &mut MynaReader) -> String {
     String::from_utf8_lossy(&data).trim_end().to_string()
 }
 
-fn jpki_cert(args: &CertArgs) {
+/// 指定種類の証明書をカードから読み取って返す
+pub fn read_cert(
+    cert_type: &CertType,
+    password: &Option<String>,
+    pin: &Option<String>,
+) -> X509 {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
     let token = read_token(&mut reader);
 
-    match args.cert_type {
+    match cert_type {
         CertType::Sign => {
-            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
+            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", password);
             let pass = pass.to_uppercase();
             utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
             reader.select_ef("001b").unwrap();
@@ -273,11 +278,11 @@ fn jpki_cert(args: &CertArgs) {
         }
         CertType::Auth => {
             if token == "JPKIAPGPSETOKEN" {
-                let pin = utils::prompt_input("認証用PIN(4桁): ", &args.pin);
-                let pin = pin.to_uppercase();
-                utils::validate_4digit_pin(&pin).expect("PINが不正です");
+                let p = utils::prompt_input("認証用PIN(4桁): ", pin);
+                let p = p.to_uppercase();
+                utils::validate_4digit_pin(&p).expect("PINが不正です");
                 reader.select_ef("0018").unwrap();
-                reader.verify_pin(&pin).expect("PIN認証に失敗しました");
+                reader.verify_pin(&p).expect("PIN認証に失敗しました");
             }
             reader.select_ef("000a").unwrap();
         }
@@ -286,45 +291,56 @@ fn jpki_cert(args: &CertArgs) {
         }
     }
 
-    let cert = X509::from_der(&reader.read_binary_all()).unwrap();
+    X509::from_der(&reader.read_binary_all()).unwrap()
+}
+
+fn run_cert(args: &CertArgs) {
+    let cert = read_cert(&args.cert_type, &args.password, &args.pin);
     output_cert(&cert, &args.format);
 }
 
-fn pkey_sign(args: &PkeySignArgs) {
+/// 指定種類の鍵でデータに低レベルRSA署名して返す
+pub fn pkey_sign(
+    key_type: &RsaKeyType,
+    password: &Option<String>,
+    content: &[u8],
+) -> Vec<u8> {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
 
-    match args.key_type {
+    match key_type {
         RsaKeyType::Sign => {
-            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
+            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", password);
             let pass = pass.to_uppercase();
             utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
             reader.select_ef("001b").unwrap();
             reader.verify_pin(&pass).expect("パスワード認証に失敗しました");
         }
         RsaKeyType::Auth => {
-            let pin = utils::prompt_input("認証用PIN(4桁): ", &args.password);
+            let pin = utils::prompt_input("認証用PIN(4桁): ", password);
             utils::validate_4digit_pin(&pin).expect("PINが不正です");
             reader.select_ef("0018").unwrap();
             reader.verify_pin(&pin).expect("PIN認証に失敗しました");
         }
     }
 
-    let content = fs::read(&args.input).expect("入力ファイルを読み込めませんでした");
-
     // 鍵EFを選択して署名
-    match args.key_type {
+    match key_type {
         RsaKeyType::Sign => reader.select_ef("001a").unwrap(),
         RsaKeyType::Auth => reader.select_ef("0017").unwrap(),
     };
-    let signature = reader.signature(&content).expect("署名に失敗しました");
+    reader.signature(content).expect("署名に失敗しました")
+}
 
+fn run_pkey_sign(args: &PkeySignArgs) {
+    let content = fs::read(&args.input).expect("入力ファイルを読み込めませんでした");
+    let signature = pkey_sign(&args.key_type, &args.password, &content);
     fs::write(&args.output, &signature).expect("出力ファイルへの書き込みに失敗しました");
     println!("署名を保存しました: {}", args.output);
 }
 
-fn pkey_verify(args: &PkeyVerifyArgs) {
+fn run_pkey_verify(args: &PkeyVerifyArgs) {
     // カードから証明書を取得して公開鍵を得る
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
@@ -373,7 +389,7 @@ pub fn to_message_digest(alg: &DigestAlgorithm) -> MessageDigest {
     }
 }
 
-fn cms_sign(args: &CmsSignArgs) {
+fn run_cms_sign(args: &CmsSignArgs) {
     let password = input_cms_password(args);
 
     // 署名対象ファイルを読み込み
@@ -439,7 +455,7 @@ pub fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
     [prefix, hash.to_vec()].concat()
 }
 
-fn cms_verify(args: &CmsVerifyArgs) {
+fn run_cms_verify(args: &CmsVerifyArgs) {
     // CA証明書を取得
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");

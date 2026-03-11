@@ -206,8 +206,8 @@ impl MynaReader {
         }
     }
 
-    pub fn select_ap(&mut self, aid: &str) {
-        let bid = hex::decode(aid).unwrap();
+    pub fn select_unknown_ap(&mut self) {
+        let bid = hex::decode("D3921000310001010100").unwrap();
         self.select_df(&bid);
     }
 

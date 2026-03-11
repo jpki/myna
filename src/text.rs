@@ -1,5 +1,5 @@
-use crate::reader::MynaReader;
-use crate::utils;
+use myna::reader::MynaReader;
+use myna::utils;
 use asn1_rs::FromBer;
 use clap::{Args, Subcommand};
 

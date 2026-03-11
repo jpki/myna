@@ -1,20 +1,12 @@
-mod apdu;
-mod jpki;
-mod pdf;
 mod pin;
-mod pkcs7;
-mod prompt;
-mod reader;
 mod test;
 mod text;
-mod unknown;
-mod utils;
 mod visual;
 use clap::{Args, Parser, Subcommand};
-use jpki::JPKI;
+use myna::jpki::JPKI;
+use myna::unknown::UnknownSubcommand;
 use pin::Pin;
 use text::TextSubcommand;
-use unknown::UnknownCommand;
 use visual::VisualSubcommand;
 
 #[derive(Parser)]
@@ -34,7 +26,7 @@ impl App {
                 pin::main(self, command);
             }
             Commands::JPKI(command) => {
-                jpki::main(self, command);
+                myna::jpki::main(command);
             }
             Commands::Text(command) => {
                 text::main(self, command);
@@ -46,7 +38,7 @@ impl App {
                 test::test(self);
             }
             Commands::Unknown(command) => {
-                unknown::main(self, command);
+                myna::unknown::main(command);
             }
         }
     }
@@ -70,7 +62,7 @@ enum Commands {
     Pin(Pin),
     /// 謎のAP
     #[command(subcommand)]
-    Unknown(UnknownCommand),
+    Unknown(UnknownSubcommand),
 }
 
 #[derive(Args)]

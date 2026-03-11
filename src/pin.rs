@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 
-use crate::reader::MynaReader;
-use crate::utils;
+use myna::reader::MynaReader;
+use myna::utils;
 
 #[derive(Debug, Args)]
 pub struct ChangeArgs {
@@ -35,29 +35,29 @@ pub enum ChangeSubcommand {
 pub fn main(app: &crate::App, subcommand: &Pin) {
     match subcommand {
         Pin::Status => {
-            status(app);
+            run_status(app);
         }
         Pin::Change(change_cmd) => {
-            change(change_cmd);
+            run_change(change_cmd);
         }
     }
 }
 
-fn change(subcommand: &ChangeSubcommand) {
+fn run_change(subcommand: &ChangeSubcommand) {
     match subcommand {
         ChangeSubcommand::Card(args) => {
-            change_card(args);
+            run_change_card(args);
         }
         ChangeSubcommand::Auth(args) => {
-            change_auth(args);
+            run_change_auth(args);
         }
         ChangeSubcommand::Sign(args) => {
-            change_sign(args);
+            run_change_sign(args);
         }
     }
 }
 
-fn change_card(args: &ChangeArgs) {
+fn run_change_card(args: &ChangeArgs) {
     let pin = utils::prompt_input("現在の暗証番号(4桁): ", &args.pin);
     utils::validate_4digit_pin(&pin).expect("暗証番号が不正です");
     let newpin = utils::prompt_input("新しい暗証番号(4桁): ", &args.newpin);
@@ -72,7 +72,7 @@ fn change_card(args: &ChangeArgs) {
     println!("券面入力補助用PINを変更しました");
 }
 
-fn change_auth(args: &ChangeArgs) {
+fn run_change_auth(args: &ChangeArgs) {
     let pin = utils::prompt_input("現在の暗証番号(4桁): ", &args.pin);
     utils::validate_4digit_pin(&pin).expect("暗証番号が不正です");
     let newpin = utils::prompt_input("新しい暗証番号(4桁): ", &args.newpin);
@@ -87,7 +87,7 @@ fn change_auth(args: &ChangeArgs) {
     println!("JPKI認証用PINを変更しました");
 }
 
-fn change_sign(args: &ChangeArgs) {
+fn run_change_sign(args: &ChangeArgs) {
     let pin = utils::prompt_input("現在のパスワード(6-16文字): ", &args.pin);
     let pin = pin.to_uppercase();
     utils::validate_jpki_sign_password(&pin).expect("パスワードが不正です");
@@ -104,7 +104,7 @@ fn change_sign(args: &ChangeArgs) {
     println!("JPKI署名用パスワードを変更しました");
 }
 
-fn status(_app: &crate::App) {
+fn run_status(_app: &crate::App) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();

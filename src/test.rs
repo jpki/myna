@@ -1,4 +1,4 @@
-use crate::reader::MynaReader;
+use myna::reader::MynaReader;
 
 pub fn test(_app: &crate::App) {
     println!("OpenSSL version: {}", openssl::version::version());
