@@ -5,6 +5,7 @@ use crate::jpki::{DigestAlgorithm, PdfSignArgs, PdfSubcommand, PdfVerifyArgs};
 use crate::pkcs7;
 use crate::reader::MynaReader;
 use crate::utils;
+use crate::verify;
 use flate2::read::ZlibDecoder;
 use openssl::hash::MessageDigest;
 use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
@@ -747,21 +748,18 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
     let mut hasher = openssl::hash::Hasher::new(md).unwrap();
     hasher.update(range1).unwrap();
     hasher.update(range2).unwrap();
-    let _content_hash = hasher.finish().unwrap();
+    let content_hash = hasher.finish().unwrap();
+    log::trace!(
+        "PDF detached content SHA-256 digest: {}",
+        hex::encode_upper(content_hash.as_ref())
+    );
 
     // /Contents を hex デコード（DER長を読み取ってパディングを正確に除去）
     let cms_der = extract_der_from_padded_hex(&contents_hex);
 
     let pkcs7 = Pkcs7::from_der(&cms_der).expect("PKCS7のパースに失敗しました");
     log::info!("Parsed embedded PKCS#7 signature");
-
-    // カードから署名用CA証明書を取得
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader.select_ef("0002").unwrap();
-    let ca_cert_der = reader.read_binary_all();
-    let ca_cert = X509::from_der(&ca_cert_der).expect("CA証明書のパースに失敗しました");
+    verify::log_pkcs7_signers(&pkcs7).expect("署名証明書情報の取得に失敗しました");
 
     // 検証用データ（ByteRange区間を結合）
     let mut verify_data = Vec::new();
@@ -769,9 +767,11 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
     verify_data.extend_from_slice(range2);
 
     log::info!("Building certificate store for PDF signature verification");
-    let mut store_builder = openssl::x509::store::X509StoreBuilder::new().unwrap();
-    store_builder.add_cert(ca_cert).unwrap();
-    let store = store_builder.build();
+    let (store, roots) =
+        verify::build_sign_verifier().expect("埋め込みCA証明書の読み込みに失敗しました");
+    verify::log_sign_trust_anchors(&roots).expect("埋め込みCA証明書情報の取得に失敗しました");
+    verify::verify_signer_certificates(&pkcs7, &store, &roots)
+        .expect("署名証明書の検証に失敗しました");
 
     let certs = Stack::new().unwrap();
     let flags = Pkcs7Flags::DETACHED;

@@ -1,6 +1,7 @@
 use crate::pkcs7;
 use crate::reader::MynaReader;
 use crate::utils;
+use crate::verify;
 use clap::{Args, Subcommand, ValueEnum};
 use openssl::hash::MessageDigest;
 use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
@@ -57,7 +58,7 @@ pub struct PkeySignArgs {
     #[arg(short, long)]
     password: Option<String>,
     /// 入力ファイル
-    #[arg(short, long)]
+    #[arg(value_name = "INPUT")]
     input: String,
     /// 出力ファイル
     #[arg(short, long)]
@@ -70,7 +71,7 @@ pub struct PkeyVerifyArgs {
     #[arg(short = 't', long = "type", value_enum)]
     key_type: RsaKeyType,
     /// 署名ファイル
-    #[arg(short, long)]
+    #[arg(value_name = "INPUT")]
     input: String,
     /// 出力ファイル (省略時はstdout)
     #[arg(short, long)]
@@ -100,7 +101,7 @@ pub struct CmsSignArgs {
     #[arg(short, long)]
     password: Option<String>,
     /// 署名対象ファイル
-    #[arg(short, long)]
+    #[arg(value_name = "INPUT")]
     input: String,
     /// 出力ファイル
     #[arg(short, long)]
@@ -167,7 +168,7 @@ pub enum CmsSubcommand {
 #[derive(Debug, Args)]
 pub struct PdfSignArgs {
     /// 入力PDFファイル
-    #[arg(short, long)]
+    #[arg(value_name = "INPUT")]
     pub input: String,
     /// 出力PDFファイル
     #[arg(short, long)]
@@ -180,7 +181,7 @@ pub struct PdfSignArgs {
 #[derive(Debug, Args)]
 pub struct PdfVerifyArgs {
     /// 署名済みPDFファイル
-    #[arg(short, long)]
+    #[arg(value_name = "INPUT")]
     pub input: String,
 }
 
@@ -458,14 +459,6 @@ pub fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
 
 fn run_cms_verify(args: &CmsVerifyArgs) {
     log::info!("Loading CMS signature from {}", args.signature);
-    // CA証明書を取得
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader.select_ef("0002").unwrap();
-    let ca_cert_der = reader.read_binary_all();
-    let ca_cert = X509::from_der(&ca_cert_der).expect("CA証明書のパースに失敗しました");
-
     // 署名ファイルを読み込み
     let sig_data = fs::read(&args.signature).expect("署名ファイルを読み込めませんでした");
 
@@ -488,12 +481,15 @@ fn run_cms_verify(args: &CmsVerifyArgs) {
         }
     };
     log::info!("Parsed PKCS#7 SignedData");
+    verify::log_pkcs7_signers(&pkcs7).expect("署名証明書情報の取得に失敗しました");
 
     // 検証
     log::info!("Building certificate store for CMS verification");
-    let mut store_builder = openssl::x509::store::X509StoreBuilder::new().unwrap();
-    store_builder.add_cert(ca_cert).unwrap();
-    let store = store_builder.build();
+    let (store, roots) =
+        verify::build_sign_verifier().expect("埋め込みCA証明書の読み込みに失敗しました");
+    verify::log_sign_trust_anchors(&roots).expect("埋め込みCA証明書情報の取得に失敗しました");
+    verify::verify_signer_certificates(&pkcs7, &store, &roots)
+        .expect("署名証明書の検証に失敗しました");
 
     let content = if args.detached {
         log::info!("Detached CMS signature: loading external content");
