@@ -97,7 +97,7 @@ impl fmt::LowerHex for CommandAPDU {
 
 impl fmt::Display for CommandAPDU {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mask = self.cla == 0x00 && self.ins == 0x20;
+        let mask = self.cla == 0x00 && matches!(self.ins, 0x20 | 0x24);
         let cmd = format!(
             "{:02x} {:02x} {:02x} {:02x}",
             self.cla, self.ins, self.p1, self.p2

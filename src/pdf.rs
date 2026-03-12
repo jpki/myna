@@ -1,7 +1,6 @@
 /// PDF電子署名(PAdES/PKCS#7 detached)の実装
 ///
 /// マイナンバーカードのJPKI署名用鍵でPDFにインクリメンタル追記で電子署名を埋め込む。
-
 use crate::jpki::{DigestAlgorithm, PdfSignArgs, PdfSubcommand, PdfVerifyArgs};
 use crate::pkcs7;
 use crate::reader::MynaReader;
@@ -29,9 +28,7 @@ fn find_startxref(data: &[u8]) -> Option<usize> {
         data
     };
     let needle = b"startxref";
-    let pos = tail
-        .windows(needle.len())
-        .rposition(|w| w == needle)?;
+    let pos = tail.windows(needle.len()).rposition(|w| w == needle)?;
     let after = &tail[pos + needle.len()..];
     let s = std::str::from_utf8(after).ok()?;
     let num_str = s.split_whitespace().next()?;
@@ -250,7 +247,7 @@ fn find_object_in_objstm(data: &[u8], target_obj_id: usize) -> Option<String> {
             }
         };
         let mut stream_start = stream_kw_pos + 6; // "stream" の後
-        // \r\n or \n をスキップ
+                                                  // \r\n or \n をスキップ
         if stream_start < data.len() && data[stream_start] == b'\r' {
             stream_start += 1;
         }
@@ -336,15 +333,12 @@ fn find_bytes(data: &[u8], needle: &[u8], from: usize) -> Option<usize> {
 /// バイト列の後方検索
 fn find_bytes_rev(data: &[u8], needle: &[u8], before: usize) -> Option<usize> {
     let end = std::cmp::min(before, data.len());
-    data[..end]
-        .windows(needle.len())
-        .rposition(|w| w == needle)
+    data[..end].windows(needle.len()).rposition(|w| w == needle)
 }
 
 /// オブジェクトの辞書内容を取得（非圧縮 → 圧縮オブジェクトストリームの順に検索）
 fn get_object_dict(data: &[u8], obj_id: usize) -> Option<String> {
-    find_object_content(data, obj_id)
-        .or_else(|| find_object_in_objstm(data, obj_id))
+    find_object_content(data, obj_id).or_else(|| find_object_in_objstm(data, obj_id))
 }
 
 /// 辞書テキストから内部コンテンツを抽出（最外側の << >> を除去）
@@ -532,7 +526,9 @@ fn find_ref_end(s: &str) -> Option<usize> {
     let rest = &rest[digit_end..];
     let trimmed = rest.trim_start();
     // 'R'
-    if trimmed.starts_with('R') && (trimmed.len() == 1 || !trimmed.as_bytes()[1].is_ascii_alphanumeric()) {
+    if trimmed.starts_with('R')
+        && (trimmed.len() == 1 || !trimmed.as_bytes()[1].is_ascii_alphanumeric())
+    {
         let total = s.len() - trimmed.len() + 1;
         Some(total)
     } else {
@@ -560,7 +556,9 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
     reader.select_ef("001b").unwrap();
-    reader.verify_pin(&password).expect("パスワード認証に失敗しました");
+    reader
+        .verify_pin(&password)
+        .expect("パスワード認証に失敗しました");
     reader.select_ef("0001").unwrap();
     let cert_der = reader.read_binary_all();
     let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
@@ -568,15 +566,14 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     // PDF構造を解析
     let xref_offset = find_startxref(&original).expect("startxref が見つかりません");
     let root_ref = find_root_ref(&original, xref_offset).expect("/Root が見つかりません");
-    let trailer_size =
-        find_trailer_size(&original, xref_offset).expect("/Size が見つかりません");
+    let trailer_size = find_trailer_size(&original, xref_offset).expect("/Size が見つかりません");
     let info_ref = find_info_ref(&original, xref_offset);
     let max_id = find_max_obj_id(&original, xref_offset);
     let next_id = std::cmp::max(max_id, trailer_size);
 
     // Root オブジェクトの辞書内容を取得
-    let root_dict_text = get_object_dict(&original, root_ref)
-        .expect("Root カタログオブジェクトが見つかりません");
+    let root_dict_text =
+        get_object_dict(&original, root_ref).expect("Root カタログオブジェクトが見つかりません");
 
     // 新オブジェクトIDを割り当て
     let sig_obj_id = next_id;
@@ -622,10 +619,7 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     // 4. 更新 Root オブジェクト（AcroForm追加）
     let updated_root_offset = original.len() + append.len();
     let updated_root_dict = build_updated_root_dict(&root_dict_text, acroform_obj_id);
-    let updated_root_obj = format!(
-        "{} 0 obj\n{}\nendobj\n",
-        updated_root_id, updated_root_dict
-    );
+    let updated_root_obj = format!("{} 0 obj\n{}\nendobj\n", updated_root_id, updated_root_dict);
     append.extend(updated_root_obj.as_bytes());
 
     // 5. xref テーブル
@@ -696,8 +690,7 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     // PKCS#7 署名を構築
     let (attrs_set, attrs_digest) = pkcs7::prepare_signing_with_hash(&content_hash, md);
 
-    let digest_info =
-        crate::jpki::make_digest_info(&DigestAlgorithm::Sha256, &attrs_digest);
+    let digest_info = crate::jpki::make_digest_info(&DigestAlgorithm::Sha256, &attrs_digest);
     reader.select_ef("001a").unwrap();
     let signature = reader.signature(&digest_info).expect("署名に失敗しました");
 
@@ -733,6 +726,7 @@ fn find_contents_hex_start(data: &[u8], search_from: usize) -> Option<usize> {
 // ---------------------------------------------------------------------------
 
 pub fn pdf_verify(args: &PdfVerifyArgs) {
+    log::info!("Loading signed PDF from {}", args.input);
     let data = fs::read(&args.input).expect("PDFファイルを読み込めませんでした");
 
     // /Type /Sig を持つ署名辞書を検索
@@ -741,9 +735,12 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
 
     // ByteRange を解析
     let ranges = parse_byte_range(&byte_range).expect("ByteRange の解析に失敗しました");
+    log::info!("Parsed PDF signature dictionary");
+    log::debug!("PDF ByteRange: {:?}", ranges);
     let (off1, len1, off2, len2) = (ranges[0], ranges[1], ranges[2], ranges[3]);
 
     // 署名対象データのハッシュ
+    log::info!("Recomputing detached PDF content digest");
     let md = MessageDigest::sha256();
     let range1 = &data[off1..off1 + len1];
     let range2 = &data[off2..off2 + len2];
@@ -756,6 +753,7 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
     let cms_der = extract_der_from_padded_hex(&contents_hex);
 
     let pkcs7 = Pkcs7::from_der(&cms_der).expect("PKCS7のパースに失敗しました");
+    log::info!("Parsed embedded PKCS#7 signature");
 
     // カードから署名用CA証明書を取得
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
@@ -770,6 +768,7 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
     verify_data.extend_from_slice(range1);
     verify_data.extend_from_slice(range2);
 
+    log::info!("Building certificate store for PDF signature verification");
     let mut store_builder = openssl::x509::store::X509StoreBuilder::new().unwrap();
     store_builder.add_cert(ca_cert).unwrap();
     let store = store_builder.build();
@@ -777,6 +776,7 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
     let certs = Stack::new().unwrap();
     let flags = Pkcs7Flags::DETACHED;
 
+    log::info!("Checking PDF content digest, CMS signature, and signer certificate chain");
     match pkcs7.verify(&certs, &store, Some(&verify_data), None, flags) {
         Ok(_) => println!("Verification successful"),
         Err(e) => eprintln!("Verification failed: {}", e),

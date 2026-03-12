@@ -1,5 +1,4 @@
 /// パスワード入力（`*` マスク表示付き）
-
 use std::io;
 
 /// プロンプトを表示し、入力文字を `*` でマスクしながらパスワードを読み取る。
@@ -157,10 +156,7 @@ mod windows {
             return Err(io::Error::last_os_error());
         }
 
-        let guard = ConsoleModeGuard {
-            handle,
-            orig_mode,
-        };
+        let guard = ConsoleModeGuard { handle, orig_mode };
 
         // Keep only ENABLE_PROCESSED_INPUT (Ctrl+C works), disable echo & line input
         if unsafe { SetConsoleMode(handle, ENABLE_PROCESSED_INPUT) } == 0 {
@@ -175,15 +171,8 @@ mod windows {
         let mut read: u32 = 0;
 
         loop {
-            if unsafe {
-                ReadConsoleA(
-                    handle,
-                    buf.as_mut_ptr(),
-                    1,
-                    &mut read,
-                    std::ptr::null(),
-                )
-            } == 0
+            if unsafe { ReadConsoleA(handle, buf.as_mut_ptr(), 1, &mut read, std::ptr::null()) }
+                == 0
             {
                 return Err(io::Error::last_os_error());
             }

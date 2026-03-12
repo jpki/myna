@@ -1,7 +1,7 @@
-use myna::reader::MynaReader;
-use myna::utils;
 use asn1_rs::FromBer;
 use clap::{Args, Subcommand};
+use myna::reader::MynaReader;
+use myna::utils;
 
 #[derive(Debug, Args)]
 pub struct PinArgs {

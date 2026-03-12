@@ -254,11 +254,7 @@ fn read_token(reader: &mut MynaReader) -> String {
 }
 
 /// 指定種類の証明書をカードから読み取って返す
-pub fn read_cert(
-    cert_type: &CertType,
-    password: &Option<String>,
-    pin: &Option<String>,
-) -> X509 {
+pub fn read_cert(cert_type: &CertType, password: &Option<String>, pin: &Option<String>) -> X509 {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
@@ -270,7 +266,9 @@ pub fn read_cert(
             let pass = pass.to_uppercase();
             utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
             reader.select_ef("001b").unwrap();
-            reader.verify_pin(&pass).expect("パスワード認証に失敗しました");
+            reader
+                .verify_pin(&pass)
+                .expect("パスワード認証に失敗しました");
             reader.select_ef("0001").unwrap();
         }
         CertType::SignCa => {
@@ -300,11 +298,7 @@ fn run_cert(args: &CertArgs) {
 }
 
 /// 指定種類の鍵でデータに低レベルRSA署名して返す
-pub fn pkey_sign(
-    key_type: &RsaKeyType,
-    password: &Option<String>,
-    content: &[u8],
-) -> Vec<u8> {
+pub fn pkey_sign(key_type: &RsaKeyType, password: &Option<String>, content: &[u8]) -> Vec<u8> {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
@@ -315,7 +309,9 @@ pub fn pkey_sign(
             let pass = pass.to_uppercase();
             utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
             reader.select_ef("001b").unwrap();
-            reader.verify_pin(&pass).expect("パスワード認証に失敗しました");
+            reader
+                .verify_pin(&pass)
+                .expect("パスワード認証に失敗しました");
         }
         RsaKeyType::Auth => {
             let pin = utils::prompt_input("認証用PIN(4桁): ", password);
@@ -400,7 +396,9 @@ fn run_cms_sign(args: &CmsSignArgs) {
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
     reader.select_ef("001b").unwrap();
-    reader.verify_pin(&password).expect("パスワード認証に失敗しました");
+    reader
+        .verify_pin(&password)
+        .expect("パスワード認証に失敗しました");
     reader.select_ef("0001").unwrap();
     let cert_der = reader.read_binary_all();
     let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
@@ -423,9 +421,12 @@ fn run_cms_sign(args: &CmsSignArgs) {
     let output_data = match args.format {
         CmsFormat::Der => pkcs7_der,
         CmsFormat::Pem => {
-            let b64 =
-                openssl::base64::encode_block(&pkcs7_der);
-            format!("-----BEGIN PKCS7-----\n{}\n-----END PKCS7-----\n", b64.trim_end()).into_bytes()
+            let b64 = openssl::base64::encode_block(&pkcs7_der);
+            format!(
+                "-----BEGIN PKCS7-----\n{}\n-----END PKCS7-----\n",
+                b64.trim_end()
+            )
+            .into_bytes()
         }
     };
 
@@ -456,6 +457,7 @@ pub fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
 }
 
 fn run_cms_verify(args: &CmsVerifyArgs) {
+    log::info!("Loading CMS signature from {}", args.signature);
     // CA証明書を取得
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
@@ -470,6 +472,7 @@ fn run_cms_verify(args: &CmsVerifyArgs) {
     let pkcs7_der = match args.format {
         CmsFormat::Der => sig_data,
         CmsFormat::Pem => {
+            log::info!("Decoding PEM-encoded CMS signature");
             // PEMからDERに変換
             let pkcs7 = Pkcs7::from_pem(&sig_data).expect("PEMのパースに失敗しました");
             pkcs7.to_der().expect("DERへの変換に失敗しました")
@@ -484,13 +487,16 @@ fn run_cms_verify(args: &CmsVerifyArgs) {
             return;
         }
     };
+    log::info!("Parsed PKCS#7 SignedData");
 
     // 検証
+    log::info!("Building certificate store for CMS verification");
     let mut store_builder = openssl::x509::store::X509StoreBuilder::new().unwrap();
     store_builder.add_cert(ca_cert).unwrap();
     let store = store_builder.build();
 
     let content = if args.detached {
+        log::info!("Detached CMS signature: loading external content");
         let content_file = args
             .content
             .as_ref()
@@ -506,6 +512,7 @@ fn run_cms_verify(args: &CmsVerifyArgs) {
     }
 
     let certs = Stack::new().unwrap();
+    log::info!("Checking CMS content digest, signature, and signer certificate chain");
     let result = if let Some(ref data) = content {
         pkcs7.verify(&certs, &store, Some(data), None, flags)
     } else {

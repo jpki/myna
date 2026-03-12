@@ -35,9 +35,7 @@ pub fn read_number() -> Vec<u8> {
     reader.select_unknown_ap();
 
     // READ RECORD (SFI=1, Record=1)
-    let data = reader
-        .read_record(1, 1)
-        .expect("READ RECORDに失敗しました");
+    let data = reader.read_record(1, 1).expect("READ RECORDに失敗しました");
 
     // BER decode して value を返却
     use asn1_rs::{Any, FromBer};

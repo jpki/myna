@@ -22,7 +22,10 @@ pub fn validate_jpki_sign_password(pass: &str) -> Result<(), String> {
     if pass.len() < 6 || pass.len() > 16 {
         return Err("パスワードの長さが正しくありません(6-16桁)".to_string());
     }
-    if !pass.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()) {
+    if !pass
+        .chars()
+        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+    {
         return Err("パスワードの文字種が不正です(英大文字と数字のみ)".to_string());
     }
     Ok(())

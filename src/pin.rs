@@ -67,7 +67,9 @@ fn run_change_card(args: &ChangeArgs) {
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
     reader.select_ef("0011").unwrap();
-    reader.verify_pin(&pin).expect("暗証番号の認証に失敗しました");
+    reader
+        .verify_pin(&pin)
+        .expect("暗証番号の認証に失敗しました");
     reader.change_pin(&newpin).expect("PINの変更に失敗しました");
     println!("券面入力補助用PINを変更しました");
 }
@@ -82,7 +84,9 @@ fn run_change_auth(args: &ChangeArgs) {
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
     reader.select_ef("0018").unwrap();
-    reader.verify_pin(&pin).expect("暗証番号の認証に失敗しました");
+    reader
+        .verify_pin(&pin)
+        .expect("暗証番号の認証に失敗しました");
     reader.change_pin(&newpin).expect("PINの変更に失敗しました");
     println!("JPKI認証用PINを変更しました");
 }
@@ -99,8 +103,12 @@ fn run_change_sign(args: &ChangeArgs) {
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
     reader.select_ef("001b").unwrap();
-    reader.verify_pin(&pin).expect("パスワードの認証に失敗しました");
-    reader.change_pin(&newpin).expect("パスワードの変更に失敗しました");
+    reader
+        .verify_pin(&pin)
+        .expect("パスワードの認証に失敗しました");
+    reader
+        .change_pin(&newpin)
+        .expect("パスワードの変更に失敗しました");
     println!("JPKI署名用パスワードを変更しました");
 }
 

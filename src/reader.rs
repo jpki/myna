@@ -10,14 +10,11 @@ impl MynaReader {
     pub fn new() -> Result<Self, String> {
         let ctx = Context::establish(Scope::User)
             .map_err(|err| format!("Failed to establish context: {}", err))?;
-        Ok(Self {
-            ctx,
-            card: None,
-        })
+        Ok(Self { ctx, card: None })
     }
 
     pub fn connect(&mut self) -> Result<(), String> {
-        log::debug!("# CONNECT");
+        log::debug!("CONNECT");
         let mut reader_states = vec![ReaderState::new(PNP_NOTIFICATION(), State::UNAWARE)];
         let mut readers_buf = [0; 2048];
         let readers = self
@@ -25,7 +22,7 @@ impl MynaReader {
             .list_readers(&mut readers_buf)
             .map_err(|err| format!("Failed to list readers: {}", err))?;
         for reader in readers {
-            log::debug!("# READER FOUND: {:?}", reader);
+            log::debug!("READER FOUND: {:?}", reader);
             reader_states.push(ReaderState::new(reader, State::UNAWARE));
         }
 
@@ -66,7 +63,7 @@ impl MynaReader {
                     }
                 };
 
-                log::debug!("# CONNECTED");
+                log::debug!("CONNECTED");
                 self.card = Some(card);
                 return Ok(());
             }
@@ -84,20 +81,20 @@ impl MynaReader {
     }
 
     fn select_df(&mut self, bid: &[u8]) {
-        log::debug!("# SELECT DF");
+        log::debug!("SELECT DF");
         let cmd = CommandAPDU::case3(0x00, 0xA4, 0x04, 0x0C, bid);
-        log::debug!("< {}", cmd);
+        log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
-        log::debug!("> {}", res);
+        log::trace!("> {}", res);
     }
 
     pub fn select_ef(&mut self, fid: &str) -> Result<(), APDUError> {
         let bid = hex::decode(fid).unwrap();
-        log::debug!("# SELECT EF");
+        log::debug!("SELECT EF fid={}", fid);
         let cmd = CommandAPDU::case3(0x00, 0xA4, 0x02, 0x0C, &bid);
-        log::debug!("< {}", cmd);
+        log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
-        log::debug!("> {}", res);
+        log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(())
         } else {
@@ -121,7 +118,7 @@ impl MynaReader {
     }
 
     pub fn read_binary(&mut self, pos: u16, size: u16) -> Vec<u8> {
-        log::debug!("# READ BINARY");
+        log::debug!("READ BINARY pos={} size={}", pos, size);
         let mut result = Vec::new();
         let mut pos = pos;
         let end = pos + size;
@@ -131,9 +128,9 @@ impl MynaReader {
             let p1: u8 = (pos >> 8) as u8;
             let p2: u8 = (pos & 0xff) as u8;
             let cmd = CommandAPDU::case2(0x00, 0xB0, p1, p2, le);
-            log::debug!("< {}", cmd);
+            log::trace!("< {}", cmd);
             let res = self.transmit(cmd);
-            log::debug!("> {}", res);
+            log::trace!("> {}", res);
             let n = res.data.len() as u16;
             result.extend(res.data);
             pos += n;
@@ -154,11 +151,11 @@ impl MynaReader {
     }
 
     pub fn read_pin(&mut self) -> Result<u8, APDUError> {
-        log::debug!("# READ PIN");
+        log::debug!("READ PIN");
         let cmd = CommandAPDU::case1(0x00, 0x20, 0x00, 0x80);
-        log::debug!("< {}", cmd);
+        log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
-        log::debug!("> {}", res);
+        log::trace!("> {}", res);
         if res.sw1 == 0x63 {
             Ok(res.sw2 & 0x0f)
         } else {
@@ -167,11 +164,11 @@ impl MynaReader {
     }
 
     pub fn verify_pin(&mut self, pin: &str) -> Result<(), APDUError> {
-        log::debug!("# VERIFY PIN");
+        log::debug!("VERIFY PIN");
         let cmd = CommandAPDU::case3(0x00, 0x20, 0x00, 0x80, pin.as_bytes());
-        log::debug!("< {}", cmd);
+        log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
-        log::debug!("> {}", res);
+        log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(())
         } else {
@@ -180,11 +177,11 @@ impl MynaReader {
     }
 
     pub fn change_pin(&mut self, newpin: &str) -> Result<(), APDUError> {
-        log::debug!("# CHANGE PIN");
+        log::debug!("CHANGE PIN");
         let cmd = CommandAPDU::case3(0x00, 0x24, 0x01, 0x80, newpin.as_bytes());
-        log::debug!("< {}", cmd);
+        log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
-        log::debug!("> {}", res);
+        log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(())
         } else {
@@ -193,12 +190,12 @@ impl MynaReader {
     }
 
     pub fn read_record(&mut self, record: u8, sfi: u8) -> Result<Vec<u8>, APDUError> {
-        log::debug!("# READ RECORD");
+        log::debug!("READ RECORD record={} sfi={}", record, sfi);
         let p2 = (sfi << 3) | 0x04;
         let cmd = CommandAPDU::case2(0x00, 0xB2, record, p2, 0);
-        log::debug!("< {}", cmd);
+        log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
-        log::debug!("> {}", res);
+        log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(res.data)
         } else {
@@ -212,11 +209,11 @@ impl MynaReader {
     }
 
     pub fn signature(&mut self, data: &[u8]) -> Result<Vec<u8>, APDUError> {
-        log::debug!("# SIGNATURE");
+        log::debug!("SIGNATURE data_len={}", data.len());
         let cmd = CommandAPDU::case4(0x80, 0x2A, 0x00, 0x80, data, 0);
-        log::debug!("< {}", cmd);
+        log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
-        log::debug!("> {}", res);
+        log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(res.data)
         } else {

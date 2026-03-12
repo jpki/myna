@@ -1,7 +1,7 @@
-use myna::reader::MynaReader;
-use myna::utils;
 use asn1_rs::FromBer;
 use clap::{Args, Subcommand};
+use myna::reader::MynaReader;
+use myna::utils;
 use std::fs::File;
 use std::io::{self, Write};
 
@@ -38,7 +38,9 @@ fn photo(args: &PhotoArgs) {
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
     reader.select_ef("0011").unwrap();
-    reader.verify_pin(&pin).expect("暗証番号の認証に失敗しました");
+    reader
+        .verify_pin(&pin)
+        .expect("暗証番号の認証に失敗しました");
     reader.select_ef("0001").unwrap();
     let encoded = reader.read_binary(0, 17);
     let (_rem, res) = asn1_rs::Any::from_ber(&encoded).unwrap();
@@ -47,7 +49,9 @@ fn photo(args: &PhotoArgs) {
     // 券面確認APを選択してPIN認証
     reader.select_visual_ap();
     reader.select_ef("0013").unwrap(); // PinA (マイナンバーで認証)
-    reader.verify_pin(mynumber).expect("マイナンバー認証に失敗しました");
+    reader
+        .verify_pin(mynumber)
+        .expect("マイナンバー認証に失敗しました");
 
     // 券面情報を読み取り
     reader.select_ef("0002").unwrap();

@@ -3,7 +3,6 @@
 /// カード上の秘密鍵を使ったCMS署名のために、PKCS#7 SignedData構造を
 /// 手動でDER構築する。openssl crateのPkcs7::signは秘密鍵オブジェクトが
 /// 必要なため、外部署名デバイス(スマートカード)との統合には使えない。
-
 use openssl::hash::{hash, MessageDigest};
 use openssl::x509::X509;
 
@@ -156,11 +155,7 @@ fn build_auth_attrs(content_digest: &[u8], signing_time_der: &[u8]) -> Vec<u8> {
         &der_set(&[&der_octet_string(content_digest)]),
     ]);
 
-    der_set(&[
-        &content_type_attr,
-        &signing_time_attr,
-        &message_digest_attr,
-    ])
+    der_set(&[&content_type_attr, &signing_time_attr, &message_digest_attr])
 }
 
 /// 署名に必要なデータを準備する
@@ -288,10 +283,7 @@ mod tests {
         // Positive number, no leading zero needed
         assert_eq!(der_integer_bytes(&[0x01]), vec![0x02, 0x01, 0x01]);
         // High bit set, needs leading zero
-        assert_eq!(
-            der_integer_bytes(&[0x80]),
-            vec![0x02, 0x02, 0x00, 0x80]
-        );
+        assert_eq!(der_integer_bytes(&[0x80]), vec![0x02, 0x02, 0x00, 0x80]);
         // Empty bytes
         assert_eq!(der_integer_bytes(&[]), vec![0x02, 0x01, 0x00]);
     }

@@ -2,7 +2,7 @@ mod pin;
 mod test;
 mod text;
 mod visual;
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgAction, Args, Parser, Subcommand};
 use myna::jpki::JPKI;
 use myna::unknown::UnknownSubcommand;
 use pin::Pin;
@@ -15,6 +15,8 @@ use visual::VisualSubcommand;
 pub struct App {
     #[command(subcommand)]
     command: Commands,
+    #[arg(short = 'v', action = ArgAction::Count, global = true)]
+    verbose: u8,
     #[arg(short, long)]
     debug: bool,
 }
@@ -84,11 +86,29 @@ fn long_version() -> &'static str {
 
 fn main() {
     let app = App::parse();
-    let mut builder = env_logger::Builder::new();
-    builder.format_timestamp(None).format_target(false);
-    if app.debug {
-        builder.filter_level(log::LevelFilter::Debug);
-    }
-    builder.init();
+    init_logger(app.log_level()).expect("failed to initialize logger");
     app.run();
+}
+
+impl App {
+    fn log_level(&self) -> log::LevelFilter {
+        if self.verbose >= 3 {
+            log::LevelFilter::Trace
+        } else if self.debug || self.verbose >= 2 {
+            log::LevelFilter::Debug
+        } else if self.verbose >= 1 {
+            log::LevelFilter::Info
+        } else {
+            log::LevelFilter::Warn
+        }
+    }
+}
+
+fn init_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
+    fern::Dispatch::new()
+        .format(|out, message, record| out.finish(format_args!("[{}] {}", record.level(), message)))
+        .level(level)
+        .chain(std::io::stderr())
+        .apply()?;
+    Ok(())
 }
