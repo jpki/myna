@@ -60,11 +60,10 @@ fn recv_message() -> io::Result<Value> {
     let val: Value =
         serde_json::from_str(&raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
+    // ログ出力のためPINを削除
     let mut masked = val.clone();
     if let Some(obj) = masked.as_object_mut() {
-        if obj.contains_key("pin") {
-            obj.insert("pin".to_string(), Value::String("****".to_string()));
-        }
+        obj.remove("pin");
     }
     let masked_raw = serde_json::to_string(&masked)
         .unwrap_or_else(|_| raw.trim_end_matches(['\r', '\n']).to_string());
