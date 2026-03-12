@@ -217,6 +217,11 @@ pub fn main(subcommand: &JPKI) {
     }
 }
 
+fn exit_with_error(err: &str) -> ! {
+    eprintln!("{}", err);
+    std::process::exit(1);
+}
+
 fn run_pkey_subcommand(subcommand: &PkeySubcommand) {
     match subcommand {
         PkeySubcommand::Sign(args) => run_pkey_sign(args),
@@ -232,107 +237,213 @@ fn run_cms_subcommand(subcommand: &CmsSubcommand) {
 }
 
 /// 証明書を指定フォーマットで出力する共通関数
-fn output_cert(cert: &X509, format: &EnumFormat) {
+fn output_cert(cert: &X509, format: &EnumFormat) -> Result<(), String> {
     match format {
         EnumFormat::Text => {
-            print!("{}", String::from_utf8(cert.to_text().unwrap()).unwrap());
+            let text = cert
+                .to_text()
+                .map_err(|e| format!("証明書のテキスト変換に失敗しました: {}", e))?;
+            let text = String::from_utf8(text)
+                .map_err(|e| format!("証明書テキストのUTF-8変換に失敗しました: {}", e))?;
+            print!("{}", text);
         }
         EnumFormat::Pem => {
-            print!("{}", String::from_utf8(cert.to_pem().unwrap()).unwrap());
+            let pem = cert
+                .to_pem()
+                .map_err(|e| format!("証明書のPEM変換に失敗しました: {}", e))?;
+            let pem = String::from_utf8(pem)
+                .map_err(|e| format!("証明書PEMのUTF-8変換に失敗しました: {}", e))?;
+            print!("{}", pem);
         }
         EnumFormat::Der => {
             std::io::stdout()
-                .write_all(&cert.to_der().unwrap())
-                .unwrap();
+                .write_all(
+                    &cert
+                        .to_der()
+                        .map_err(|e| format!("証明書のDER変換に失敗しました: {}", e))?,
+                )
+                .map_err(|e| format!("標準出力への書き込みに失敗しました: {}", e))?;
         }
     }
+    Ok(())
 }
 
-fn read_token(reader: &mut MynaReader) -> String {
-    reader.select_ef("0006").unwrap();
+fn read_token(reader: &mut MynaReader) -> Result<String, String> {
+    reader
+        .select_ef("0006")
+        .map_err(|e| format!("トークンEFの選択に失敗しました: {:?}", e))?;
     let data = reader.read_binary(0, 0x20);
-    String::from_utf8_lossy(&data).trim_end().to_string()
+    Ok(String::from_utf8_lossy(&data).trim_end().to_string())
+}
+
+fn validate_sign_password(password: &Option<String>) -> Result<String, String> {
+    let pass = password
+        .clone()
+        .ok_or_else(|| "署名用パスワードが必要です".to_string())?;
+    let pass = pass.to_uppercase();
+    utils::validate_jpki_sign_password(&pass)?;
+    Ok(pass)
+}
+
+fn validate_auth_pin(pin: &Option<String>) -> Result<String, String> {
+    let pin = pin
+        .clone()
+        .ok_or_else(|| "認証用PINが必要です".to_string())?;
+    utils::validate_4digit_pin(&pin)?;
+    Ok(pin)
+}
+
+fn prompt_sign_password(password: &Option<String>) -> Result<String, String> {
+    validate_sign_password(&Some(utils::prompt_input(
+        "署名用パスワード(6-16桁): ",
+        password,
+    )))
+}
+
+fn prompt_auth_pin(pin: &Option<String>) -> Result<String, String> {
+    validate_auth_pin(&Some(utils::prompt_input("認証用PIN(4桁): ", pin)))
+}
+
+fn init_jpki_reader() -> Result<MynaReader, String> {
+    let mut reader =
+        MynaReader::new().map_err(|e| format!("リーダーの初期化に失敗しました: {}", e))?;
+    reader
+        .connect()
+        .map_err(|e| format!("カードへの接続に失敗しました: {}", e))?;
+    reader.select_jpki_ap();
+    Ok(reader)
 }
 
 /// 指定種類の証明書をカードから読み取って返す
-pub fn read_cert(cert_type: &CertType, password: &Option<String>, pin: &Option<String>) -> X509 {
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    let token = read_token(&mut reader);
+pub fn cert_read(
+    cert_type: &CertType,
+    password: &Option<String>,
+    pin: &Option<String>,
+) -> Result<X509, String> {
+    let mut reader = init_jpki_reader()?;
+    let token = read_token(&mut reader)?;
 
     match cert_type {
         CertType::Sign => {
-            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", password);
-            let pass = pass.to_uppercase();
-            utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
-            reader.select_ef("001b").unwrap();
+            let pass = validate_sign_password(password)?;
+            reader
+                .select_ef("001b")
+                .map_err(|e| format!("署名用PIN EFの選択に失敗しました: {:?}", e))?;
             reader
                 .verify_pin(&pass)
-                .expect("パスワード認証に失敗しました");
-            reader.select_ef("0001").unwrap();
+                .map_err(|e| format!("パスワード認証に失敗しました: {:?}", e))?;
+            reader
+                .select_ef("0001")
+                .map_err(|e| format!("署名用証明書EFの選択に失敗しました: {:?}", e))?;
         }
         CertType::SignCa => {
-            reader.select_ef("0002").unwrap();
+            reader
+                .select_ef("0002")
+                .map_err(|e| format!("署名用CA証明書EFの選択に失敗しました: {:?}", e))?;
         }
         CertType::Auth => {
             if token == "JPKIAPGPSETOKEN" {
-                let p = utils::prompt_input("認証用PIN(4桁): ", pin);
-                let p = p.to_uppercase();
-                utils::validate_4digit_pin(&p).expect("PINが不正です");
-                reader.select_ef("0018").unwrap();
-                reader.verify_pin(&p).expect("PIN認証に失敗しました");
+                let p = validate_auth_pin(pin)?;
+                reader
+                    .select_ef("0018")
+                    .map_err(|e| format!("認証用PIN EFの選択に失敗しました: {:?}", e))?;
+                reader
+                    .verify_pin(&p)
+                    .map_err(|e| format!("PIN認証に失敗しました: {:?}", e))?;
             }
-            reader.select_ef("000a").unwrap();
+            reader
+                .select_ef("000a")
+                .map_err(|e| format!("認証用証明書EFの選択に失敗しました: {:?}", e))?;
         }
         CertType::AuthCa => {
-            reader.select_ef("000b").unwrap();
+            reader
+                .select_ef("000b")
+                .map_err(|e| format!("認証用CA証明書EFの選択に失敗しました: {:?}", e))?;
         }
     }
 
-    X509::from_der(&reader.read_binary_all()).unwrap()
+    X509::from_der(&reader.read_binary_all())
+        .map_err(|e| format!("証明書のパースに失敗しました: {}", e))
 }
 
 fn run_cert(args: &CertArgs) {
-    let cert = read_cert(&args.cert_type, &args.password, &args.pin);
-    output_cert(&cert, &args.format);
+    let password = match args.cert_type {
+        CertType::Sign => {
+            Some(prompt_sign_password(&args.password).unwrap_or_else(|e| exit_with_error(&e)))
+        }
+        _ => args.password.clone(),
+    };
+    let pin = match args.cert_type {
+        CertType::Auth => args.pin.clone().or_else(|| {
+            let mut probe_reader = init_jpki_reader().unwrap_or_else(|e| exit_with_error(&e));
+            let token = read_token(&mut probe_reader).unwrap_or_else(|e| exit_with_error(&e));
+            if token == "JPKIAPGPSETOKEN" {
+                Some(prompt_auth_pin(&args.pin).unwrap_or_else(|e| exit_with_error(&e)))
+            } else {
+                None
+            }
+        }),
+        _ => args.pin.clone(),
+    };
+    let cert = cert_read(&args.cert_type, &password, &pin).unwrap_or_else(|e| exit_with_error(&e));
+    output_cert(&cert, &args.format).unwrap_or_else(|e| exit_with_error(&e));
 }
 
 /// 指定種類の鍵でデータに低レベルRSA署名して返す
-pub fn pkey_sign(key_type: &RsaKeyType, password: &Option<String>, content: &[u8]) -> Vec<u8> {
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
+pub fn pkey_sign(
+    key_type: &RsaKeyType,
+    credential: &Option<String>,
+    content: &[u8],
+) -> Result<Vec<u8>, String> {
+    let mut reader = init_jpki_reader()?;
 
     match key_type {
         RsaKeyType::Sign => {
-            let pass = utils::prompt_input("署名用パスワード(6-16桁): ", password);
-            let pass = pass.to_uppercase();
-            utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
-            reader.select_ef("001b").unwrap();
+            let pass = validate_sign_password(credential)?;
+            reader
+                .select_ef("001b")
+                .map_err(|e| format!("署名用PIN EFの選択に失敗しました: {:?}", e))?;
             reader
                 .verify_pin(&pass)
-                .expect("パスワード認証に失敗しました");
+                .map_err(|e| format!("パスワード認証に失敗しました: {:?}", e))?;
         }
         RsaKeyType::Auth => {
-            let pin = utils::prompt_input("認証用PIN(4桁): ", password);
-            utils::validate_4digit_pin(&pin).expect("PINが不正です");
-            reader.select_ef("0018").unwrap();
-            reader.verify_pin(&pin).expect("PIN認証に失敗しました");
+            let pin = validate_auth_pin(credential)?;
+            reader
+                .select_ef("0018")
+                .map_err(|e| format!("認証用PIN EFの選択に失敗しました: {:?}", e))?;
+            reader
+                .verify_pin(&pin)
+                .map_err(|e| format!("PIN認証に失敗しました: {:?}", e))?;
         }
     }
 
     // 鍵EFを選択して署名
     match key_type {
-        RsaKeyType::Sign => reader.select_ef("001a").unwrap(),
-        RsaKeyType::Auth => reader.select_ef("0017").unwrap(),
+        RsaKeyType::Sign => reader
+            .select_ef("001a")
+            .map_err(|e| format!("署名鍵EFの選択に失敗しました: {:?}", e))?,
+        RsaKeyType::Auth => reader
+            .select_ef("0017")
+            .map_err(|e| format!("認証鍵EFの選択に失敗しました: {:?}", e))?,
     };
-    reader.signature(content).expect("署名に失敗しました")
+    reader
+        .signature(content)
+        .map_err(|e| format!("署名に失敗しました: {:?}", e))
 }
 
 fn run_pkey_sign(args: &PkeySignArgs) {
     let content = fs::read(&args.input).expect("入力ファイルを読み込めませんでした");
-    let signature = pkey_sign(&args.key_type, &args.password, &content);
+    let credential = match args.key_type {
+        RsaKeyType::Sign => {
+            Some(prompt_sign_password(&args.password).unwrap_or_else(|e| exit_with_error(&e)))
+        }
+        RsaKeyType::Auth => {
+            Some(prompt_auth_pin(&args.password).unwrap_or_else(|e| exit_with_error(&e)))
+        }
+    };
+    let signature =
+        pkey_sign(&args.key_type, &credential, &content).unwrap_or_else(|e| exit_with_error(&e));
     fs::write(&args.output, &signature).expect("出力ファイルへの書き込みに失敗しました");
     println!("署名を保存しました: {}", args.output);
 }
