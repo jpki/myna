@@ -129,7 +129,7 @@ fn main() -> io::Result<()> {
         }
 
         if mode != Some("01") {
-            send_error_response("Unsupported mode: 01")?;
+            send_error_response(&format!("Unsupported mode {:?}", mode))?;
             continue;
         }
 
