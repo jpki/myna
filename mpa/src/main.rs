@@ -24,7 +24,7 @@ struct ErrorResponse {
 }
 
 fn setup_logging() -> Result<(), fern::InitError> {
-    fern::Dispatch::new()
+    let dispatch = fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
                 "[{}][{}][{}] {}",
@@ -34,15 +34,11 @@ fn setup_logging() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(LevelFilter::Info)
-        .chain(
-            OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/mpa.log")?,
-        )
-        .chain(std::io::stderr())
-        .apply()?;
+        .level(LevelFilter::Info);
+    let dispatch = if let Some(log_path) = std::env::var_os("MPA_LOG") {
+        dispatch.chain(OpenOptions::new().create(true).append(true).open(log_path)?)
+    }
+    dispatch.apply()?;
     Ok(())
 }
 
