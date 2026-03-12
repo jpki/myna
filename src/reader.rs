@@ -44,13 +44,7 @@ impl MynaReader {
                     continue;
                 }
 
-                let atr = hex::encode(rs.atr());
-
-                // FIDOデバイス?
-                if !atr.starts_with("3b888001") {
-                    continue;
-                }
-
+                //let atr = hex::encode(rs.atr());
                 let card = match self
                     .ctx
                     .connect(rs.name(), ShareMode::Shared, Protocols::ANY)
