@@ -1,5 +1,19 @@
 /// 共通ユーティリティ関数
 
+pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
+    openssl::base64::decode_block(input).map_err(|e| format!("base64 decode failed: {}", e))
+}
+
+pub fn base64_encode(input: &[u8]) -> String {
+    openssl::base64::encode_block(input)
+}
+
+pub fn base64_encode_nopad(input: &[u8]) -> String {
+    openssl::base64::encode_block(input)
+        .trim_end_matches('=')
+        .to_string()
+}
+
 /// パスワード/PINの入力を取得する共通関数
 pub fn prompt_input(prompt: &str, existing: &Option<String>) -> String {
     match existing {
