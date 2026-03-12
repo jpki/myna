@@ -199,6 +199,14 @@ pub struct APDUError {
     pub res: ResponseAPDU,
 }
 
+impl fmt::Display for APDUError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for APDUError {}
+
 #[test]
 fn apdu_case1() {
     let cmd = CommandAPDU::case1(1, 2, 3, 4);

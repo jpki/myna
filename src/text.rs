@@ -22,15 +22,9 @@ pub enum TextSubcommand {
 
 pub fn main(_app: &crate::App, subcommand: &TextSubcommand) {
     match subcommand {
-        TextSubcommand::BasicInfo => {
-            basic_info();
-        }
-        TextSubcommand::Mynumber(args) => {
-            mynumber(args);
-        }
-        TextSubcommand::Attrs(args) => {
-            attrs(args);
-        }
+        TextSubcommand::BasicInfo => basic_info(),
+        TextSubcommand::Mynumber(args) => mynumber(args),
+        TextSubcommand::Attrs(args) => attrs(args),
     }
 }
 
@@ -38,7 +32,9 @@ fn basic_info() {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
-    reader.select_ef("0005").unwrap();
+    reader
+        .select_ef("0005")
+        .expect("EF 0005の選択に失敗しました");
     let encoded = reader.read_binary_all();
     let (_rem, payload) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
     let (rem, apid) = asn1_rs::Any::from_ber(&payload.data).expect("parse failed");
@@ -58,12 +54,16 @@ fn mynumber(args: &PinArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
-    reader.select_ef("0011").unwrap();
+    reader
+        .select_ef("0011")
+        .expect("EF 0011の選択に失敗しました");
     reader.verify_pin(&pin).expect("verify pin failed");
-    reader.select_ef("0001").unwrap();
+    reader
+        .select_ef("0001")
+        .expect("EF 0001の選択に失敗しました");
     let encoded = reader.read_binary(0, 17);
-    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).unwrap();
-    let mynumber = std::str::from_utf8(res.data).unwrap();
+    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
+    let mynumber = std::str::from_utf8(res.data).expect("個人番号のUTF-8変換に失敗しました");
     println!("{}", mynumber);
 }
 
@@ -72,22 +72,26 @@ fn attrs(args: &PinArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
-    reader.select_ef("0011").unwrap();
+    reader
+        .select_ef("0011")
+        .expect("EF 0011の選択に失敗しました");
     reader.verify_pin(&pin).expect("verify pin failed");
-    reader.select_ef("0002").unwrap();
+    reader
+        .select_ef("0002")
+        .expect("EF 0002の選択に失敗しました");
     let encoded = reader.read_binary_all();
-    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).unwrap();
-    let (rem, _res) = asn1_rs::Any::from_ber(&res.data).unwrap();
-    let (rem, res) = asn1_rs::Any::from_ber(&rem).unwrap();
-    let name = std::str::from_utf8(res.data).unwrap();
+    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
+    let (rem, _res) = asn1_rs::Any::from_ber(&res.data).expect("parse failed");
+    let (rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let name = std::str::from_utf8(res.data).expect("氏名のUTF-8変換に失敗しました");
     println!("氏名    : {}", name);
-    let (rem, res) = asn1_rs::Any::from_ber(&rem).unwrap();
-    let addr = std::str::from_utf8(res.data).unwrap();
+    let (rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let addr = std::str::from_utf8(res.data).expect("住所のUTF-8変換に失敗しました");
     println!("住所    : {}", addr);
-    let (rem, res) = asn1_rs::Any::from_ber(&rem).unwrap();
-    let birth = std::str::from_utf8(res.data).unwrap();
+    let (rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let birth = std::str::from_utf8(res.data).expect("生年月日のUTF-8変換に失敗しました");
     println!("生年月日: {}", birth);
-    let (_rem, res) = asn1_rs::Any::from_ber(&rem).unwrap();
-    let sex = std::str::from_utf8(res.data).unwrap();
+    let (_rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let sex = std::str::from_utf8(res.data).expect("性別のUTF-8変換に失敗しました");
     println!("性別    : {}", sex);
 }

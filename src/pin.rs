@@ -34,26 +34,16 @@ pub enum ChangeSubcommand {
 
 pub fn main(app: &crate::App, subcommand: &Pin) {
     match subcommand {
-        Pin::Status => {
-            run_status(app);
-        }
-        Pin::Change(change_cmd) => {
-            run_change(change_cmd);
-        }
+        Pin::Status => run_status(app),
+        Pin::Change(change_cmd) => run_change(change_cmd),
     }
 }
 
 fn run_change(subcommand: &ChangeSubcommand) {
     match subcommand {
-        ChangeSubcommand::Card(args) => {
-            run_change_card(args);
-        }
-        ChangeSubcommand::Auth(args) => {
-            run_change_auth(args);
-        }
-        ChangeSubcommand::Sign(args) => {
-            run_change_sign(args);
-        }
+        ChangeSubcommand::Card(args) => run_change_card(args),
+        ChangeSubcommand::Auth(args) => run_change_auth(args),
+        ChangeSubcommand::Sign(args) => run_change_sign(args),
     }
 }
 
@@ -66,7 +56,9 @@ fn run_change_card(args: &ChangeArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
-    reader.select_ef("0011").unwrap();
+    reader
+        .select_ef("0011")
+        .expect("EF 0011の選択に失敗しました");
     reader
         .verify_pin(&pin)
         .expect("暗証番号の認証に失敗しました");
@@ -83,7 +75,9 @@ fn run_change_auth(args: &ChangeArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
-    reader.select_ef("0018").unwrap();
+    reader
+        .select_ef("0018")
+        .expect("EF 0018の選択に失敗しました");
     reader
         .verify_pin(&pin)
         .expect("暗証番号の認証に失敗しました");
@@ -102,7 +96,9 @@ fn run_change_sign(args: &ChangeArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_jpki_ap();
-    reader.select_ef("001b").unwrap();
+    reader
+        .select_ef("001b")
+        .expect("EF 001bの選択に失敗しました");
     reader
         .verify_pin(&pin)
         .expect("パスワードの認証に失敗しました");
@@ -116,27 +112,41 @@ fn run_status(_app: &crate::App) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
-    reader.select_ef("0011").unwrap(); // Pin
-    let counter = reader.read_pin().unwrap();
+    reader
+        .select_ef("0011")
+        .expect("EF 0011の選択に失敗しました");
+    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
     println!("券面入力補助AP 暗証番号: {}", counter);
-    reader.select_ef("0014").unwrap(); // PinA
-    let counter = reader.read_pin().unwrap();
+    reader
+        .select_ef("0014")
+        .expect("EF 0014の選択に失敗しました");
+    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
     println!("券面入力補助AP 暗証番号A: {}", counter);
-    reader.select_ef("0015").unwrap(); // PinB
-    let counter = reader.read_pin().unwrap();
+    reader
+        .select_ef("0015")
+        .expect("EF 0015の選択に失敗しました");
+    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
     println!("券面入力補助AP 暗証番号B: {}", counter);
     reader.select_visual_ap();
-    reader.select_ef("0013").unwrap(); // PinA
-    let counter = reader.read_pin().unwrap();
+    reader
+        .select_ef("0013")
+        .expect("EF 0013の選択に失敗しました");
+    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
     println!("券面確認AP 暗証番号A: {}", counter);
-    reader.select_ef("0012").unwrap(); // PinB
-    let counter = reader.read_pin().unwrap();
+    reader
+        .select_ef("0012")
+        .expect("EF 0012の選択に失敗しました");
+    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
     println!("券面確認AP 暗証番号B: {}", counter);
     reader.select_jpki_ap();
-    reader.select_ef("0018").unwrap(); // UserPin
-    let counter = reader.read_pin().unwrap();
+    reader
+        .select_ef("0018")
+        .expect("EF 0018の選択に失敗しました");
+    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
     println!("JPKIユーザー認証用 暗証番号: {}", counter);
-    reader.select_ef("001b").unwrap(); // SignPin
-    let counter = reader.read_pin().unwrap();
+    reader
+        .select_ef("001b")
+        .expect("EF 001bの選択に失敗しました");
+    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
     println!("JPKIデジタル署名用 パスワード: {}", counter);
 }

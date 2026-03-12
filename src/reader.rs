@@ -1,4 +1,5 @@
 use crate::apdu::{APDUError, CommandAPDU, ResponseAPDU};
+use crate::error::Error;
 use pcsc::*;
 
 pub struct MynaReader {
@@ -7,20 +8,20 @@ pub struct MynaReader {
 }
 
 impl MynaReader {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self, Error> {
         let ctx = Context::establish(Scope::User)
-            .map_err(|err| format!("Failed to establish context: {}", err))?;
+            .map_err(|e| Error::with_source("Failed to establish context", e))?;
         Ok(Self { ctx, card: None })
     }
 
-    pub fn connect(&mut self) -> Result<(), String> {
+    pub fn connect(&mut self) -> Result<(), Error> {
         log::debug!("CONNECT");
         let mut reader_states = vec![ReaderState::new(PNP_NOTIFICATION(), State::UNAWARE)];
         let mut readers_buf = [0; 2048];
         let readers = self
             .ctx
             .list_readers(&mut readers_buf)
-            .map_err(|err| format!("Failed to list readers: {}", err))?;
+            .map_err(|e| Error::with_source("Failed to list readers", e))?;
         for reader in readers {
             log::debug!("READER FOUND: {:?}", reader);
             reader_states.push(ReaderState::new(reader, State::UNAWARE));
@@ -32,7 +33,7 @@ impl MynaReader {
             }
             self.ctx
                 .get_status_change(None, &mut reader_states)
-                .expect("failed to get status change");
+                .map_err(|e| Error::with_source("failed to get status change", e))?;
 
             for rs in &reader_states {
                 if rs.name() == PNP_NOTIFICATION() {
@@ -55,11 +56,11 @@ impl MynaReader {
                     .connect(rs.name(), ShareMode::Shared, Protocols::ANY)
                 {
                     Ok(card) => card,
-                    Err(Error::NoSmartcard) => {
-                        return Err("A smartcard is not present in the reader.".to_string());
+                    Err(pcsc::Error::NoSmartcard) => {
+                        return Err("A smartcard is not present in the reader.".into());
                     }
                     Err(err) => {
-                        return Err(format!("Failed to connect to card: {}", err));
+                        return Err(format!("Failed to connect to card: {}", err).into());
                     }
                 };
 
@@ -88,7 +89,7 @@ impl MynaReader {
         log::trace!("> {}", res);
     }
 
-    pub fn select_ef(&mut self, fid: &str) -> Result<(), APDUError> {
+    pub fn select_ef(&mut self, fid: &str) -> std::result::Result<(), APDUError> {
         let bid = hex::decode(fid).unwrap();
         log::debug!("SELECT EF fid={}", fid);
         let cmd = CommandAPDU::case3(0x00, 0xA4, 0x02, 0x0C, &bid);
@@ -150,7 +151,7 @@ impl MynaReader {
         head
     }
 
-    pub fn read_pin(&mut self) -> Result<u8, APDUError> {
+    pub fn read_pin(&mut self) -> std::result::Result<u8, APDUError> {
         log::debug!("READ PIN");
         let cmd = CommandAPDU::case1(0x00, 0x20, 0x00, 0x80);
         log::trace!("< {}", cmd);
@@ -163,7 +164,7 @@ impl MynaReader {
         }
     }
 
-    pub fn verify_pin(&mut self, pin: &str) -> Result<(), APDUError> {
+    pub fn verify_pin(&mut self, pin: &str) -> std::result::Result<(), APDUError> {
         log::debug!("VERIFY PIN");
         let cmd = CommandAPDU::case3(0x00, 0x20, 0x00, 0x80, pin.as_bytes());
         log::trace!("< {}", cmd);
@@ -176,7 +177,7 @@ impl MynaReader {
         }
     }
 
-    pub fn change_pin(&mut self, newpin: &str) -> Result<(), APDUError> {
+    pub fn change_pin(&mut self, newpin: &str) -> std::result::Result<(), APDUError> {
         log::debug!("CHANGE PIN");
         let cmd = CommandAPDU::case3(0x00, 0x24, 0x01, 0x80, newpin.as_bytes());
         log::trace!("< {}", cmd);
@@ -189,7 +190,7 @@ impl MynaReader {
         }
     }
 
-    pub fn read_record(&mut self, record: u8, sfi: u8) -> Result<Vec<u8>, APDUError> {
+    pub fn read_record(&mut self, record: u8, sfi: u8) -> std::result::Result<Vec<u8>, APDUError> {
         log::debug!("READ RECORD record={} sfi={}", record, sfi);
         let p2 = (sfi << 3) | 0x04;
         let cmd = CommandAPDU::case2(0x00, 0xB2, record, p2, 0);
@@ -208,7 +209,7 @@ impl MynaReader {
         self.select_df(&bid);
     }
 
-    pub fn signature(&mut self, data: &[u8]) -> Result<Vec<u8>, APDUError> {
+    pub fn signature(&mut self, data: &[u8]) -> std::result::Result<Vec<u8>, APDUError> {
         log::debug!("SIGNATURE data_len={}", data.len());
         let cmd = CommandAPDU::case4(0x80, 0x2A, 0x00, 0x80, data, 0);
         log::trace!("< {}", cmd);

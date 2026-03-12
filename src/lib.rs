@@ -1,4 +1,5 @@
 mod apdu;
+pub mod error;
 pub mod jpki;
 pub mod pdf;
 pub mod pkcs7;

@@ -24,24 +24,12 @@ pub struct App {
 impl App {
     pub fn run(&self) {
         match &self.command {
-            Commands::Pin(command) => {
-                pin::main(self, command);
-            }
-            Commands::JPKI(command) => {
-                myna::jpki::main(command);
-            }
-            Commands::Text(command) => {
-                text::main(self, command);
-            }
-            Commands::Visual(command) => {
-                visual::main(self, command);
-            }
-            Commands::Test(_command) => {
-                test::test(self);
-            }
-            Commands::Unknown(command) => {
-                myna::unknown::main(command);
-            }
+            Commands::Pin(command) => pin::main(self, command),
+            Commands::JPKI(command) => myna::jpki::main(command),
+            Commands::Text(command) => text::main(self, command),
+            Commands::Visual(command) => visual::main(self, command),
+            Commands::Test(_command) => test::test(self),
+            Commands::Unknown(command) => myna::unknown::main(command),
         }
     }
 }
@@ -104,7 +92,7 @@ impl App {
     }
 }
 
-fn init_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
+fn init_logger(level: log::LevelFilter) -> std::result::Result<(), fern::InitError> {
     fern::Dispatch::new()
         .format(|out, message, record| out.finish(format_args!("[{}] {}", record.level(), message)))
         .level(level)

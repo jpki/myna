@@ -23,9 +23,7 @@ pub enum VisualSubcommand {
 
 pub fn main(_app: &crate::App, subcommand: &VisualSubcommand) {
     match subcommand {
-        VisualSubcommand::Photo(args) => {
-            photo(args);
-        }
+        VisualSubcommand::Photo(args) => photo(args),
     }
 }
 
@@ -37,24 +35,32 @@ fn photo(args: &PhotoArgs) {
     let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
     reader.connect().expect("カードへの接続に失敗しました");
     reader.select_text_ap();
-    reader.select_ef("0011").unwrap();
+    reader
+        .select_ef("0011")
+        .expect("EF 0011の選択に失敗しました");
     reader
         .verify_pin(&pin)
         .expect("暗証番号の認証に失敗しました");
-    reader.select_ef("0001").unwrap();
+    reader
+        .select_ef("0001")
+        .expect("EF 0001の選択に失敗しました");
     let encoded = reader.read_binary(0, 17);
-    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).unwrap();
-    let mynumber = std::str::from_utf8(res.data).unwrap();
+    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
+    let mynumber = std::str::from_utf8(res.data).expect("マイナンバーのUTF-8変換に失敗しました");
 
     // 券面確認APを選択してPIN認証
     reader.select_visual_ap();
-    reader.select_ef("0013").unwrap(); // PinA (マイナンバーで認証)
+    reader
+        .select_ef("0013")
+        .expect("EF 0013の選択に失敗しました");
     reader
         .verify_pin(mynumber)
         .expect("マイナンバー認証に失敗しました");
 
     // 券面情報を読み取り
-    reader.select_ef("0002").unwrap();
+    reader
+        .select_ef("0002")
+        .expect("EF 0002の選択に失敗しました");
     let encoded = reader.read_binary_all();
 
     // ASN.1をパース
@@ -71,7 +77,9 @@ fn photo(args: &PhotoArgs) {
 
     // 写真データを出力
     if args.output == "-" {
-        io::stdout().write_all(photo_data.data).unwrap();
+        io::stdout()
+            .write_all(photo_data.data)
+            .expect("標準出力への書き込みに失敗しました");
     } else {
         let mut file = File::create(&args.output).expect("ファイルを作成できませんでした");
         file.write_all(photo_data.data)
