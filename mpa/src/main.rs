@@ -57,10 +57,18 @@ fn recv_message() -> io::Result<Value> {
     let raw =
         String::from_utf8(msg_buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    info!("recv: {}", raw.trim_end_matches(['\r', '\n']));
-
-    let val =
+    let val: Value =
         serde_json::from_str(&raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    let mut masked = val.clone();
+    if let Some(obj) = masked.as_object_mut() {
+        if obj.contains_key("pin") {
+            obj.insert("pin".to_string(), Value::String("****".to_string()));
+        }
+    }
+    let masked_raw = serde_json::to_string(&masked)
+        .unwrap_or_else(|_| raw.trim_end_matches(['\r', '\n']).to_string());
+    info!("recv: {}", masked_raw);
 
     Ok(val)
 }
