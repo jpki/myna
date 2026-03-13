@@ -99,7 +99,8 @@ fn send_error_response(message: &str) -> io::Result<()> {
     send_message(&ErrorResponse { result: "1" })
 }
 
-fn auth_pin(msg: &Value, env_pin: &Option<String>) -> Option<String> {
+fn auth_pin(msg: &Value) -> Option<String> {
+    let env_pin = std::env::var("MPA_PIN").ok();
     msg.get("pin")
         .and_then(|v| v.as_str())
         .map(ToOwned::to_owned)
@@ -118,7 +119,7 @@ fn load_certificate_b64(pin: &Option<String>) -> io::Result<String> {
     Ok(utils::base64_encode_nopad(&cert_der))
 }
 
-fn auth(msg: &Value, env_pin: &Option<String>) -> io::Result<()> {
+fn auth(msg: &Value) -> io::Result<()> {
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
     if service_id != Some("01") {
@@ -130,7 +131,7 @@ fn auth(msg: &Value, env_pin: &Option<String>) -> io::Result<()> {
         None => return send_error_response("digest is required"),
     };
 
-    let pin = auth_pin(msg, env_pin);
+    let pin = auth_pin(msg);
 
     let signature = match sign_digest(digest, &pin) {
         Ok(signature) => signature,
@@ -158,8 +159,7 @@ fn auth(msg: &Value, env_pin: &Option<String>) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    let env_pin = std::env::var("MPA_PIN").ok();
-    setup_logging().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    setup_logging().map_err(io::Error::other)?;
     loop {
         let msg = match recv_message() {
             Ok(msg) => msg,
@@ -171,7 +171,7 @@ fn main() -> io::Result<()> {
 
         match mode {
             Some("check") => check::check()?,
-            Some("01") => auth(&msg, &env_pin)?,
+            Some("01") => auth(&msg)?,
             Some("05") => {
                 log::info!("received close request");
                 break;
