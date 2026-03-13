@@ -6,6 +6,8 @@ use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
 
+mod check;
+
 #[derive(Serialize)]
 struct SuccessResponse {
     mode: String,
@@ -24,11 +26,7 @@ struct ErrorResponse {
 }
 
 fn setup_logging() -> Result<(), fern::InitError> {
-    let Some(log_path) = std::env::var_os("MPA_LOG") else {
-        return Ok(());
-    };
-
-    fern::Dispatch::new()
+    let mut dispatch = fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
                 "[{}][{}][{}] {}",
@@ -38,9 +36,21 @@ fn setup_logging() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(LevelFilter::Info)
-        .chain(OpenOptions::new().create(true).append(true).open(log_path)?)
-        .apply()?;
+        .level(LevelFilter::Info);
+
+    #[cfg(debug_assertions)]
+    {
+        dispatch = dispatch.chain(std::io::stderr());
+    }
+
+    if let Some(log_path) = std::env::var_os("MPA_LOG") {
+        let log_file = OpenOptions::new().create(true).append(true).open(log_path)?;
+        dispatch = dispatch.chain(log_file);
+    } else if !cfg!(debug_assertions) {
+        return Ok(());
+    }
+
+    dispatch.apply()?;
     Ok(())
 }
 
@@ -70,7 +80,7 @@ fn recv_message() -> io::Result<Value> {
     Ok(val)
 }
 
-fn send_message<T: Serialize>(msg: &T) -> io::Result<()> {
+pub(crate) fn send_message<T: Serialize>(msg: &T) -> io::Result<()> {
     let data = serde_json::to_vec(msg)?;
 
     if let Ok(raw) = String::from_utf8(data.clone()) {
@@ -121,16 +131,25 @@ fn main() -> io::Result<()> {
         let mode = msg.get("mode").and_then(|v| v.as_str());
         let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
+        // 動作チェックモード
+        if mode == Some("check") {
+            check::check()?;
+            continue;
+        }
+
+        // 終了リクエスト
         if mode == Some("05") {
             log::info!("received close request");
             break;
         }
 
+        // launch(認証要求)
         if mode != Some("01") {
             send_error_response(&format!("Unsupported mode {:?}", mode))?;
             continue;
         }
 
+        // たぶん01がJPKI Auth
         if service_id != Some("01") {
             send_error_response("Unsupported service_id")?;
             continue;
