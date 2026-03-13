@@ -1,4 +1,4 @@
-use colored::Colorize;
+use crate::color;
 use std::fmt;
 
 #[derive(Debug)]
@@ -98,18 +98,17 @@ impl fmt::LowerHex for CommandAPDU {
 impl fmt::Display for CommandAPDU {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mask = self.cla == 0x00 && matches!(self.ins, 0x20 | 0x24);
-        let cmd = format!(
-            "{:02x} {:02x} {:02x} {:02x}",
+        let cmd = color::cyan(format!(
+            "{:02X} {:02X} {:02X} {:02X}",
             self.cla, self.ins, self.p1, self.p2
-        )
-        .cyan();
+        ));
         write!(f, "{}", cmd).unwrap();
         let bytes = self.to_bytes();
         for b in &bytes[4..] {
             if mask {
                 write!(f, " XX").unwrap();
             } else {
-                write!(f, " {:02x}", b).unwrap();
+                write!(f, " {:02X}", b).unwrap();
             }
         }
         Ok(())
@@ -167,16 +166,16 @@ impl fmt::LowerHex for ResponseAPDU {
 
 impl fmt::Display for ResponseAPDU {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut sw = format!("{:02x} {:02x}", self.sw1, self.sw2);
+        let mut sw = format!("{:02X} {:02X}", self.sw1, self.sw2);
         if self.sw() == 0x9000 {
-            sw = sw.green().to_string();
+            sw = color::green(sw);
         } else {
-            sw = sw.yellow().to_string();
+            sw = color::yellow(sw);
         }
         write!(f, "{}", sw).unwrap();
         if !self.data.is_empty() {
             for b in &self.data {
-                write!(f, " {:02x}", b).unwrap();
+                write!(f, " {:02X}", b).unwrap();
             }
         }
         Ok(())

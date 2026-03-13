@@ -1,4 +1,5 @@
 mod apdu;
+pub mod color;
 pub mod error;
 pub mod jpki;
 pub mod pdf;
