@@ -4,8 +4,6 @@ use pcsc::{
 use std::ffi::CString;
 
 pub fn main(app: &crate::App) {
-    println!("OpenSSL version: {}", openssl::version::version());
-
     print!("SCardEstablishContext: ");
     let ctx = match Context::establish(Scope::User) {
         Ok(ctx) => {
