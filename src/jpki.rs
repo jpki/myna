@@ -298,23 +298,15 @@ fn prompt_auth_pin(pin: &Option<String>) -> String {
         .expect("認証用PINが不正です")
 }
 
-fn init_jpki_reader() -> std::result::Result<MynaReader, Error> {
-    let mut reader =
-        MynaReader::new().map_err(|e| Error::with_source("リーダーの初期化に失敗しました", e))?;
-    reader
-        .connect()
-        .map_err(|e| Error::with_source("カードへの接続に失敗しました", e))?;
-    reader.select_jpki_ap();
-    Ok(reader)
-}
-
 /// 指定種類の証明書をカードから読み取って返す
 pub fn cert_read(
     cert_type: &CertType,
     password: &Option<String>,
     pin: &Option<String>,
 ) -> std::result::Result<X509, Error> {
-    let mut reader = init_jpki_reader()?;
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    reader.select_jpki_ap();
     let token = read_token(&mut reader)?;
 
     match cert_type {
@@ -367,7 +359,9 @@ fn run_cert(args: &CertArgs) {
     };
     let pin = match args.cert_type {
         CertType::Auth if args.pin.is_none() => {
-            let mut probe_reader = init_jpki_reader().expect("リーダーの初期化に失敗しました");
+            let mut probe_reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
+            probe_reader.connect().expect("カードへの接続に失敗しました");
+            probe_reader.select_jpki_ap();
             let token = read_token(&mut probe_reader).expect("トークンの読み取りに失敗しました");
             if token == "JPKIAPGPSETOKEN" {
                 Some(prompt_auth_pin(&args.pin))
@@ -388,7 +382,9 @@ pub fn pkey_sign(
     credential: &Option<String>,
     content: &[u8],
 ) -> std::result::Result<Vec<u8>, Error> {
-    let mut reader = init_jpki_reader()?;
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    reader.select_jpki_ap();
 
     match key_type {
         RsaKeyType::Sign => {
