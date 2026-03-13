@@ -35,7 +35,7 @@ fn basic_info() {
     reader
         .select_ef("0005")
         .expect("EF 0005の選択に失敗しました");
-    let encoded = reader.read_binary_all();
+    let encoded = reader.read_binary_all().expect("READ BINARYに失敗しました");
     let (_rem, payload) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
     let (rem, apid) = asn1_rs::Any::from_ber(payload.data).expect("parse failed");
     println!("APID: {}", hex::encode(apid.data));
@@ -61,7 +61,7 @@ fn mynumber(args: &PinArgs) {
     reader
         .select_ef("0001")
         .expect("EF 0001の選択に失敗しました");
-    let encoded = reader.read_binary(0, 17);
+    let encoded = reader.read_binary(0, 17).expect("READ BINARYに失敗しました");
     let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
     let mynumber = std::str::from_utf8(res.data).expect("個人番号のUTF-8変換に失敗しました");
     println!("{}", mynumber);
@@ -79,7 +79,7 @@ fn attrs(args: &PinArgs) {
     reader
         .select_ef("0002")
         .expect("EF 0002の選択に失敗しました");
-    let encoded = reader.read_binary_all();
+    let encoded = reader.read_binary_all().expect("READ BINARYに失敗しました");
     let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
     let (rem, _res) = asn1_rs::Any::from_ber(res.data).expect("parse failed");
     let (rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");

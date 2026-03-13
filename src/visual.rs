@@ -44,7 +44,7 @@ fn photo(args: &PhotoArgs) {
     reader
         .select_ef("0001")
         .expect("EF 0001の選択に失敗しました");
-    let encoded = reader.read_binary(0, 17);
+    let encoded = reader.read_binary(0, 17).expect("READ BINARYに失敗しました");
     let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
     let mynumber = std::str::from_utf8(res.data).expect("マイナンバーのUTF-8変換に失敗しました");
 
@@ -61,7 +61,7 @@ fn photo(args: &PhotoArgs) {
     reader
         .select_ef("0002")
         .expect("EF 0002の選択に失敗しました");
-    let encoded = reader.read_binary_all();
+    let encoded = reader.read_binary_all().expect("READ BINARYに失敗しました");
 
     // ASN.1をパース
     let (_rem, payload) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");

@@ -264,7 +264,9 @@ fn read_token(reader: &mut MynaReader) -> std::result::Result<String, Error> {
     reader
         .select_ef("0006")
         .map_err(|e| Error::with_source("トークンEFの選択に失敗しました", e))?;
-    let data = reader.read_binary(0, 0x20);
+    let data = reader
+        .read_binary(0, 0x20)
+        .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
     Ok(String::from_utf8_lossy(&data).trim_end().to_string())
 }
 
@@ -348,7 +350,10 @@ pub fn cert_read(
         }
     }
 
-    X509::from_der(&reader.read_binary_all())
+    let cert_der = reader
+        .read_binary_all()
+        .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
+    X509::from_der(&cert_der)
         .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))
 }
 
@@ -443,7 +448,7 @@ fn run_pkey_verify(args: &PkeyVerifyArgs) {
         RsaKeyType::Auth => "000a",
     };
     reader.select_ef(cert_ef).unwrap();
-    let cert_der = reader.read_binary_all();
+    let cert_der = reader.read_binary_all().expect("READ BINARYに失敗しました");
     let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
     let pubkey = cert.public_key().expect("公開鍵の取得に失敗しました");
 
@@ -496,7 +501,7 @@ fn run_cms_sign(args: &CmsSignArgs) {
         .verify_pin(&password)
         .expect("パスワード認証に失敗しました");
     reader.select_ef("0001").unwrap();
-    let cert_der = reader.read_binary_all();
+    let cert_der = reader.read_binary_all().expect("READ BINARYに失敗しました");
     let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
 
     let md = to_message_digest(&args.digest);

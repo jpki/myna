@@ -560,7 +560,7 @@ pub fn pdf_sign(args: &PdfSignArgs) {
         .verify_pin(&password)
         .expect("パスワード認証に失敗しました");
     reader.select_ef("0001").unwrap();
-    let cert_der = reader.read_binary_all();
+    let cert_der = reader.read_binary_all().expect("READ BINARYに失敗しました");
     let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
 
     // PDF構造を解析

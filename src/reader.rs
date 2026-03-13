@@ -113,7 +113,7 @@ impl MynaReader {
         self.select_df(&bid);
     }
 
-    pub fn read_binary(&mut self, pos: u16, size: u16) -> Vec<u8> {
+    pub fn read_binary(&mut self, pos: u16, size: u16) -> std::result::Result<Vec<u8>, APDUError> {
         log::debug!("READ BINARY pos={} size={}", pos, size);
         let mut result = Vec::new();
         let mut pos = pos;
@@ -127,23 +127,29 @@ impl MynaReader {
             log::trace!("< {}", cmd);
             let res = self.transmit(cmd);
             log::trace!("> {}", res);
+            if res.sw() != 0x9000 {
+                return Err(APDUError { res });
+            }
             let n = res.data.len() as u16;
+            if n == 0 {
+                break;
+            }
             result.extend(res.data);
             pos += n;
         }
-        result
+        Ok(result)
     }
 
-    pub fn read_binary_all(&mut self) -> Vec<u8> {
-        let mut head = self.read_binary(0, 7);
+    pub fn read_binary_all(&mut self) -> std::result::Result<Vec<u8>, APDUError> {
+        let mut head = self.read_binary(0, 7)?;
         let res = asn1_rs::Any::from_ber(&head);
         let len: u16 = match res {
             Err(asn1_rs::Err::Incomplete(asn1_rs::Needed::Size(size))) => size.get() as u16,
             _ => 0,
         };
-        let data = self.read_binary(7, len);
+        let data = self.read_binary(7, len)?;
         head.extend(data);
-        head
+        Ok(head)
     }
 
     pub fn read_pin(&mut self) -> std::result::Result<u8, APDUError> {
