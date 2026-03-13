@@ -3,7 +3,7 @@ use pcsc::{
 };
 use std::ffi::CString;
 
-pub fn test(app: &crate::App) {
+pub fn main(app: &crate::App) {
     println!("OpenSSL version: {}", openssl::version::version());
 
     print!("SCardEstablishContext: ");
@@ -82,7 +82,7 @@ fn select_reader<'a>(app: &crate::App, readers: &'a [CString]) -> Option<&'a CSt
 
 fn selected_reader_name(app: &crate::App) -> Option<&str> {
     match &app.command {
-        crate::Commands::Test(args) => args.name.as_deref(),
+        crate::Commands::Check(args) => args.name.as_deref(),
         _ => None,
     }
 }

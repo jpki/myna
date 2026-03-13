@@ -1,5 +1,5 @@
 mod pin;
-mod test;
+mod check;
 mod text;
 mod visual;
 use clap::{ArgAction, Args, Parser, Subcommand};
@@ -10,7 +10,7 @@ use text::TextSubcommand;
 use visual::VisualSubcommand;
 
 #[derive(Parser)]
-#[command(author, version, long_version = long_version(), about, long_about = None)]
+#[command(author, version = version(), about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct App {
     #[command(subcommand)]
@@ -28,7 +28,7 @@ impl App {
             Commands::JPKI(command) => myna::jpki::main(command),
             Commands::Text(command) => text::main(self, command),
             Commands::Visual(command) => visual::main(self, command),
-            Commands::Test(_command) => test::test(self),
+            Commands::Check(_command) => check::main(self),
             Commands::Unknown(command) => myna::unknown::main(command),
         }
     }
@@ -36,14 +36,14 @@ impl App {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// 動作診断
+    Check(CheckArgs),
     /// 券面入力補助AP
     #[command(subcommand)]
     Text(TextSubcommand),
     /// 券面確認AP
     #[command(subcommand)]
     Visual(VisualSubcommand),
-    /// Test card reader
-    Test(TestArgs),
     /// 公的個人認証
     #[command(subcommand)]
     JPKI(JPKI),
@@ -56,11 +56,11 @@ enum Commands {
 }
 
 #[derive(Args)]
-struct TestArgs {
+struct CheckArgs {
     name: Option<String>,
 }
 
-fn long_version() -> &'static str {
+fn version() -> &'static str {
     use std::sync::OnceLock;
     static VERSION: OnceLock<String> = OnceLock::new();
     VERSION.get_or_init(|| {
