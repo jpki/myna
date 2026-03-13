@@ -2,7 +2,7 @@
 
 Linuxでマイナポータルにログインするためのブラウザ拡張およびNativeMessagingホストアプリケーションです。
 
-# ホストアプリケーションのビルド
+## ホストアプリケーションのビルド
 
 このディレクトリで
 ```
@@ -18,7 +18,7 @@ cargo build -r --workspace
 workspaceになっているのでプロジェクトrootの
 `target/release/mpa`に生成されます。
 
-# ホストアプリケーションの登録
+## ホストアプリケーションの登録
 
 ```
 ./install.sh
@@ -30,7 +30,7 @@ ChromeのProfileを指定する場合
 ./install.sh --user-data-dir /path/to/datadir
 ```
 
-# ブラウザ拡張のインストール
+## ブラウザ拡張のインストール
 
 `chrome://extensions/`を開いて「パッケージ化されていない拡張機能を読み込む」
 `./mpa/extension`を読み込む
@@ -38,7 +38,7 @@ ChromeのProfileを指定する場合
 右上の拡張機能のメニューから「MPA for Linux」を開く
 動作確認ボタンを押してエラーが出なければOK
 
-# ログイン
+## ログイン
 
 マイナポータルのログイン画面で暗証番号入力ウィンドウが表示されます。
 
