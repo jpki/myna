@@ -6,8 +6,9 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HOST_PATH="$SCRIPT_DIR/target/debug/mpa"
-HOST_NAME="jp.go.cao.mpa"
+#HOST_PATH="$SCRIPT_DIR/../target/debug/mpa"
+HOST_PATH="$SCRIPT_DIR/../target/release/mpa"
+HOST_NAME="com.github.jpki.mpa"
 HOST_DESC="MPA for Linux"
 
 # Chrome拡張ID (manifest.jsonのkeyフィールドから算出された固定ID)

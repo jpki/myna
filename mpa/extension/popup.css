@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light;
+  font-family: "Noto Sans JP", sans-serif;
+  background: #f4efe6;
+  color: #1f2937;
+}
+
+body {
+  margin: 0;
+  min-width: 360px;
+  background: white;
+}
+
+.app {
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.lead {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+form {
+  display: grid;
+  gap: 10px;
+}
+
+label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+textarea,
+input,
+button {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font: inherit;
+}
+
+textarea,
+input {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+button {
+  padding: 10px 12px;
+  border: 0;
+  background: #0f766e;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:hover {
+  background: #115e59;
+}
+
+pre {
+  margin: 14px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

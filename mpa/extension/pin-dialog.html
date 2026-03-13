@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>暗証番号入力</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+      body {
+        min-width: auto;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .actions button[type="button"] {
+        background: #475569;
+      }
+
+      .actions button[type="button"]:hover {
+        background: #334155;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <h1>暗証番号入力</h1>
+      <p class="lead">ログインのため、公的個人認証の認証用暗証番号(4桁)を入力してください。</p>
+      <form id="pin-form">
+        <label for="pin">暗証番号(4桁)</label>
+        <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="\d{4}" required autofocus>
+
+        <div class="actions">
+          <button type="submit">OK</button>
+          <button id="cancel" type="button">Cancel</button>
+        </div>
+      </form>
+    </main>
+
+    <script src="pin-dialog.js"></script>
+  </body>
+</html>
