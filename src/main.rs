@@ -66,7 +66,7 @@ fn version() -> &'static str {
     static VERSION: OnceLock<String> = OnceLock::new();
     VERSION.get_or_init(|| {
         format!(
-            "{}\n{}",
+            "{} {}",
             env!("CARGO_PKG_VERSION"),
             openssl::version::version()
         )
