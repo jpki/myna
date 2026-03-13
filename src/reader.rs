@@ -5,22 +5,26 @@ use pcsc::*;
 pub struct MynaReader {
     ctx: Context,
     card: Option<Card>,
+    pub timeout: Option<std::time::Duration>,
 }
 
 impl MynaReader {
     pub fn new() -> Result<Self, Error> {
         let ctx = Context::establish(Scope::User)
             .map_err(|e| Error::with_source("Failed to establish context", e))?;
-        Ok(Self { ctx, card: None })
+        Ok(Self {
+            ctx,
+            card: None,
+            timeout: None,
+        })
     }
 
     pub fn connect(&mut self) -> Result<(), Error> {
-        log::debug!("CONNECT");
+        log::debug!("CONNECT timeout={:?}", self.timeout);
         let mut reader_states = vec![ReaderState::new(PNP_NOTIFICATION(), State::UNAWARE)];
-        let mut readers_buf = [0; 2048];
         let readers = self
             .ctx
-            .list_readers(&mut readers_buf)
+            .list_readers_owned()
             .map_err(|e| Error::with_source("Failed to list readers", e))?;
         for reader in readers {
             log::debug!("READER FOUND: {:?}", reader);
@@ -32,31 +36,28 @@ impl MynaReader {
                 rs.sync_current_state();
             }
             self.ctx
-                .get_status_change(None, &mut reader_states)
-                .map_err(|e| Error::with_source("failed to get status change", e))?;
+                .get_status_change(self.timeout, &mut reader_states)
+                .map_err(|e| match e {
+                    pcsc::Error::Timeout => Error::from("Timeout: No smartcard found"),
+                    err => Error::with_source("failed to get status change", err),
+                })?;
 
-            for rs in &reader_states {
-                if rs.name() == PNP_NOTIFICATION() {
-                    continue;
-                }
+            let found = reader_states.iter()
+                .filter(|rs| rs.name() != PNP_NOTIFICATION())
+                .find(|rs| rs.event_state().contains(State::PRESENT));
 
-                if State::PRESENT & rs.event_state() != State::PRESENT {
-                    continue;
-                }
-
-                //let atr = hex::encode(rs.atr());
-                let card = match self
-                    .ctx
-                    .connect(rs.name(), ShareMode::Shared, Protocols::ANY)
-                {
-                    Ok(card) => card,
-                    Err(pcsc::Error::NoSmartcard) => {
-                        return Err("A smartcard is not present in the reader.".into());
-                    }
-                    Err(err) => {
-                        return Err(format!("Failed to connect to card: {}", err).into());
-                    }
-                };
+            if let Some(rs) = found {
+                log::debug!(
+                    "READER SELECTED: {:?} state={:?} atr={}",
+                    rs.name(),
+                    rs.event_state(),
+                    hex::encode(rs.atr())
+                );
+                let card = self.ctx.connect(rs.name(), ShareMode::Shared, Protocols::ANY)
+                    .map_err(|e| match e {
+                        pcsc::Error::NoSmartcard => Error::from("A smartcard is not present in the reader."),
+                        err => Error::with_source("Failed to connect to card", err),
+                    })?;
 
                 log::debug!("CONNECTED");
                 self.card = Some(card);
