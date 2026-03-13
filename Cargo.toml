@@ -3,8 +3,6 @@ name = "myna"
 version = "0.6.4"
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 asn1-rs = "0.7.1"
 clap = { version = "4.5.60", features = ["cargo", "derive"] }
@@ -15,3 +13,6 @@ openssl = { version = "0.10.75", features = ["vendored"] }
 pcsc = "2.9.0"
 libc = "0.2"
 fern = "0.7.1"
+
+[workspace]
+members = ["mpa"]
