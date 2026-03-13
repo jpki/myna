@@ -37,10 +37,10 @@ fn basic_info() {
         .expect("EF 0005の選択に失敗しました");
     let encoded = reader.read_binary_all();
     let (_rem, payload) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
-    let (rem, apid) = asn1_rs::Any::from_ber(&payload.data).expect("parse failed");
-    println!("APID: {}", hex::encode(&apid.data));
-    let (_rem, pubkey_id) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
-    println!("公開鍵ID: {}", hex::encode(&pubkey_id.data));
+    let (rem, apid) = asn1_rs::Any::from_ber(payload.data).expect("parse failed");
+    println!("APID: {}", hex::encode(apid.data));
+    let (_rem, pubkey_id) = asn1_rs::Any::from_ber(rem).expect("parse failed");
+    println!("公開鍵ID: {}", hex::encode(pubkey_id.data));
 }
 
 fn input_pin(args: &PinArgs) -> String {
@@ -81,17 +81,17 @@ fn attrs(args: &PinArgs) {
         .expect("EF 0002の選択に失敗しました");
     let encoded = reader.read_binary_all();
     let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
-    let (rem, _res) = asn1_rs::Any::from_ber(&res.data).expect("parse failed");
-    let (rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let (rem, _res) = asn1_rs::Any::from_ber(res.data).expect("parse failed");
+    let (rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
     let name = std::str::from_utf8(res.data).expect("氏名のUTF-8変換に失敗しました");
     println!("氏名    : {}", name);
-    let (rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let (rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
     let addr = std::str::from_utf8(res.data).expect("住所のUTF-8変換に失敗しました");
     println!("住所    : {}", addr);
-    let (rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let (rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
     let birth = std::str::from_utf8(res.data).expect("生年月日のUTF-8変換に失敗しました");
     println!("生年月日: {}", birth);
-    let (_rem, res) = asn1_rs::Any::from_ber(&rem).expect("parse failed");
+    let (_rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
     let sex = std::str::from_utf8(res.data).expect("性別のUTF-8変換に失敗しました");
     println!("性別    : {}", sex);
 }

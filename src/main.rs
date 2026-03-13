@@ -46,6 +46,7 @@ enum Commands {
     Visual(VisualSubcommand),
     /// 公的個人認証
     #[command(subcommand)]
+    #[allow(clippy::upper_case_acronyms)]
     JPKI(JPKI),
     /// Pin operation
     #[command(subcommand)]

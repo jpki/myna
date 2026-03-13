@@ -52,14 +52,13 @@ fn find_max_obj_id(data: &[u8], xref_offset: usize) -> usize {
             let xref_text = String::from_utf8_lossy(&slice[4..trailer_pos]);
             for line in xref_text.lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() == 2 {
-                    if let (Ok(start), Ok(count)) =
+                if parts.len() == 2
+                    && let (Ok(start), Ok(count)) =
                         (parts[0].parse::<usize>(), parts[1].parse::<usize>())
-                    {
-                        let end = start + count;
-                        if end > max_id {
-                            max_id = end;
-                        }
+                {
+                    let end = start + count;
+                    if end > max_id {
+                        max_id = end;
                     }
                 }
             }
@@ -72,26 +71,26 @@ fn find_max_obj_id(data: &[u8], xref_offset: usize) -> usize {
                     .take_while(|&&b| b.is_ascii_digit())
                     .map(|&b| b as char)
                     .collect();
-                if let Ok(id) = obj_id_str.parse::<usize>() {
-                    if id + 1 > max_id {
-                        max_id = id + 1;
-                    }
+                if let Ok(id) = obj_id_str.parse::<usize>()
+                    && id + 1 > max_id
+                {
+                    max_id = id + 1;
                 }
-                if let Some(size) = extract_int_value(text, "/Size") {
-                    if size > max_id {
-                        max_id = size;
-                    }
+                if let Some(size) = extract_int_value(text, "/Size")
+                    && size > max_id
+                {
+                    max_id = size;
                 }
             }
         }
 
         // /Prev を探す
         let dict = get_xref_dict_text(data, offset);
-        if let Some(ref text) = dict {
-            if let Some(prev) = extract_int_value(text, "/Prev") {
-                offset = prev;
-                continue;
-            }
+        if let Some(ref text) = dict
+            && let Some(prev) = extract_int_value(text, "/Prev")
+        {
+            offset = prev;
+            continue;
         }
         break;
     }
@@ -170,14 +169,14 @@ fn find_object_content(data: &[u8], obj_id: usize) -> Option<String> {
     let needle = format!("{} 0 obj", obj_id);
     let needle_bytes = needle.as_bytes();
     for i in 0..data.len().saturating_sub(needle_bytes.len()) {
-        if &data[i..i + needle_bytes.len()] == needle_bytes {
-            if i == 0 || data[i - 1] == b'\n' || data[i - 1] == b'\r' {
-                let start = i + needle_bytes.len();
-                let rest = &data[start..];
-                if let Some(end_pos) = rest.windows(6).position(|w| w == b"endobj") {
-                    let content = &data[start..start + end_pos];
-                    return Some(String::from_utf8_lossy(content).to_string());
-                }
+        if &data[i..i + needle_bytes.len()] == needle_bytes
+            && (i == 0 || data[i - 1] == b'\n' || data[i - 1] == b'\r')
+        {
+            let start = i + needle_bytes.len();
+            let rest = &data[start..];
+            if let Some(end_pos) = rest.windows(6).position(|w| w == b"endobj") {
+                let content = &data[start..start + end_pos];
+                return Some(String::from_utf8_lossy(content).to_string());
             }
         }
     }

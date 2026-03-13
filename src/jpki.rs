@@ -195,6 +195,7 @@ pub enum PdfSubcommand {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum JPKI {
     /// 証明書を表示します
     Cert(CertArgs),

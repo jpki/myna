@@ -91,7 +91,7 @@ pub(crate) fn verify_signer_certificates(
                         .collect::<Vec<_>>()
                         .join(" -> "),
                 );
-                if chain.len() > 0 {
+                if !chain.is_empty() {
                     matched_root =
                         ta::root_name_for_cert(roots, chain.get(chain.len() - 1).unwrap())?;
                 }

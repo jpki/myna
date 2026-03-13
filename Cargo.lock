@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "myna"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "asn1-rs",
  "clap",
