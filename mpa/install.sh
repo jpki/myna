@@ -7,7 +7,7 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 #HOST_PATH="$SCRIPT_DIR/../target/debug/mpa"
-HOST_PATH="$SCRIPT_DIR/../target/release/mpa"
+HOST_PATH="$HOME/.cargo/bin/mpa"
 HOST_NAME="com.github.jpki.mpa"
 HOST_DESC="MPA for Linux"
 

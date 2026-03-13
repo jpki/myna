@@ -22,9 +22,8 @@ myna - マイナンバーカード・ユーティリティ
 ## 動作プラットホーム
 
 - Linux
+- Windows
 - macOS(未検証)
-- Windows(未検証)
-- FreeBSD(未検証)
 
 ## ビルド環境
 
@@ -65,12 +64,6 @@ $ sudo apt-get install libpcsclite-dev
 
 ~~~
 $ sudo yum install pcsc-lite-devel
-~~~
-
-- FreeBSD
-
-~~~
-# pkg install pcsc-lite ccid pkgconf
 ~~~
 
 - macOS

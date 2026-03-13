@@ -2,21 +2,20 @@
 
 Linuxでマイナポータルにログインするためのブラウザ拡張およびNativeMessagingホストアプリケーションです。
 
-## ホストアプリケーションのビルド
+## ホストアプリケーションのインストール
 
 このディレクトリで
 ```
-cargo build -r
+cargo install --path .
 ```
 
 もしくはプロジェクトrootで
 
 ```
-cargo build -r --workspace
+cargo install --path mpa
 ```
 
-workspaceになっているのでプロジェクトrootの
-`target/release/mpa`に生成されます。
+`~/.cargo/bin/mpa`にインストールされます。
 
 ## ホストアプリケーションの登録
 
