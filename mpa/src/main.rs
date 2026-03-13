@@ -118,6 +118,45 @@ fn load_certificate_b64(pin: &Option<String>) -> io::Result<String> {
     Ok(utils::base64_encode_nopad(&cert_der))
 }
 
+fn auth(msg: &Value, env_pin: &Option<String>) -> io::Result<()> {
+    let service_id = msg.get("service_id").and_then(|v| v.as_str());
+
+    if service_id != Some("01") {
+        return send_error_response("Unsupported service_id");
+    }
+
+    let digest = match msg.get("digest").and_then(|v| v.as_str()) {
+        Some(digest) => digest,
+        None => return send_error_response("digest is required"),
+    };
+
+    let pin = auth_pin(msg, env_pin);
+
+    let signature = match sign_digest(digest, &pin) {
+        Ok(signature) => signature,
+        Err(e) => {
+            return send_error_response(&format!("failed to sign digest: {}", e));
+        }
+    };
+
+    let certificate = match load_certificate_b64(&pin) {
+        Ok(certificate) => certificate,
+        Err(e) => {
+            return send_error_response(&format!("failed to load certificate: {}", e));
+        }
+    };
+
+    let response = SuccessResponse {
+        mode: "01".to_string(),
+        result: "0".to_string(),
+        uuid: None,
+        signature,
+        certificate,
+        combination_code: None,
+    };
+    send_message(&response)
+}
+
 fn main() -> io::Result<()> {
     let env_pin = std::env::var("MPA_PIN").ok();
     setup_logging().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -129,69 +168,16 @@ fn main() -> io::Result<()> {
         };
 
         let mode = msg.get("mode").and_then(|v| v.as_str());
-        let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
-        // 動作チェックモード
-        if mode == Some("check") {
-            check::check()?;
-            continue;
-        }
-
-        // 終了リクエスト
-        if mode == Some("05") {
-            log::info!("received close request");
-            break;
-        }
-
-        // launch(認証要求)
-        if mode != Some("01") {
-            send_error_response(&format!("Unsupported mode {:?}", mode))?;
-            continue;
-        }
-
-        // たぶん01がJPKI Auth
-        if service_id != Some("01") {
-            send_error_response("Unsupported service_id")?;
-            continue;
-        }
-
-        let digest = match msg.get("digest").and_then(|v| v.as_str()) {
-            Some(digest) => digest,
-            None => {
-                send_error_response("digest is required")?;
-                continue;
+        match mode {
+            Some("check") => check::check()?,
+            Some("01") => auth(&msg, &env_pin)?,
+            Some("05") => {
+                log::info!("received close request");
+                break;
             }
-        };
-
-        let pin = auth_pin(&msg, &env_pin);
-
-        let signature = match sign_digest(digest, &pin) {
-            Ok(signature) => signature,
-            Err(e) => {
-                let error_msg = format!("failed to sign digest: {}", e);
-                send_error_response(&error_msg)?;
-                continue;
-            }
-        };
-
-        let certificate = match load_certificate_b64(&pin) {
-            Ok(certificate) => certificate,
-            Err(e) => {
-                let error_msg = format!("failed to load certificate: {}", e);
-                send_error_response(&error_msg)?;
-                continue;
-            }
-        };
-
-        let response = SuccessResponse {
-            mode: mode.unwrap_or_default().to_string(),
-            result: "0".to_string(),
-            uuid: None,
-            signature,
-            certificate,
-            combination_code: None,
-        };
-        send_message(&response)?;
+            _ => send_error_response(&format!("Unsupported mode {:?}", mode))?,
+        }
     }
     Ok(())
 }
