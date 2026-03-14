@@ -1,3 +1,15 @@
+// modify navigator.userAgent
+{
+  const ua = navigator.userAgent;
+  const fakeUserAgent = ua
+    .replace(/Linux\s*[^;)]*/i, "Windows NT 10.0; Win64; x64")
+    .replace(/X11;\s*/i, "")
+  Object.defineProperty(navigator, "userAgent", {
+    get: () => fakeUserAgent,
+    configurable: true,
+  });
+}
+
 // modify navigator.userAgentData
 if (navigator.userAgentData) {
   const original = navigator.userAgentData;
@@ -26,3 +38,4 @@ if (navigator.userAgentData) {
     configurable: true,
   });
 }
+
