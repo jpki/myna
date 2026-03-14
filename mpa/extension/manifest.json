@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MPA for Linux",
-  "version": "0.0.1",
+  "version": "24.0.1",
   "description": "Linuxユーザーでも様々なオンライン行政サービスを利用するためのアプリケーションです。非公式ですので自己責任でご利用ください。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAywd+m1SVuSCNxVe0m+fw62swuqDpZqTM1yMuqsBHVjMKY0d2gSqLwIIMU9oy0ez5mSRyfL7NXAZID+agntq77pauPrROsrc4H37SI2sXLfA3sCmlLzn7VUkarh9Tg4FMmZA/jxTSm5d+qKVpByB4zIDfCxugS7DUd1wKG7UTsXXaZrYGF0TsQMB1xmuqGQlY3aiiWg+iwKL/3XFA7Gr6iv8ZbU63pb9Zux9lJvRTBi+/4trzihDQ1+ObPzbCO/QopKRDOfgCO8X5MPNrh+md2WtgQ4iQ4BDm1l+Sy3avHLkc2Nyp9ifuWw5iRrEwQqjuRd7D8aDYgx8QIHU0QLg+dQIDAQAB",
   "permissions": [
@@ -19,7 +19,7 @@
     },
     {
       "matches": [
-        "https://myna.go.jp/*"
+        "https://*.go.jp/*"
       ],
       "run_at": "document_end",
       "js": ["content.js"]
