@@ -33,7 +33,9 @@ fn der_sequence(items: &[&[u8]]) -> Vec<u8> {
 }
 
 fn der_set(items: &[&[u8]]) -> Vec<u8> {
-    let content: Vec<u8> = items.iter().flat_map(|i| i.iter().copied()).collect();
+    let mut sorted: Vec<&[u8]> = items.to_vec();
+    sorted.sort();
+    let content: Vec<u8> = sorted.iter().flat_map(|i| i.iter().copied()).collect();
     der_wrap(0x31, &content)
 }
 
@@ -297,6 +299,24 @@ mod tests {
         // 1970-01-01 00:00:00 UTC = 0
         let (y, m, d, h, min, s) = civil_from_epoch(0);
         assert_eq!((y, m, d, h, min, s), (1970, 1, 1, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_der_set_sorts_elements() {
+        // DER SET OF must encode elements in lexicographic order (X.690 §11.6)
+        let a = vec![0x30, 0x02, 0x01, 0x01]; // smaller
+        let b = vec![0x30, 0x02, 0x01, 0x03]; // larger
+        let c = vec![0x30, 0x02, 0x01, 0x02]; // middle
+
+        let result = der_set(&[&b, &c, &a]);
+        // Expected: 0x31 tag, then a, c, b in sorted order
+        let mut expected = vec![0x31];
+        let content_len = a.len() + b.len() + c.len();
+        expected.extend(der_length(content_len));
+        expected.extend(&a);
+        expected.extend(&c);
+        expected.extend(&b);
+        assert_eq!(result, expected);
     }
 
     #[test]
