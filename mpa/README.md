@@ -55,10 +55,19 @@ ChromeのProfileを指定する場合
 
 ## ブラウザ拡張のインストール
 
+### Chrome
 - `chrome://extensions/`を開く
 - 右上のディベロッパーモードをON
 -「パッケージ化されていない拡張機能を読み込む」で`./mpa/extension`を読み込む
 - 拡張機能のメニューから「MPA for Linux」を開く
+- 動作確認ボタンを押してエラーが出なければOK
+
+### Firefox
+- `about:debugging`の`このFirefox`を開く
+- `一時的なアドオンを読み込む`で`./mpa/extension/manifest.json`を読み込む
+- `about:addons`を開く
+- 歯車ボタンの`ファイルからアドオンをインストール`
+- 拡張機能のメニューから`MPA for Linux`を開く
 - 動作確認ボタンを押してエラーが出なければOK
 
 ## ログイン
