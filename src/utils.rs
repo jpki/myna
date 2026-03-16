@@ -1,6 +1,18 @@
 /// 共通ユーティリティ関数
 use crate::error::Error;
 
+pub fn hex_encode(input: &[u8]) -> String {
+    base16ct::lower::encode_string(input)
+}
+
+pub fn hex_encode_upper(input: &[u8]) -> String {
+    base16ct::upper::encode_string(input)
+}
+
+pub fn hex_decode(input: &str) -> Result<Vec<u8>, Error> {
+    base16ct::mixed::decode_vec(input).map_err(|e| Error::new(format!("hex decode failed: {}", e)))
+}
+
 pub fn base64_decode(input: &str) -> Result<Vec<u8>, Error> {
     openssl::base64::decode_block(input).map_err(|e| Error::with_source("base64 decode failed", e))
 }

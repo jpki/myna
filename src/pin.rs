@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use myna::error::Error;
 use myna::reader::MynaReader;
 use myna::utils;
 
@@ -32,14 +33,14 @@ pub enum ChangeSubcommand {
     Sign(ChangeArgs),
 }
 
-pub fn main(app: &crate::App, subcommand: &Pin) {
+pub fn main(app: &crate::App, subcommand: &Pin) -> Result<(), Error> {
     match subcommand {
         Pin::Status => run_status(app),
         Pin::Change(change_cmd) => run_change(change_cmd),
     }
 }
 
-fn run_change(subcommand: &ChangeSubcommand) {
+fn run_change(subcommand: &ChangeSubcommand) -> Result<(), Error> {
     match subcommand {
         ChangeSubcommand::Card(args) => run_change_card(args),
         ChangeSubcommand::Auth(args) => run_change_auth(args),
@@ -47,106 +48,87 @@ fn run_change(subcommand: &ChangeSubcommand) {
     }
 }
 
-fn run_change_card(args: &ChangeArgs) {
+fn run_change_card(args: &ChangeArgs) -> Result<(), Error> {
     let pin = utils::prompt_input("現在の暗証番号(4桁): ", &args.pin);
-    utils::validate_4digit_pin(&pin).expect("暗証番号が不正です");
+    utils::validate_4digit_pin(&pin)?;
     let newpin = utils::prompt_input("新しい暗証番号(4桁): ", &args.newpin);
-    utils::validate_4digit_pin(&newpin).expect("新しい暗証番号が不正です");
+    utils::validate_4digit_pin(&newpin)?;
 
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_text_ap();
-    reader
-        .select_ef("0011")
-        .expect("EF 0011の選択に失敗しました");
-    reader
-        .verify_pin(&pin)
-        .expect("暗証番号の認証に失敗しました");
-    reader.change_pin(&newpin).expect("PINの変更に失敗しました");
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let text = reader.text_ap()?;
+    text.reader.select_ef("0011")?;
+    text.reader.verify_pin(&pin)?;
+    text.reader.change_pin(&newpin)?;
     println!("券面入力補助用PINを変更しました");
+    Ok(())
 }
 
-fn run_change_auth(args: &ChangeArgs) {
+fn run_change_auth(args: &ChangeArgs) -> Result<(), Error> {
     let pin = utils::prompt_input("現在の暗証番号(4桁): ", &args.pin);
-    utils::validate_4digit_pin(&pin).expect("暗証番号が不正です");
+    utils::validate_4digit_pin(&pin)?;
     let newpin = utils::prompt_input("新しい暗証番号(4桁): ", &args.newpin);
-    utils::validate_4digit_pin(&newpin).expect("新しい暗証番号が不正です");
+    utils::validate_4digit_pin(&newpin)?;
 
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader
-        .select_ef("0018")
-        .expect("EF 0018の選択に失敗しました");
-    reader
-        .verify_pin(&pin)
-        .expect("暗証番号の認証に失敗しました");
-    reader.change_pin(&newpin).expect("PINの変更に失敗しました");
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let jpki = reader.jpki_ap()?;
+    jpki.reader.select_ef("0018")?;
+    jpki.reader.verify_pin(&pin)?;
+    jpki.reader.change_pin(&newpin)?;
     println!("JPKI認証用PINを変更しました");
+    Ok(())
 }
 
-fn run_change_sign(args: &ChangeArgs) {
+fn run_change_sign(args: &ChangeArgs) -> Result<(), Error> {
     let pin = utils::prompt_input("現在のパスワード(6-16文字): ", &args.pin);
     let pin = pin.to_uppercase();
-    utils::validate_jpki_sign_password(&pin).expect("パスワードが不正です");
+    utils::validate_jpki_sign_password(&pin)?;
     let newpin = utils::prompt_input("新しいパスワード(6-16文字): ", &args.newpin);
     let newpin = newpin.to_uppercase();
-    utils::validate_jpki_sign_password(&newpin).expect("新しいパスワードが不正です");
+    utils::validate_jpki_sign_password(&newpin)?;
 
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader
-        .select_ef("001b")
-        .expect("EF 001bの選択に失敗しました");
-    reader
-        .verify_pin(&pin)
-        .expect("パスワードの認証に失敗しました");
-    reader
-        .change_pin(&newpin)
-        .expect("パスワードの変更に失敗しました");
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let jpki = reader.jpki_ap()?;
+    jpki.reader.select_ef("001b")?;
+    jpki.reader.verify_pin(&pin)?;
+    jpki.reader.change_pin(&newpin)?;
     println!("JPKI署名用パスワードを変更しました");
+    Ok(())
 }
 
-fn run_status(_app: &crate::App) {
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_text_ap();
-    reader
-        .select_ef("0011")
-        .expect("EF 0011の選択に失敗しました");
-    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
+fn run_status(_app: &crate::App) -> Result<(), Error> {
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+
+    let text = reader.text_ap()?;
+    text.reader.select_ef("0011")?;
+    let counter = text.reader.read_pin()?;
     println!("券面入力補助AP 暗証番号: {}", counter);
-    reader
-        .select_ef("0014")
-        .expect("EF 0014の選択に失敗しました");
-    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
+    text.reader.select_ef("0014")?;
+    let counter = text.reader.read_pin()?;
     println!("券面入力補助AP 暗証番号A: {}", counter);
-    reader
-        .select_ef("0015")
-        .expect("EF 0015の選択に失敗しました");
-    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
+    text.reader.select_ef("0015")?;
+    let counter = text.reader.read_pin()?;
     println!("券面入力補助AP 暗証番号B: {}", counter);
-    reader.select_visual_ap();
-    reader
-        .select_ef("0013")
-        .expect("EF 0013の選択に失敗しました");
-    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
+    text.close();
+
+    let visual = reader.visual_ap()?;
+    visual.reader.select_ef("0013")?;
+    let counter = visual.reader.read_pin()?;
     println!("券面確認AP 暗証番号A: {}", counter);
-    reader
-        .select_ef("0012")
-        .expect("EF 0012の選択に失敗しました");
-    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
+    visual.reader.select_ef("0012")?;
+    let counter = visual.reader.read_pin()?;
     println!("券面確認AP 暗証番号B: {}", counter);
-    reader.select_jpki_ap();
-    reader
-        .select_ef("0018")
-        .expect("EF 0018の選択に失敗しました");
-    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
+    visual.close();
+
+    let jpki = reader.jpki_ap()?;
+    jpki.reader.select_ef("0018")?;
+    let counter = jpki.reader.read_pin()?;
     println!("JPKIユーザー認証用 暗証番号: {}", counter);
-    reader
-        .select_ef("001b")
-        .expect("EF 001bの選択に失敗しました");
-    let counter = reader.read_pin().expect("PIN状態の読み取りに失敗しました");
+    jpki.reader.select_ef("001b")?;
+    let counter = jpki.reader.read_pin()?;
     println!("JPKIデジタル署名用 パスワード: {}", counter);
+    Ok(())
 }

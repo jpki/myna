@@ -11,6 +11,10 @@ use openssl::x509::X509;
 use std::fs;
 use std::io::Write;
 
+// ---------------------------------------------------------------------------
+// CLI 引数定義
+// ---------------------------------------------------------------------------
+
 #[derive(Clone, Debug, ValueEnum)]
 #[clap(rename_all = "snake_case")]
 pub enum CertType {
@@ -43,7 +47,7 @@ pub struct CertArgs {
 }
 
 #[derive(Clone, Debug, ValueEnum)]
-pub enum RsaKeyType {
+pub enum KeyType {
     /// 署名用鍵
     Sign,
     /// 認証用鍵
@@ -54,7 +58,7 @@ pub enum RsaKeyType {
 pub struct PkeySignArgs {
     /// 鍵の種類 [sign, auth]
     #[arg(short = 't', long = "type", value_enum)]
-    key_type: RsaKeyType,
+    key_type: KeyType,
     /// 署名用パスワード(6-16桁) / 認証用PIN(4桁)
     #[arg(short, long)]
     password: Option<String>,
@@ -70,7 +74,7 @@ pub struct PkeySignArgs {
 pub struct PkeyVerifyArgs {
     /// 鍵の種類 [sign, auth]
     #[arg(short = 't', long = "type", value_enum)]
-    key_type: RsaKeyType,
+    key_type: KeyType,
     /// 署名ファイル
     #[arg(value_name = "INPUT")]
     input: String,
@@ -210,67 +214,222 @@ pub enum JPKI {
     Pdf(PdfSubcommand),
 }
 
-pub fn main(subcommand: &JPKI) {
-    match subcommand {
-        JPKI::Cert(args) => run_cert(args),
-        JPKI::Pkey(cmd) => run_pkey_subcommand(cmd),
-        JPKI::Cms(cms_cmd) => {
-            run_cms_subcommand(cms_cmd);
-        }
-        JPKI::Pdf(pdf_cmd) => {
-            crate::pdf::pdf_main(pdf_cmd);
-        }
+// ---------------------------------------------------------------------------
+// JPKIAP — JPKI アプリケーション構造体
+// ---------------------------------------------------------------------------
+
+const JPKI_AID: &str = "D392f000260100000001";
+
+pub struct JPKIAP<'a> {
+    pub reader: &'a mut MynaReader,
+    token: String,
+}
+
+impl MynaReader {
+    pub fn jpki_ap(&mut self) -> Result<JPKIAP<'_>, Error> {
+        let aid = utils::hex_decode(JPKI_AID).unwrap();
+        self.select_df(&aid)
+            .map_err(|e| Error::with_source("JPKI APの選択に失敗しました", e))?;
+        self.select_ef("0006")
+            .map_err(|e| Error::with_source("トークンEFの選択に失敗しました", e))?;
+        let data = self
+            .read_binary(0, 0x20)
+            .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
+        let token = String::from_utf8_lossy(&data).trim_end().to_string();
+        Ok(JPKIAP {
+            reader: self,
+            token,
+        })
     }
 }
 
-fn run_pkey_subcommand(subcommand: &PkeySubcommand) {
-    match subcommand {
-        PkeySubcommand::Sign(args) => run_pkey_sign(args),
-        PkeySubcommand::Verify(args) => {
-            run_pkey_verify(args);
+impl<'a> JPKIAP<'a> {
+    pub fn close(self) {}
+
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
+    /// 証明書読み取り
+    pub fn cert_read(
+        &mut self,
+        cert_type: &CertType,
+        password: &Option<String>,
+        pin: &Option<String>,
+    ) -> Result<X509, Error> {
+        match cert_type {
+            CertType::Sign => {
+                let pass = validate_sign_password(password)?;
+                self.reader
+                    .select_ef("001b")
+                    .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
+                self.reader
+                    .verify_pin(&pass)
+                    .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
+                self.reader
+                    .select_ef("0001")
+                    .map_err(|e| Error::with_source("署名用証明書EFの選択に失敗しました", e))?;
+            }
+            CertType::SignCa => {
+                self.reader
+                    .select_ef("0002")
+                    .map_err(|e| Error::with_source("署名用CA証明書EFの選択に失敗しました", e))?;
+            }
+            CertType::Auth => {
+                if self.token == "JPKIAPGPSETOKEN" {
+                    let p = validate_auth_pin(pin)?;
+                    self.reader
+                        .select_ef("0018")
+                        .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
+                    self.reader
+                        .verify_pin(&p)
+                        .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
+                }
+                self.reader
+                    .select_ef("000a")
+                    .map_err(|e| Error::with_source("認証用証明書EFの選択に失敗しました", e))?;
+            }
+            CertType::AuthCa => {
+                self.reader
+                    .select_ef("000b")
+                    .map_err(|e| Error::with_source("認証用CA証明書EFの選択に失敗しました", e))?;
+            }
         }
+        let cert_der = self
+            .reader
+            .read_binary_all()
+            .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
+        X509::from_der(&cert_der)
+            .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))
+    }
+
+    /// 低レベルRSA署名
+    pub fn pkey_sign(
+        &mut self,
+        key_type: &KeyType,
+        credential: &Option<String>,
+        data: &[u8],
+    ) -> Result<Vec<u8>, Error> {
+        match key_type {
+            KeyType::Sign => {
+                let pass = validate_sign_password(credential)?;
+                self.reader
+                    .select_ef("001b")
+                    .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
+                self.reader
+                    .verify_pin(&pass)
+                    .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
+            }
+            KeyType::Auth => {
+                let pin = validate_auth_pin(credential)?;
+                self.reader
+                    .select_ef("0018")
+                    .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
+                self.reader
+                    .verify_pin(&pin)
+                    .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
+            }
+        }
+        let key_ef = match key_type {
+            KeyType::Sign => "001a",
+            KeyType::Auth => "0017",
+        };
+        self.reader
+            .select_ef(key_ef)
+            .map_err(|e| Error::with_source("鍵EFの選択に失敗しました", e))?;
+        self.reader
+            .signature(data)
+            .map_err(|e| Error::with_source("署名に失敗しました", e))
+    }
+
+    /// CMS署名: PKCS#7 SignedData DER を返す
+    pub fn cms_sign(
+        &mut self,
+        content: &[u8],
+        password: &str,
+        md: MessageDigest,
+        detached: bool,
+    ) -> Result<Vec<u8>, Error> {
+        self.reader
+            .select_ef("001b")
+            .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
+        self.reader
+            .verify_pin(password)
+            .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
+        self.reader
+            .select_ef("0001")
+            .map_err(|e| Error::with_source("署名用証明書EFの選択に失敗しました", e))?;
+        let cert_der = self
+            .reader
+            .read_binary_all()
+            .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
+        let cert = X509::from_der(&cert_der)
+            .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))?;
+
+        let (attrs_set, attrs_digest) = pkcs7::prepare_signing(content, md);
+        let digest_info = make_digest_info_from_md(md, &attrs_digest);
+
+        self.reader
+            .select_ef("001a")
+            .map_err(|e| Error::with_source("署名鍵EFの選択に失敗しました", e))?;
+        let signature = self
+            .reader
+            .signature(&digest_info)
+            .map_err(|e| Error::with_source("署名に失敗しました", e))?;
+
+        Ok(pkcs7::build_signed_data(
+            content, &cert, &signature, md, &attrs_set, detached,
+        ))
+    }
+
+    /// PDF電子署名: 署名済みPDFバイト列を返す
+    pub fn pdf_sign(&mut self, pdf_data: &[u8], password: &str) -> Result<Vec<u8>, Error> {
+        self.reader
+            .select_ef("001b")
+            .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
+        self.reader
+            .verify_pin(password)
+            .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
+        self.reader
+            .select_ef("0001")
+            .map_err(|e| Error::with_source("署名用証明書EFの選択に失敗しました", e))?;
+        let cert_der = self
+            .reader
+            .read_binary_all()
+            .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
+        let cert = X509::from_der(&cert_der)
+            .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))?;
+
+        let mut output = crate::pdf::build_pdf_with_placeholder(pdf_data)?;
+        let (contents_range, byte_range_placeholder) =
+            crate::pdf::locate_signature_placeholders(&output)?;
+        crate::pdf::write_byte_range(&mut output, &contents_range, &byte_range_placeholder)?;
+        let content_hash = crate::pdf::hash_signed_ranges(&output, &contents_range)?;
+
+        let md = MessageDigest::sha256();
+        let (attrs_set, attrs_digest) = pkcs7::prepare_signing_with_hash(&content_hash, md);
+        let digest_info = make_digest_info_from_md(md, &attrs_digest);
+
+        self.reader
+            .select_ef("001a")
+            .map_err(|e| Error::with_source("署名鍵EFの選択に失敗しました", e))?;
+        let signature = self
+            .reader
+            .signature(&digest_info)
+            .map_err(|e| Error::with_source("署名に失敗しました", e))?;
+
+        let pkcs7_der = pkcs7::build_signed_data_detached(&cert, &signature, md, &attrs_set);
+        crate::pdf::embed_signature(&mut output, &contents_range, &pkcs7_der)?;
+
+        Ok(output)
     }
 }
 
-fn run_cms_subcommand(subcommand: &CmsSubcommand) {
-    match subcommand {
-        CmsSubcommand::Sign(args) => run_cms_sign(args),
-        CmsSubcommand::Verify(args) => run_cms_verify(args),
-    }
-}
+// ---------------------------------------------------------------------------
+// ヘルパー関数
+// ---------------------------------------------------------------------------
 
-/// 証明書を指定フォーマットで出力する共通関数
-fn output_cert(cert: &X509, format: &EnumFormat) {
-    match format {
-        EnumFormat::Text => {
-            let text = cert.to_text().expect("証明書のテキスト変換に失敗しました");
-            let text = String::from_utf8(text).expect("証明書テキストのUTF-8変換に失敗しました");
-            print!("{}", text);
-        }
-        EnumFormat::Pem => {
-            let pem = cert.to_pem().expect("証明書のPEM変換に失敗しました");
-            let pem = String::from_utf8(pem).expect("証明書PEMのUTF-8変換に失敗しました");
-            print!("{}", pem);
-        }
-        EnumFormat::Der => {
-            std::io::stdout()
-                .write_all(&cert.to_der().expect("証明書のDER変換に失敗しました"))
-                .expect("標準出力への書き込みに失敗しました");
-        }
-    }
-}
-
-fn read_token(reader: &mut MynaReader) -> std::result::Result<String, Error> {
-    reader
-        .select_ef("0006")
-        .map_err(|e| Error::with_source("トークンEFの選択に失敗しました", e))?;
-    let data = reader
-        .read_binary(0, 0x20)
-        .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
-    Ok(String::from_utf8_lossy(&data).trim_end().to_string())
-}
-
-fn validate_sign_password(password: &Option<String>) -> std::result::Result<String, Error> {
+fn validate_sign_password(password: &Option<String>) -> Result<String, Error> {
     let pass = password
         .clone()
         .ok_or_else(|| Error::from("署名用パスワードが必要です"))?;
@@ -279,7 +438,7 @@ fn validate_sign_password(password: &Option<String>) -> std::result::Result<Stri
     Ok(pass)
 }
 
-fn validate_auth_pin(pin: &Option<String>) -> std::result::Result<String, Error> {
+fn validate_auth_pin(pin: &Option<String>) -> Result<String, Error> {
     let pin = pin
         .clone()
         .ok_or_else(|| Error::from("認証用PINが必要です"))?;
@@ -300,183 +459,6 @@ fn prompt_auth_pin(pin: &Option<String>) -> String {
         .expect("認証用PINが不正です")
 }
 
-/// 指定種類の証明書をカードから読み取って返す
-pub fn cert_read(
-    cert_type: &CertType,
-    password: &Option<String>,
-    pin: &Option<String>,
-) -> std::result::Result<X509, Error> {
-    let mut reader = MynaReader::new()?;
-    reader.connect()?;
-    reader.select_jpki_ap();
-    let token = read_token(&mut reader)?;
-
-    match cert_type {
-        CertType::Sign => {
-            let pass = validate_sign_password(password)?;
-            reader
-                .select_ef("001b")
-                .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
-            reader
-                .verify_pin(&pass)
-                .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
-            reader
-                .select_ef("0001")
-                .map_err(|e| Error::with_source("署名用証明書EFの選択に失敗しました", e))?;
-        }
-        CertType::SignCa => {
-            reader
-                .select_ef("0002")
-                .map_err(|e| Error::with_source("署名用CA証明書EFの選択に失敗しました", e))?;
-        }
-        CertType::Auth => {
-            if token == "JPKIAPGPSETOKEN" {
-                let p = validate_auth_pin(pin)?;
-                reader
-                    .select_ef("0018")
-                    .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
-                reader
-                    .verify_pin(&p)
-                    .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
-            }
-            reader
-                .select_ef("000a")
-                .map_err(|e| Error::with_source("認証用証明書EFの選択に失敗しました", e))?;
-        }
-        CertType::AuthCa => {
-            reader
-                .select_ef("000b")
-                .map_err(|e| Error::with_source("認証用CA証明書EFの選択に失敗しました", e))?;
-        }
-    }
-
-    let cert_der = reader
-        .read_binary_all()
-        .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
-    X509::from_der(&cert_der)
-        .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))
-}
-
-fn run_cert(args: &CertArgs) {
-    let password = match args.cert_type {
-        CertType::Sign => Some(prompt_sign_password(&args.password)),
-        _ => args.password.clone(),
-    };
-    let pin = match args.cert_type {
-        CertType::Auth if args.pin.is_none() => {
-            let mut probe_reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-            probe_reader.connect().expect("カードへの接続に失敗しました");
-            probe_reader.select_jpki_ap();
-            let token = read_token(&mut probe_reader).expect("トークンの読み取りに失敗しました");
-            if token == "JPKIAPGPSETOKEN" {
-                Some(prompt_auth_pin(&args.pin))
-            } else {
-                None
-            }
-        }
-        CertType::Auth => args.pin.clone(),
-        _ => args.pin.clone(),
-    };
-    let cert = cert_read(&args.cert_type, &password, &pin).expect("証明書の取得に失敗しました");
-    output_cert(&cert, &args.format);
-}
-
-/// 指定種類の鍵でデータに低レベルRSA署名して返す
-pub fn pkey_sign(
-    key_type: &RsaKeyType,
-    credential: &Option<String>,
-    content: &[u8],
-) -> std::result::Result<Vec<u8>, Error> {
-    let mut reader = MynaReader::new()?;
-    reader.connect()?;
-    reader.select_jpki_ap();
-
-    match key_type {
-        RsaKeyType::Sign => {
-            let pass = validate_sign_password(credential)?;
-            reader
-                .select_ef("001b")
-                .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
-            reader
-                .verify_pin(&pass)
-                .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
-        }
-        RsaKeyType::Auth => {
-            let pin = validate_auth_pin(credential)?;
-            reader
-                .select_ef("0018")
-                .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
-            reader
-                .verify_pin(&pin)
-                .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
-        }
-    }
-
-    // 鍵EFを選択して署名
-    match key_type {
-        RsaKeyType::Sign => reader
-            .select_ef("001a")
-            .map_err(|e| Error::with_source("署名鍵EFの選択に失敗しました", e))?,
-        RsaKeyType::Auth => reader
-            .select_ef("0017")
-            .map_err(|e| Error::with_source("認証鍵EFの選択に失敗しました", e))?,
-    };
-    reader
-        .signature(content)
-        .map_err(|e| Error::with_source("署名に失敗しました", e))
-}
-
-fn run_pkey_sign(args: &PkeySignArgs) {
-    let content = fs::read(&args.input).expect("入力ファイルを読み込めませんでした");
-    let credential = match args.key_type {
-        RsaKeyType::Sign => Some(prompt_sign_password(&args.password)),
-        RsaKeyType::Auth => Some(prompt_auth_pin(&args.password)),
-    };
-    let signature = pkey_sign(&args.key_type, &credential, &content).expect("署名に失敗しました");
-    fs::write(&args.output, &signature).expect("出力ファイルへの書き込みに失敗しました");
-    println!("署名を保存しました: {}", args.output);
-}
-
-fn run_pkey_verify(args: &PkeyVerifyArgs) {
-    // カードから証明書を取得して公開鍵を得る
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-
-    let cert_ef = match args.key_type {
-        RsaKeyType::Sign => "0001",
-        RsaKeyType::Auth => "000a",
-    };
-    reader.select_ef(cert_ef).unwrap();
-    let cert_der = reader.read_binary_all().expect("READ BINARYに失敗しました");
-    let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
-    let pubkey = cert.public_key().expect("公開鍵の取得に失敗しました");
-
-    let sig = fs::read(&args.input).expect("署名ファイルを読み込めませんでした");
-
-    // RSA公開鍵演算の結果をそのまま出力
-    let rsa = pubkey.rsa().expect("RSA鍵の取得に失敗しました");
-    let mut buf = vec![0u8; rsa.size() as usize];
-    let len = rsa
-        .public_decrypt(&sig, &mut buf, openssl::rsa::Padding::PKCS1)
-        .expect("RSA公開鍵演算に失敗しました");
-    let result = &buf[..len];
-    if let Some(ref path) = args.output {
-        fs::write(path, result).expect("出力ファイルへの書き込みに失敗しました");
-    } else {
-        std::io::stdout()
-            .write_all(result)
-            .expect("標準出力への書き込みに失敗しました");
-    }
-}
-
-fn input_cms_password(args: &CmsSignArgs) -> String {
-    let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
-    let pass = pass.to_uppercase();
-    utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
-    pass
-}
-
 pub fn to_message_digest(alg: &DigestAlgorithm) -> MessageDigest {
     match alg {
         DigestAlgorithm::Sha1 => MessageDigest::sha1(),
@@ -484,55 +466,6 @@ pub fn to_message_digest(alg: &DigestAlgorithm) -> MessageDigest {
         DigestAlgorithm::Sha384 => MessageDigest::sha384(),
         DigestAlgorithm::Sha512 => MessageDigest::sha512(),
     }
-}
-
-fn run_cms_sign(args: &CmsSignArgs) {
-    let password = input_cms_password(args);
-
-    // 署名対象ファイルを読み込み
-    let content = fs::read(&args.input).expect("署名対象ファイルを読み込めませんでした");
-
-    // 署名用証明書を取得
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader.select_ef("001b").unwrap();
-    reader
-        .verify_pin(&password)
-        .expect("パスワード認証に失敗しました");
-    reader.select_ef("0001").unwrap();
-    let cert_der = reader.read_binary_all().expect("READ BINARYに失敗しました");
-    let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
-
-    let md = to_message_digest(&args.digest);
-
-    // 認証属性を構築し、署名対象のハッシュを計算
-    let (attrs_set, attrs_digest) = pkcs7::prepare_signing(&content, md);
-
-    // DigestInfoを作成してカードで署名
-    let digest_info = make_digest_info(&args.digest, &attrs_digest);
-    reader.select_ef("001a").unwrap();
-    let signature = reader.signature(&digest_info).expect("署名に失敗しました");
-
-    // PKCS#7 SignedData構造を構築
-    let pkcs7_der =
-        pkcs7::build_signed_data(&content, &cert, &signature, md, &attrs_set, args.detached);
-
-    // 出力形式に変換
-    let output_data = match args.format {
-        CmsFormat::Der => pkcs7_der,
-        CmsFormat::Pem => {
-            let b64 = openssl::base64::encode_block(&pkcs7_der);
-            format!(
-                "-----BEGIN PKCS7-----\n{}\n-----END PKCS7-----\n",
-                b64.trim_end()
-            )
-            .into_bytes()
-        }
-    };
-
-    fs::write(&args.output, &output_data).expect("出力ファイルへの書き込みに失敗しました");
-    println!("署名を保存しました: {}", args.output);
 }
 
 pub fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
@@ -557,47 +490,189 @@ pub fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
     [prefix, hash.to_vec()].concat()
 }
 
-fn run_cms_verify(args: &CmsVerifyArgs) {
+fn make_digest_info_from_md(md: MessageDigest, hash: &[u8]) -> Vec<u8> {
+    let alg = if md == MessageDigest::sha256() {
+        DigestAlgorithm::Sha256
+    } else if md == MessageDigest::sha384() {
+        DigestAlgorithm::Sha384
+    } else if md == MessageDigest::sha512() {
+        DigestAlgorithm::Sha512
+    } else {
+        DigestAlgorithm::Sha1
+    };
+    make_digest_info(&alg, hash)
+}
+
+/// 証明書を指定フォーマットで出力する共通関数
+fn output_cert(cert: &X509, format: &EnumFormat) {
+    match format {
+        EnumFormat::Text => {
+            let text = cert.to_text().expect("証明書のテキスト変換に失敗しました");
+            let text = String::from_utf8(text).expect("証明書テキストのUTF-8変換に失敗しました");
+            print!("{}", text);
+        }
+        EnumFormat::Pem => {
+            let pem = cert.to_pem().expect("証明書のPEM変換に失敗しました");
+            let pem = String::from_utf8(pem).expect("証明書PEMのUTF-8変換に失敗しました");
+            print!("{}", pem);
+        }
+        EnumFormat::Der => {
+            std::io::stdout()
+                .write_all(&cert.to_der().expect("証明書のDER変換に失敗しました"))
+                .expect("標準出力への書き込みに失敗しました");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CLI メインディスパッチ
+// ---------------------------------------------------------------------------
+
+pub fn main(subcommand: &JPKI) -> Result<(), Error> {
+    match subcommand {
+        JPKI::Cert(args) => run_cert(args),
+        JPKI::Pkey(cmd) => match cmd {
+            PkeySubcommand::Sign(args) => run_pkey_sign(args),
+            PkeySubcommand::Verify(args) => run_pkey_verify(args),
+        },
+        JPKI::Cms(cmd) => match cmd {
+            CmsSubcommand::Sign(args) => run_cms_sign(args),
+            CmsSubcommand::Verify(args) => run_cms_verify(args),
+        },
+        JPKI::Pdf(cmd) => match cmd {
+            PdfSubcommand::Sign(args) => run_pdf_sign(args),
+            PdfSubcommand::Verify(args) => crate::pdf::pdf_verify(args),
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CLI 実行関数
+// ---------------------------------------------------------------------------
+
+fn run_cert(args: &CertArgs) -> Result<(), Error> {
+    let password = match args.cert_type {
+        CertType::Sign => Some(prompt_sign_password(&args.password)),
+        _ => args.password.clone(),
+    };
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let mut jpki = reader.jpki_ap()?;
+
+    let pin = match args.cert_type {
+        CertType::Auth if args.pin.is_none() && jpki.token() == "JPKIAPGPSETOKEN" => {
+            Some(prompt_auth_pin(&args.pin))
+        }
+        _ => args.pin.clone(),
+    };
+
+    let cert = jpki.cert_read(&args.cert_type, &password, &pin)?;
+    output_cert(&cert, &args.format);
+    Ok(())
+}
+
+fn run_pkey_sign(args: &PkeySignArgs) -> Result<(), Error> {
+    let content = fs::read(&args.input)?;
+    let credential = match args.key_type {
+        KeyType::Sign => Some(prompt_sign_password(&args.password)),
+        KeyType::Auth => Some(prompt_auth_pin(&args.password)),
+    };
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let mut jpki = reader.jpki_ap()?;
+    let signature = jpki.pkey_sign(&args.key_type, &credential, &content)?;
+    fs::write(&args.output, &signature)?;
+    println!("署名を保存しました: {}", args.output);
+    Ok(())
+}
+
+fn run_pkey_verify(args: &PkeyVerifyArgs) -> Result<(), Error> {
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let mut jpki = reader.jpki_ap()?;
+
+    let cert_type = match args.key_type {
+        KeyType::Sign => CertType::Sign,
+        KeyType::Auth => CertType::Auth,
+    };
+    let cert = jpki.cert_read(&cert_type, &None, &None)?;
+    let pubkey = cert.public_key()?;
+
+    let sig = fs::read(&args.input)?;
+
+    let rsa = pubkey.rsa()?;
+    let mut buf = vec![0u8; rsa.size() as usize];
+    let len = rsa.public_decrypt(&sig, &mut buf, openssl::rsa::Padding::PKCS1)?;
+    let result = &buf[..len];
+    if let Some(ref path) = args.output {
+        fs::write(path, result)?;
+    } else {
+        std::io::stdout().write_all(result)?;
+    }
+    Ok(())
+}
+
+fn run_cms_sign(args: &CmsSignArgs) -> Result<(), Error> {
+    let password = {
+        let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
+        let pass = pass.to_uppercase();
+        utils::validate_jpki_sign_password(&pass)?;
+        pass
+    };
+    let content = fs::read(&args.input)?;
+    let md = to_message_digest(&args.digest);
+
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let mut jpki = reader.jpki_ap()?;
+    let pkcs7_der = jpki.cms_sign(&content, &password, md, args.detached)?;
+
+    let output_data = match args.format {
+        CmsFormat::Der => pkcs7_der,
+        CmsFormat::Pem => {
+            let b64 = openssl::base64::encode_block(&pkcs7_der);
+            format!(
+                "-----BEGIN PKCS7-----\n{}\n-----END PKCS7-----\n",
+                b64.trim_end()
+            )
+            .into_bytes()
+        }
+    };
+
+    fs::write(&args.output, &output_data)?;
+    println!("署名を保存しました: {}", args.output);
+    Ok(())
+}
+
+fn run_cms_verify(args: &CmsVerifyArgs) -> Result<(), Error> {
     log::info!("Loading CMS signature from {}", args.signature);
-    // 署名ファイルを読み込み
-    let sig_data = fs::read(&args.signature).expect("署名ファイルを読み込めませんでした");
+    let sig_data = fs::read(&args.signature)?;
 
     let pkcs7_der = match args.format {
         CmsFormat::Der => sig_data,
         CmsFormat::Pem => {
             log::info!("Decoding PEM-encoded CMS signature");
-            // PEMからDERに変換
-            let pkcs7 = Pkcs7::from_pem(&sig_data).expect("PEMのパースに失敗しました");
-            pkcs7.to_der().expect("DERへの変換に失敗しました")
+            let pkcs7 = Pkcs7::from_pem(&sig_data)?;
+            pkcs7.to_der()?
         }
     };
 
-    // PKCS7をパース
-    let pkcs7 = match Pkcs7::from_der(&pkcs7_der) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("PKCS7のパースに失敗しました: {}", e);
-            return;
-        }
-    };
+    let pkcs7 = Pkcs7::from_der(&pkcs7_der)?;
     log::info!("Parsed PKCS#7 SignedData");
-    verify::log_pkcs7_signers(&pkcs7).expect("署名証明書情報の取得に失敗しました");
+    verify::log_pkcs7_signers(&pkcs7)?;
 
-    // 検証
     log::info!("Building certificate store for CMS verification");
-    let (store, roots) =
-        verify::build_sign_verifier().expect("埋め込みCA証明書の読み込みに失敗しました");
-    verify::log_sign_trust_anchors(&roots).expect("埋め込みCA証明書情報の取得に失敗しました");
-    verify::verify_signer_certificates(&pkcs7, &store, &roots)
-        .expect("署名証明書の検証に失敗しました");
+    let (store, roots) = verify::build_sign_verifier()?;
+    verify::log_sign_trust_anchors(&roots)?;
+    verify::verify_signer_certificates(&pkcs7, &store, &roots)?;
 
     let content = if args.detached {
         log::info!("Detached CMS signature: loading external content");
         let content_file = args
             .content
             .as_ref()
-            .expect("デタッチ署名には-cオプションが必要です");
-        Some(fs::read(content_file).expect("検証対象ファイルを読み込めませんでした"))
+            .ok_or_else(|| Error::from("デタッチ署名には-cオプションが必要です"))?;
+        Some(fs::read(content_file)?)
     } else {
         None
     };
@@ -607,7 +682,7 @@ fn run_cms_verify(args: &CmsVerifyArgs) {
         flags |= Pkcs7Flags::DETACHED;
     }
 
-    let certs = Stack::new().unwrap();
+    let certs = Stack::new()?;
     log::info!("Checking CMS content digest, signature, and signer certificate chain");
     let result = if let Some(ref data) = content {
         pkcs7.verify(&certs, &store, Some(data), None, flags)
@@ -619,4 +694,24 @@ fn run_cms_verify(args: &CmsVerifyArgs) {
         Ok(_) => println!("Verification successful"),
         Err(e) => eprintln!("Verification failed: {}", e),
     }
+    Ok(())
+}
+
+fn run_pdf_sign(args: &PdfSignArgs) -> Result<(), Error> {
+    let password = {
+        let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
+        let pass = pass.to_uppercase();
+        utils::validate_jpki_sign_password(&pass)?;
+        pass
+    };
+    let pdf_data = fs::read(&args.input)?;
+
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let mut jpki = reader.jpki_ap()?;
+    let signed_pdf = jpki.pdf_sign(&pdf_data, &password)?;
+
+    fs::write(&args.output, &signed_pdf)?;
+    println!("PDF署名を保存しました: {}", args.output);
+    Ok(())
 }

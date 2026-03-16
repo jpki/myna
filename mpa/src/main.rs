@@ -1,5 +1,6 @@
 use log::{LevelFilter, info};
-use myna::jpki::{CertType, RsaKeyType, cert_read, pkey_sign};
+use myna::jpki::{CertType, KeyType};
+use myna::reader::MynaReader;
 use myna::utils;
 use serde::Serialize;
 use serde_json::Value;
@@ -107,18 +108,6 @@ fn auth_pin(msg: &Value) -> Option<String> {
         .or_else(|| env_pin.clone())
 }
 
-fn sign_digest(digest_b64: &str, pin: &Option<String>) -> io::Result<String> {
-    let digest = utils::base64_decode(digest_b64).map_err(io::Error::other)?;
-    let signature = pkey_sign(&RsaKeyType::Auth, pin, &digest).map_err(io::Error::other)?;
-    Ok(utils::base64_encode(&signature))
-}
-
-fn load_certificate_b64(pin: &Option<String>) -> io::Result<String> {
-    let cert = cert_read(&CertType::Auth, &None, pin).map_err(io::Error::other)?;
-    let cert_der = cert.to_der().map_err(io::Error::other)?;
-    Ok(utils::base64_encode_nopad(&cert_der))
-}
-
 fn auth(msg: &Value) -> io::Result<()> {
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
@@ -126,25 +115,41 @@ fn auth(msg: &Value) -> io::Result<()> {
         return send_error_response("Unsupported service_id");
     }
 
-    let digest = match msg.get("digest").and_then(|v| v.as_str()) {
+    let digest_b64 = match msg.get("digest").and_then(|v| v.as_str()) {
         Some(digest) => digest,
         None => return send_error_response("digest is required"),
     };
 
     let pin = auth_pin(msg);
 
-    let signature = match sign_digest(digest, &pin) {
-        Ok(signature) => signature,
-        Err(e) => {
-            return send_error_response(&format!("failed to sign digest: {}", e));
-        }
+    let mut reader = match MynaReader::new().and_then(|mut r| {
+        r.timeout = Some(std::time::Duration::from_secs(5));
+        r.connect()?;
+        Ok(r)
+    }) {
+        Ok(r) => r,
+        Err(e) => return send_error_response(&format!("failed to connect: {}", e)),
+    };
+    let mut jpki = match reader.jpki_ap() {
+        Ok(j) => j,
+        Err(e) => return send_error_response(&format!("failed to select JPKI AP: {}", e)),
     };
 
-    let certificate = match load_certificate_b64(&pin) {
-        Ok(certificate) => certificate,
-        Err(e) => {
-            return send_error_response(&format!("failed to load certificate: {}", e));
-        }
+    let digest = match utils::base64_decode(digest_b64) {
+        Ok(d) => d,
+        Err(e) => return send_error_response(&format!("failed to decode digest: {}", e)),
+    };
+    let signature = match jpki.pkey_sign(&KeyType::Auth, &pin, &digest) {
+        Ok(sig) => utils::base64_encode(&sig),
+        Err(e) => return send_error_response(&format!("failed to sign digest: {}", e)),
+    };
+
+    let certificate = match jpki.cert_read(&CertType::Auth, &None, &pin) {
+        Ok(cert) => match cert.to_der() {
+            Ok(der) => utils::base64_encode_nopad(&der),
+            Err(e) => return send_error_response(&format!("failed to encode certificate: {}", e)),
+        },
+        Err(e) => return send_error_response(&format!("failed to load certificate: {}", e)),
     };
 
     let response = SuccessResponse {
@@ -159,6 +164,7 @@ fn auth(msg: &Value) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
+    eprintln!("Host Application started");
     setup_logging().map_err(io::Error::other)?;
     loop {
         let msg = match recv_message() {

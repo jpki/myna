@@ -1,5 +1,6 @@
 use asn1_rs::FromBer;
 use clap::{Args, Subcommand};
+use myna::error::Error;
 use myna::reader::MynaReader;
 use myna::utils;
 
@@ -20,7 +21,7 @@ pub enum TextSubcommand {
     Attrs(PinArgs),
 }
 
-pub fn main(_app: &crate::App, subcommand: &TextSubcommand) {
+pub fn main(_app: &crate::App, subcommand: &TextSubcommand) -> Result<(), Error> {
     match subcommand {
         TextSubcommand::BasicInfo => basic_info(),
         TextSubcommand::Mynumber(args) => mynumber(args),
@@ -28,70 +29,72 @@ pub fn main(_app: &crate::App, subcommand: &TextSubcommand) {
     }
 }
 
-fn basic_info() {
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_text_ap();
-    reader
-        .select_ef("0005")
-        .expect("EF 0005の選択に失敗しました");
-    let encoded = reader.read_binary_all().expect("READ BINARYに失敗しました");
-    let (_rem, payload) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
-    let (rem, apid) = asn1_rs::Any::from_ber(payload.data).expect("parse failed");
-    println!("APID: {}", hex::encode(apid.data));
-    let (_rem, pubkey_id) = asn1_rs::Any::from_ber(rem).expect("parse failed");
-    println!("公開鍵ID: {}", hex::encode(pubkey_id.data));
+fn ber_err(e: impl std::fmt::Display) -> Error {
+    Error::new(format!("BERデコードに失敗しました: {}", e))
 }
 
-fn input_pin(args: &PinArgs) -> String {
+fn basic_info() -> Result<(), Error> {
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let text = reader.text_ap()?;
+    text.reader.select_ef("0005")?;
+    let encoded = text.reader.read_binary_all()?;
+    let (_rem, payload) = asn1_rs::Any::from_ber(&encoded).map_err(ber_err)?;
+    let (rem, apid) = asn1_rs::Any::from_ber(payload.data).map_err(ber_err)?;
+    println!("APID: {}", utils::hex_encode(apid.data));
+    let (_rem, pubkey_id) = asn1_rs::Any::from_ber(rem).map_err(ber_err)?;
+    println!("公開鍵ID: {}", utils::hex_encode(pubkey_id.data));
+    Ok(())
+}
+
+fn input_pin(args: &PinArgs) -> Result<String, Error> {
     let pin = utils::prompt_input("暗証番号(4桁): ", &args.pin);
-    utils::validate_4digit_pin(&pin).expect("暗証番号が不正です");
-    pin
+    utils::validate_4digit_pin(&pin)?;
+    Ok(pin)
 }
 
-fn mynumber(args: &PinArgs) {
-    let pin = input_pin(args);
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_text_ap();
-    reader
-        .select_ef("0011")
-        .expect("EF 0011の選択に失敗しました");
-    reader.verify_pin(&pin).expect("verify pin failed");
-    reader
-        .select_ef("0001")
-        .expect("EF 0001の選択に失敗しました");
-    let encoded = reader.read_binary(0, 17).expect("READ BINARYに失敗しました");
-    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
-    let mynumber = std::str::from_utf8(res.data).expect("個人番号のUTF-8変換に失敗しました");
+fn mynumber(args: &PinArgs) -> Result<(), Error> {
+    let pin = input_pin(args)?;
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let text = reader.text_ap()?;
+    text.reader.select_ef("0011")?;
+    text.reader.verify_pin(&pin)?;
+    text.reader.select_ef("0001")?;
+    let encoded = text.reader.read_binary(0, 17)?;
+    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).map_err(ber_err)?;
+    let mynumber = std::str::from_utf8(res.data)
+        .map_err(|e| Error::new(format!("個人番号のUTF-8変換に失敗しました: {}", e)))?;
     println!("{}", mynumber);
+    Ok(())
 }
 
-fn attrs(args: &PinArgs) {
-    let pin = input_pin(args);
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_text_ap();
-    reader
-        .select_ef("0011")
-        .expect("EF 0011の選択に失敗しました");
-    reader.verify_pin(&pin).expect("verify pin failed");
-    reader
-        .select_ef("0002")
-        .expect("EF 0002の選択に失敗しました");
-    let encoded = reader.read_binary_all().expect("READ BINARYに失敗しました");
-    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).expect("parse failed");
-    let (rem, _res) = asn1_rs::Any::from_ber(res.data).expect("parse failed");
-    let (rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
-    let name = std::str::from_utf8(res.data).expect("氏名のUTF-8変換に失敗しました");
+fn attrs(args: &PinArgs) -> Result<(), Error> {
+    let pin = input_pin(args)?;
+    let mut reader = MynaReader::new()?;
+    reader.connect()?;
+    let text = reader.text_ap()?;
+    text.reader.select_ef("0011")?;
+    text.reader.verify_pin(&pin)?;
+    text.reader.select_ef("0002")?;
+    let encoded = text.reader.read_binary_all()?;
+    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).map_err(ber_err)?;
+    let (rem, _res) = asn1_rs::Any::from_ber(res.data).map_err(ber_err)?;
+    let (rem, res) = asn1_rs::Any::from_ber(rem).map_err(ber_err)?;
+    let name = std::str::from_utf8(res.data)
+        .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
     println!("氏名    : {}", name);
-    let (rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
-    let addr = std::str::from_utf8(res.data).expect("住所のUTF-8変換に失敗しました");
+    let (rem, res) = asn1_rs::Any::from_ber(rem).map_err(ber_err)?;
+    let addr = std::str::from_utf8(res.data)
+        .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
     println!("住所    : {}", addr);
-    let (rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
-    let birth = std::str::from_utf8(res.data).expect("生年月日のUTF-8変換に失敗しました");
+    let (rem, res) = asn1_rs::Any::from_ber(rem).map_err(ber_err)?;
+    let birth = std::str::from_utf8(res.data)
+        .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
     println!("生年月日: {}", birth);
-    let (_rem, res) = asn1_rs::Any::from_ber(rem).expect("parse failed");
-    let sex = std::str::from_utf8(res.data).expect("性別のUTF-8変換に失敗しました");
+    let (_rem, res) = asn1_rs::Any::from_ber(rem).map_err(ber_err)?;
+    let sex = std::str::from_utf8(res.data)
+        .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
     println!("性別    : {}", sex);
+    Ok(())
 }

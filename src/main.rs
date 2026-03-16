@@ -22,15 +22,16 @@ pub struct App {
 }
 
 impl App {
-    pub fn run(&self) {
+    pub fn run(&self) -> Result<(), myna::error::Error> {
         match &self.command {
-            Commands::Pin(command) => pin::main(self, command),
-            Commands::JPKI(command) => myna::jpki::main(command),
-            Commands::Text(command) => text::main(self, command),
-            Commands::Visual(command) => visual::main(self, command),
-            Commands::Check(_command) => check::main(self),
-            Commands::Unknown(command) => myna::unknown::main(command),
+            Commands::Pin(command) => pin::main(self, command)?,
+            Commands::JPKI(command) => myna::jpki::main(command)?,
+            Commands::Text(command) => text::main(self, command)?,
+            Commands::Visual(command) => visual::main(self, command)?,
+            Commands::Check(_command) => check::main(self)?,
+            Commands::Unknown(command) => myna::unknown::main(command)?,
         }
+        Ok(())
     }
 }
 
@@ -76,7 +77,9 @@ fn version() -> &'static str {
 fn main() {
     let app = App::parse();
     init_logger(app.log_level()).expect("failed to initialize logger");
-    app.run();
+    if let Err(e) = app.run() {
+        eprintln!("Error: {}", e);
+    }
 }
 
 impl App {

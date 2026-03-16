@@ -1,3 +1,4 @@
+use crate::utils;
 use openssl::error::ErrorStack;
 use openssl::hash::MessageDigest;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
@@ -94,7 +95,7 @@ fn format_x509_name(name: &X509NameRef) -> String {
                 .data()
                 .as_utf8()
                 .map(|value| value.to_string())
-                .unwrap_or_else(|_| hex::encode(entry.data().as_slice()));
+                .unwrap_or_else(|_| utils::hex_encode(entry.data().as_slice()));
             format!("{key}={value}")
         })
         .collect();

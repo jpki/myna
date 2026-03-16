@@ -7,6 +7,8 @@ pub mod pkcs7;
 pub mod prompt;
 pub mod reader;
 pub mod ta;
+pub mod text_ap;
 pub mod unknown;
 pub mod utils;
+pub mod visual_ap;
 pub(crate) mod verify;

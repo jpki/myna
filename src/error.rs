@@ -42,3 +42,21 @@ impl From<&str> for Error {
         Self::new(message)
     }
 }
+
+impl From<crate::apdu::APDUError> for Error {
+    fn from(e: crate::apdu::APDUError) -> Self {
+        Self::new(format!("{}", e))
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Self::new(format!("{}", e))
+    }
+}
+
+impl From<openssl::error::ErrorStack> for Error {
+    fn from(e: openssl::error::ErrorStack) -> Self {
+        Self::new(format!("{}", e))
+    }
+}

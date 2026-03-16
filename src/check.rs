@@ -3,7 +3,7 @@ use pcsc::{
 };
 use std::ffi::CString;
 
-pub fn main(app: &crate::App) {
+pub fn main(app: &crate::App) -> Result<(), myna::error::Error> {
     print!("SCardEstablishContext: ");
     let ctx = match Context::establish(Scope::User) {
         Ok(ctx) => {
@@ -12,7 +12,7 @@ pub fn main(app: &crate::App) {
         }
         Err(err) => {
             println!("NG {}", err);
-            return;
+            return Ok(());
         }
     };
 
@@ -20,14 +20,14 @@ pub fn main(app: &crate::App) {
         Some(readers) => readers,
         None => {
             release_context(ctx);
-            return;
+            return Ok(());
         }
     };
 
     if readers.is_empty() {
         println!("No PC/SC readers found.");
         release_context(ctx);
-        return;
+        return Ok(());
     }
 
     for (i, reader) in readers.iter().enumerate() {
@@ -38,7 +38,7 @@ pub fn main(app: &crate::App) {
         Some(reader) => reader,
         None => {
             release_context(ctx);
-            return;
+            return Ok(());
         }
     };
 
@@ -46,6 +46,7 @@ pub fn main(app: &crate::App) {
     test_status_change(&ctx, reader);
     test_card(&ctx, reader);
     release_context(ctx);
+    Ok(())
 }
 
 fn list_readers(ctx: &Context) -> Option<Vec<CString>> {

@@ -1,5 +1,6 @@
 use crate::apdu::{APDUError, CommandAPDU, ResponseAPDU};
 use crate::error::Error;
+use crate::utils;
 use pcsc::*;
 
 pub struct MynaReader {
@@ -51,7 +52,7 @@ impl MynaReader {
                     "READER SELECTED: {:?} state={:?} atr={}",
                     rs.name(),
                     rs.event_state(),
-                    hex::encode(rs.atr())
+                    utils::hex_encode(rs.atr())
                 );
                 let card = self.ctx.connect(rs.name(), ShareMode::Shared, Protocols::ANY)
                     .map_err(|e| match e {
@@ -76,18 +77,9 @@ impl MynaReader {
         ResponseAPDU::new(rapdu)
     }
 
-    fn select_df(&mut self, bid: &[u8]) {
-        log::debug!("SELECT DF");
-        let cmd = CommandAPDU::case3(0x00, 0xA4, 0x04, 0x0C, bid);
-        log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
-        log::trace!("> {}", res);
-    }
-
-    pub fn select_ef(&mut self, fid: &str) -> std::result::Result<(), APDUError> {
-        let bid = hex::decode(fid).unwrap();
-        log::debug!("SELECT EF fid={}", fid);
-        let cmd = CommandAPDU::case3(0x00, 0xA4, 0x02, 0x0C, &bid);
+    pub fn select_df(&mut self, aid: &[u8]) -> std::result::Result<(), APDUError> {
+        log::debug!("SELECT DF aid={}", utils::hex_encode(aid));
+        let cmd = CommandAPDU::case3(0x00, 0xA4, 0x04, 0x0C, aid);
         log::trace!("< {}", cmd);
         let res = self.transmit(cmd);
         log::trace!("> {}", res);
@@ -98,19 +90,18 @@ impl MynaReader {
         }
     }
 
-    pub fn select_visual_ap(&mut self) {
-        let bid = hex::decode("D3921000310001010402").unwrap();
-        self.select_df(&bid);
-    }
-
-    pub fn select_text_ap(&mut self) {
-        let bid = hex::decode("D3921000310001010408").unwrap();
-        self.select_df(&bid);
-    }
-
-    pub fn select_jpki_ap(&mut self) {
-        let bid = hex::decode("D392f000260100000001").unwrap();
-        self.select_df(&bid);
+    pub fn select_ef(&mut self, fid: &str) -> std::result::Result<(), APDUError> {
+        let bid = utils::hex_decode(fid).unwrap();
+        log::debug!("SELECT EF fid={}", fid);
+        let cmd = CommandAPDU::case3(0x00, 0xA4, 0x02, 0x0C, &bid);
+        log::trace!("< {}", cmd);
+        let res = self.transmit(cmd);
+        log::trace!("> {}", res);
+        if res.sw() == 0x9000 {
+            Ok(())
+        } else {
+            Err(APDUError { res })
+        }
     }
 
     pub fn read_binary(&mut self, pos: u16, size: u16) -> std::result::Result<Vec<u8>, APDUError> {
@@ -203,11 +194,6 @@ impl MynaReader {
         } else {
             Err(APDUError { res })
         }
-    }
-
-    pub fn select_unknown_ap(&mut self) {
-        let bid = hex::decode("D3921000310001010100").unwrap();
-        self.select_df(&bid);
     }
 
     pub fn signature(&mut self, data: &[u8]) -> std::result::Result<Vec<u8>, APDUError> {

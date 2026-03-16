@@ -1,16 +1,14 @@
 /// PDF電子署名(PAdES/PKCS#7 detached)の実装
 ///
 /// マイナンバーカードのJPKI署名用鍵でPDFにインクリメンタル追記で電子署名を埋め込む。
-use crate::jpki::{DigestAlgorithm, PdfSignArgs, PdfSubcommand, PdfVerifyArgs};
-use crate::pkcs7;
-use crate::reader::MynaReader;
+use crate::error::Error;
+use crate::jpki::PdfVerifyArgs;
 use crate::utils;
 use crate::verify;
 use flate2::read::ZlibDecoder;
 use openssl::hash::MessageDigest;
 use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
 use openssl::stack::Stack;
-use openssl::x509::X509;
 use std::fs;
 use std::io::Read;
 
@@ -540,59 +538,47 @@ fn find_ref_end(s: &str) -> Option<usize> {
 // PDF 署名
 // ---------------------------------------------------------------------------
 
-pub fn pdf_sign(args: &PdfSignArgs) {
-    let password = {
-        let pass = utils::prompt_input("署名用パスワード(6-16桁): ", &args.password);
-        let pass = pass.to_uppercase();
-        utils::validate_jpki_sign_password(&pass).expect("パスワードが不正です");
-        pass
-    };
+/// /Contents の位置情報
+pub struct ContentsRange {
+    /// '<' の位置
+    pub angle_start: usize,
+    /// '>' の次の位置
+    pub angle_end: usize,
+    /// hex 文字列の開始位置
+    pub hex_start: usize,
+    /// hex 文字列の終了位置
+    pub hex_end: usize,
+    /// Sig辞書オブジェクトのオフセット (ByteRange検索用)
+    sig_obj_offset: usize,
+}
 
-    // 入力PDFを読み込み
-    let original = fs::read(&args.input).expect("入力PDFファイルを読み込めませんでした");
-
-    // カードに接続して証明書を取得
-    let mut reader = MynaReader::new().expect("リーダーの初期化に失敗しました");
-    reader.connect().expect("カードへの接続に失敗しました");
-    reader.select_jpki_ap();
-    reader.select_ef("001b").unwrap();
-    reader
-        .verify_pin(&password)
-        .expect("パスワード認証に失敗しました");
-    reader.select_ef("0001").unwrap();
-    let cert_der = reader.read_binary_all().expect("READ BINARYに失敗しました");
-    let cert = X509::from_der(&cert_der).expect("証明書のパースに失敗しました");
-
-    // PDF構造を解析
-    let xref_offset = find_startxref(&original).expect("startxref が見つかりません");
-    let root_ref = find_root_ref(&original, xref_offset).expect("/Root が見つかりません");
-    let trailer_size = find_trailer_size(&original, xref_offset).expect("/Size が見つかりません");
-    let info_ref = find_info_ref(&original, xref_offset);
-    let max_id = find_max_obj_id(&original, xref_offset);
+/// PDF にプレースホルダ付き署名辞書を追記したバイト列を返す
+pub fn build_pdf_with_placeholder(original: &[u8]) -> Result<Vec<u8>, Error> {
+    let xref_offset =
+        find_startxref(original).ok_or_else(|| Error::from("startxref が見つかりません"))?;
+    let root_ref = find_root_ref(original, xref_offset)
+        .ok_or_else(|| Error::from("/Root が見つかりません"))?;
+    let trailer_size = find_trailer_size(original, xref_offset)
+        .ok_or_else(|| Error::from("/Size が見つかりません"))?;
+    let info_ref = find_info_ref(original, xref_offset);
+    let max_id = find_max_obj_id(original, xref_offset);
     let next_id = std::cmp::max(max_id, trailer_size);
 
-    // Root オブジェクトの辞書内容を取得
-    let root_dict_text =
-        get_object_dict(&original, root_ref).expect("Root カタログオブジェクトが見つかりません");
+    let root_dict_text = get_object_dict(original, root_ref)
+        .ok_or_else(|| Error::from("Root カタログオブジェクトが見つかりません"))?;
 
-    // 新オブジェクトIDを割り当て
     let sig_obj_id = next_id;
     let widget_obj_id = next_id + 1;
     let acroform_obj_id = next_id + 2;
     let updated_root_id = root_ref;
     let new_size = next_id + 3;
 
-    // /Contents プレースホルダ (hex文字列)
     let placeholder_hex = "0".repeat(SIG_CONTENTS_SIZE * 2);
-
-    // ByteRange のプレースホルダ（後で上書きするので十分なスペースを確保）
     let byterange_placeholder = format!("[{:<10} {:<10} {:<10} {:<10}]", 0, 0, 0, 0);
 
-    // インクリメンタル追記内容を構築
     let mut append = Vec::new();
     append.push(b'\n');
 
-    // 1. Sig辞書オブジェクト
     let sig_obj_offset = original.len() + append.len();
     let sig_obj = format!(
         "{} 0 obj\n<<\n/Type /Sig\n/Filter /Adobe.PPKLite\n/SubFilter /adbe.pkcs7.detached\n/ByteRange {}\n/Contents <{}>\n/Reason (JPKI Digital Signature)\n>>\nendobj\n",
@@ -600,7 +586,6 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     );
     append.extend(sig_obj.as_bytes());
 
-    // 2. Widget アノテーション
     let widget_obj_offset = original.len() + append.len();
     let widget_obj = format!(
         "{} 0 obj\n<<\n/Type /Annot\n/Subtype /Widget\n/FT /Sig\n/Rect [0 0 0 0]\n/V {} 0 R\n/T (Sig1)\n/F 132\n>>\nendobj\n",
@@ -608,7 +593,6 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     );
     append.extend(widget_obj.as_bytes());
 
-    // 3. AcroForm オブジェクト
     let acroform_obj_offset = original.len() + append.len();
     let acroform_obj = format!(
         "{} 0 obj\n<<\n/Fields [{} 0 R]\n/SigFlags 3\n>>\nendobj\n",
@@ -616,13 +600,11 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     );
     append.extend(acroform_obj.as_bytes());
 
-    // 4. 更新 Root オブジェクト（AcroForm追加）
     let updated_root_offset = original.len() + append.len();
     let updated_root_dict = build_updated_root_dict(&root_dict_text, acroform_obj_id);
     let updated_root_obj = format!("{} 0 obj\n{}\nendobj\n", updated_root_id, updated_root_dict);
     append.extend(updated_root_obj.as_bytes());
 
-    // 5. xref テーブル
     let new_xref_offset = original.len() + append.len();
     let mut xref = String::new();
     xref.push_str("xref\n");
@@ -634,7 +616,6 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     xref.push_str(&format!("{:010} 00000 n \n", acroform_obj_offset));
     append.extend(xref.as_bytes());
 
-    // 6. trailer
     let mut trailer = String::new();
     trailer.push_str("trailer\n<<\n");
     trailer.push_str(&format!("/Size {}\n", new_size));
@@ -649,68 +630,113 @@ pub fn pdf_sign(args: &PdfSignArgs) {
     trailer.push_str("%%EOF\n");
     append.extend(trailer.as_bytes());
 
-    // 出力ファイルに書き出し
-    let mut output = original.clone();
+    let mut output = original.to_vec();
     output.extend(&append);
+    Ok(output)
+}
 
-    // ByteRange と /Contents の位置を特定
-    let contents_hex_start = find_contents_hex_start(&output, sig_obj_offset)
-        .expect("/Contents プレースホルダが見つかりません");
+/// /Contents と ByteRange プレースホルダの位置を特定する
+pub fn locate_signature_placeholders(
+    output: &[u8],
+) -> Result<(ContentsRange, Vec<u8>), Error> {
+    // 末尾から Sig 辞書を探す: 最後の /Type /Sig を検索
+    let needle = b"/Type /Sig";
+    let sig_dict_pos = output
+        .windows(needle.len())
+        .rposition(|w| w == needle)
+        .ok_or_else(|| Error::from("/Type /Sig が見つかりません"))?;
+    // Sig辞書のオブジェクト開始を探す
+    let sig_obj_offset = find_bytes_rev(output, b" 0 obj", sig_dict_pos)
+        .map(|p| {
+            // 数字の先頭まで戻る
+            let mut start = p;
+            while start > 0 && output[start - 1].is_ascii_digit() {
+                start -= 1;
+            }
+            start
+        })
+        .ok_or_else(|| Error::from("Sig オブジェクトの開始が見つかりません"))?;
+
+    let contents_hex_start = find_contents_hex_start(output, sig_obj_offset)
+        .ok_or_else(|| Error::from("/Contents プレースホルダが見つかりません"))?;
     let contents_hex_end = contents_hex_start + SIG_CONTENTS_SIZE * 2;
+    let angle_start = contents_hex_start - 1;
+    let angle_end = contents_hex_end + 1;
 
-    let angle_start = contents_hex_start - 1; // '<' の位置
-    let angle_end = contents_hex_end + 1; // '>' の次の位置
+    let byterange_placeholder =
+        format!("[{:<10} {:<10} {:<10} {:<10}]", 0, 0, 0, 0).into_bytes();
 
+    Ok((
+        ContentsRange {
+            angle_start,
+            angle_end,
+            hex_start: contents_hex_start,
+            hex_end: contents_hex_end,
+            sig_obj_offset,
+        },
+        byterange_placeholder,
+    ))
+}
+
+/// ByteRange をプレースホルダに上書き
+pub fn write_byte_range(
+    output: &mut [u8],
+    contents: &ContentsRange,
+    byterange_placeholder: &[u8],
+) -> Result<(), Error> {
     let byte_range = format!(
         "[{:<10} {:<10} {:<10} {:<10}]",
         0,
-        angle_start,
-        angle_end,
-        output.len() - angle_end
+        contents.angle_start,
+        contents.angle_end,
+        output.len() - contents.angle_end
     );
 
-    // ByteRange を上書き
-    let br_needle = byterange_placeholder.as_bytes();
-    let br_pos = output[sig_obj_offset..]
-        .windows(br_needle.len())
-        .position(|w| w == br_needle)
-        .expect("ByteRange プレースホルダが見つかりません")
-        + sig_obj_offset;
+    let br_pos = output[contents.sig_obj_offset..]
+        .windows(byterange_placeholder.len())
+        .position(|w| w == byterange_placeholder)
+        .ok_or_else(|| Error::from("ByteRange プレースホルダが見つかりません"))?
+        + contents.sig_obj_offset;
     output[br_pos..br_pos + byte_range.len()].copy_from_slice(byte_range.as_bytes());
+    Ok(())
+}
 
-    // 署名対象データのハッシュを計算
+/// ByteRange 区間のハッシュ (SHA-256) を計算
+pub fn hash_signed_ranges(output: &[u8], contents: &ContentsRange) -> Result<Vec<u8>, Error> {
     let md = MessageDigest::sha256();
-    let range1 = &output[0..angle_start];
-    let range2 = &output[angle_end..];
-    let mut hasher = openssl::hash::Hasher::new(md).unwrap();
-    hasher.update(range1).unwrap();
-    hasher.update(range2).unwrap();
-    let content_hash = hasher.finish().unwrap().to_vec();
+    let range1 = &output[0..contents.angle_start];
+    let range2 = &output[contents.angle_end..];
+    let mut hasher = openssl::hash::Hasher::new(md)
+        .map_err(|e| Error::with_source("ハッシュの初期化に失敗しました", e))?;
+    hasher
+        .update(range1)
+        .map_err(|e| Error::with_source("ハッシュ計算に失敗しました", e))?;
+    hasher
+        .update(range2)
+        .map_err(|e| Error::with_source("ハッシュ計算に失敗しました", e))?;
+    let hash = hasher
+        .finish()
+        .map_err(|e| Error::with_source("ハッシュ計算に失敗しました", e))?;
+    Ok(hash.to_vec())
+}
 
-    // PKCS#7 署名を構築
-    let (attrs_set, attrs_digest) = pkcs7::prepare_signing_with_hash(&content_hash, md);
-
-    let digest_info = crate::jpki::make_digest_info(&DigestAlgorithm::Sha256, &attrs_digest);
-    reader.select_ef("001a").unwrap();
-    let signature = reader.signature(&digest_info).expect("署名に失敗しました");
-
-    let pkcs7_der = pkcs7::build_signed_data_detached(&cert, &signature, md, &attrs_set);
-
-    // CMS DER を hex エンコードして /Contents に書き込み
-    let sig_hex = hex::encode(&pkcs7_der);
+/// PKCS#7 DER を /Contents に埋め込み
+pub fn embed_signature(
+    output: &mut [u8],
+    contents: &ContentsRange,
+    pkcs7_der: &[u8],
+) -> Result<(), Error> {
+    let sig_hex = utils::hex_encode(pkcs7_der);
     if sig_hex.len() > SIG_CONTENTS_SIZE * 2 {
-        panic!(
+        return Err(Error::from(format!(
             "署名データがプレースホルダサイズを超えています ({} > {})",
             sig_hex.len(),
             SIG_CONTENTS_SIZE * 2
-        );
+        )));
     }
-
     let padded_hex = format!("{:0<width$}", sig_hex, width = SIG_CONTENTS_SIZE * 2);
-    output[contents_hex_start..contents_hex_end].copy_from_slice(padded_hex.as_bytes());
-
-    fs::write(&args.output, &output).expect("出力ファイルへの書き込みに失敗しました");
-    println!("PDF署名を保存しました: {}", args.output);
+    output[contents.hex_start..contents.hex_end].copy_from_slice(padded_hex.as_bytes());
+    Ok(())
 }
 
 /// /Contents <...> の hex 文字列開始位置を見つける
@@ -725,16 +751,17 @@ fn find_contents_hex_start(data: &[u8], search_from: usize) -> Option<usize> {
 // PDF 署名検証
 // ---------------------------------------------------------------------------
 
-pub fn pdf_verify(args: &PdfVerifyArgs) {
+pub fn pdf_verify(args: &PdfVerifyArgs) -> Result<(), Error> {
     log::info!("Loading signed PDF from {}", args.input);
-    let data = fs::read(&args.input).expect("PDFファイルを読み込めませんでした");
+    let data = fs::read(&args.input)?;
 
     // /Type /Sig を持つ署名辞書を検索
     let (byte_range, contents_hex) =
-        find_signature_dict(&data).expect("PDF内に署名辞書が見つかりません");
+        find_signature_dict(&data).ok_or_else(|| Error::from("PDF内に署名辞書が見つかりません"))?;
 
     // ByteRange を解析
-    let ranges = parse_byte_range(&byte_range).expect("ByteRange の解析に失敗しました");
+    let ranges = parse_byte_range(&byte_range)
+        .ok_or_else(|| Error::from("ByteRange の解析に失敗しました"))?;
     log::info!("Parsed PDF signature dictionary");
     log::debug!("PDF ByteRange: {:?}", ranges);
     let (off1, len1, off2, len2) = (ranges[0], ranges[1], ranges[2], ranges[3]);
@@ -744,21 +771,21 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
     let md = MessageDigest::sha256();
     let range1 = &data[off1..off1 + len1];
     let range2 = &data[off2..off2 + len2];
-    let mut hasher = openssl::hash::Hasher::new(md).unwrap();
-    hasher.update(range1).unwrap();
-    hasher.update(range2).unwrap();
-    let content_hash = hasher.finish().unwrap();
+    let mut hasher = openssl::hash::Hasher::new(md)?;
+    hasher.update(range1)?;
+    hasher.update(range2)?;
+    let content_hash = hasher.finish()?;
     log::trace!(
         "PDF detached content SHA-256 digest: {}",
-        hex::encode_upper(content_hash.as_ref())
+        utils::hex_encode_upper(content_hash.as_ref())
     );
 
     // /Contents を hex デコード（DER長を読み取ってパディングを正確に除去）
     let cms_der = extract_der_from_padded_hex(&contents_hex);
 
-    let pkcs7 = Pkcs7::from_der(&cms_der).expect("PKCS7のパースに失敗しました");
+    let pkcs7 = Pkcs7::from_der(&cms_der)?;
     log::info!("Parsed embedded PKCS#7 signature");
-    verify::log_pkcs7_signers(&pkcs7).expect("署名証明書情報の取得に失敗しました");
+    verify::log_pkcs7_signers(&pkcs7)?;
 
     // 検証用データ（ByteRange区間を結合）
     let mut verify_data = Vec::new();
@@ -766,13 +793,11 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
     verify_data.extend_from_slice(range2);
 
     log::info!("Building certificate store for PDF signature verification");
-    let (store, roots) =
-        verify::build_sign_verifier().expect("埋め込みCA証明書の読み込みに失敗しました");
-    verify::log_sign_trust_anchors(&roots).expect("埋め込みCA証明書情報の取得に失敗しました");
-    verify::verify_signer_certificates(&pkcs7, &store, &roots)
-        .expect("署名証明書の検証に失敗しました");
+    let (store, roots) = verify::build_sign_verifier()?;
+    verify::log_sign_trust_anchors(&roots)?;
+    verify::verify_signer_certificates(&pkcs7, &store, &roots)?;
 
-    let certs = Stack::new().unwrap();
+    let certs = Stack::new()?;
     let flags = Pkcs7Flags::DETACHED;
 
     log::info!("Checking PDF content digest, CMS signature, and signer certificate chain");
@@ -780,6 +805,7 @@ pub fn pdf_verify(args: &PdfVerifyArgs) {
         Ok(_) => println!("Verification successful"),
         Err(e) => eprintln!("Verification failed: {}", e),
     }
+    Ok(())
 }
 
 /// パディングされた hex 文字列から正しい DER データを抽出
@@ -807,7 +833,7 @@ fn extract_der_from_padded_hex(hex_str: &str) -> Vec<u8> {
 
     let total = header_len + content_len;
     let hex_len = total * 2;
-    hex::decode(&hex_str[..hex_len]).expect("DER hex デコードに失敗しました")
+    utils::hex_decode(&hex_str[..hex_len]).expect("DER hex デコードに失敗しました")
 }
 
 /// PDF 内から署名辞書を検索し、ByteRange と Contents を返す
@@ -890,13 +916,3 @@ fn parse_byte_range(s: &str) -> Option<Vec<usize>> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// メインディスパッチ
-// ---------------------------------------------------------------------------
-
-pub fn pdf_main(subcommand: &PdfSubcommand) {
-    match subcommand {
-        PdfSubcommand::Sign(args) => pdf_sign(args),
-        PdfSubcommand::Verify(args) => pdf_verify(args),
-    }
-}

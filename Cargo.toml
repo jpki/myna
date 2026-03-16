@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 asn1-rs = "0.7.1"
+base16ct = { version = "1", features = ["alloc"] }
 clap = { version = "4.5.60", features = ["cargo", "derive"] }
 flate2 = "1"
-hex = "0.4.3"
 log = "0.4.29"
 openssl = { version = "0.10.75", features = ["vendored"] }
 pcsc = "2.9.0"

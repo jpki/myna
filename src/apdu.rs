@@ -1,4 +1,5 @@
 use crate::color;
+use crate::utils;
 use std::fmt;
 
 #[derive(Debug)]
@@ -91,7 +92,7 @@ impl CommandAPDU {
 impl fmt::LowerHex for CommandAPDU {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let bytes = self.to_bytes();
-        write!(f, "{}", hex::encode(bytes))
+        write!(f, "{}", utils::hex_encode(&bytes))
     }
 }
 
@@ -160,7 +161,7 @@ impl ResponseAPDU {
 impl fmt::LowerHex for ResponseAPDU {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let bytes = self.to_bytes();
-        write!(f, "{}", hex::encode(bytes))
+        write!(f, "{}", utils::hex_encode(&bytes))
     }
 }
 
@@ -244,13 +245,13 @@ fn apdu_case3() {
     let cmd = CommandAPDU::case3(1, 2, 3, 4, &data);
     assert_eq!(
         format!("{cmd:x}"),
-        format!("01020304ff{}", hex::encode(data))
+        format!("01020304ff{}", utils::hex_encode(&data))
     );
     let data: [u8; 256] = [0; 256];
     let cmd = CommandAPDU::case3(1, 2, 3, 4, &data);
     assert_eq!(
         format!("{cmd:x}"),
-        format!("01020304000100{}", hex::encode(data))
+        format!("01020304000100{}", utils::hex_encode(&data))
     );
 }
 
@@ -263,19 +264,19 @@ fn apdu_case4() {
     let cmd = CommandAPDU::case4(1, 2, 3, 4, &data, 255);
     assert_eq!(
         format!("{cmd:x}"),
-        format!("01020304ff{}ff", hex::encode(data))
+        format!("01020304ff{}ff", utils::hex_encode(&data))
     );
     let data: [u8; 255] = [0; 255];
     let cmd = CommandAPDU::case4(1, 2, 3, 4, &data, 256);
     assert_eq!(
         format!("{cmd:x}"),
-        format!("01020304ff{}0100", hex::encode(data))
+        format!("01020304ff{}0100", utils::hex_encode(&data))
     );
     let data: [u8; 256] = [0; 256];
     let cmd = CommandAPDU::case4(1, 2, 3, 4, &data, 256);
     assert_eq!(
         format!("{cmd:x}"),
-        format!("01020304000100{}0100", hex::encode(data))
+        format!("01020304000100{}0100", utils::hex_encode(&data))
     );
 }
 
