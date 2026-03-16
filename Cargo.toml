@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 asn1-rs = "0.7.1"
 base16ct = { version = "1", features = ["alloc"] }
+base64ct = { version = "1", features = ["alloc"] }
 clap = { version = "4.5.60", features = ["cargo", "derive"] }
 flate2 = "1"
 log = "0.4.29"

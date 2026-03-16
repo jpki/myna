@@ -630,7 +630,7 @@ fn run_cms_sign(args: &CmsSignArgs) -> Result<(), Error> {
     let output_data = match args.format {
         CmsFormat::Der => pkcs7_der,
         CmsFormat::Pem => {
-            let b64 = openssl::base64::encode_block(&pkcs7_der);
+            let b64 = utils::base64_encode(&pkcs7_der);
             format!(
                 "-----BEGIN PKCS7-----\n{}\n-----END PKCS7-----\n",
                 b64.trim_end()

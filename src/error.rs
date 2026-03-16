@@ -60,3 +60,15 @@ impl From<openssl::error::ErrorStack> for Error {
         Self::new(format!("{}", e))
     }
 }
+
+impl From<base16ct::Error> for Error {
+    fn from(e: base16ct::Error) -> Self {
+        Self::new(format!("{}", e))
+    }
+}
+
+impl From<base64ct::Error> for Error {
+    fn from(e: base64ct::Error) -> Self {
+        Self::new(format!("{}", e))
+    }
+}
