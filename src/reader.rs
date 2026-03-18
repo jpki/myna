@@ -1,14 +1,26 @@
 use crate::apdu::{APDUError, CommandAPDU, ResponseAPDU};
 use crate::error::Error;
 use crate::utils;
+
+#[cfg(not(feature = "dummy"))]
 use pcsc::*;
 
+#[cfg(feature = "dummy")]
+pub mod dummy;
+
 pub struct MynaReader {
+    #[cfg(not(feature = "dummy"))]
     ctx: Context,
+    #[cfg(not(feature = "dummy"))]
     card: Option<Card>,
+    #[cfg(feature = "dummy")]
+    state: dummy::DummyCardState,
     pub timeout: Option<std::time::Duration>,
 }
 
+// --- pcsc backend ---
+
+#[cfg(not(feature = "dummy"))]
 impl MynaReader {
     pub fn new() -> Result<Self, Error> {
         let ctx = Context::establish(Scope::User)
@@ -43,7 +55,8 @@ impl MynaReader {
                     err => Error::with_source("failed to get status change", err),
                 })?;
 
-            let found = reader_states.iter()
+            let found = reader_states
+                .iter()
                 .filter(|rs| rs.name() != PNP_NOTIFICATION())
                 .find(|rs| rs.event_state().contains(State::PRESENT));
 
@@ -54,9 +67,13 @@ impl MynaReader {
                     rs.event_state(),
                     utils::hex_encode(rs.atr())
                 );
-                let card = self.ctx.connect(rs.name(), ShareMode::Shared, Protocols::ANY)
+                let card = self
+                    .ctx
+                    .connect(rs.name(), ShareMode::Shared, Protocols::ANY)
                     .map_err(|e| match e {
-                        pcsc::Error::NoSmartcard => Error::from("A smartcard is not present in the reader."),
+                        pcsc::Error::NoSmartcard => {
+                            Error::from("A smartcard is not present in the reader.")
+                        }
                         err => Error::with_source("Failed to connect to card", err),
                     })?;
 
@@ -76,7 +93,46 @@ impl MynaReader {
             .expect("Failed to transmit APDU command to card");
         ResponseAPDU::new(rapdu)
     }
+}
 
+// --- dummy backend ---
+
+#[cfg(feature = "dummy")]
+impl MynaReader {
+    pub fn new() -> Result<Self, Error> {
+        Ok(Self {
+            state: dummy::DummyCardState::new(),
+            timeout: None,
+        })
+    }
+
+    pub fn connect(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn transmit(&mut self, cmd: CommandAPDU) -> ResponseAPDU {
+        self.state.process(cmd)
+    }
+
+    pub fn with_file(mut self, df: &str, ef: &str, data: Vec<u8>) -> Self {
+        self.state.add_file(df, ef, data);
+        self
+    }
+
+    pub fn with_pin(mut self, df: &str, ef: &str, pin: &str, attempts: u8) -> Self {
+        self.state.add_pin(df, ef, pin, attempts);
+        self
+    }
+
+    pub fn with_sign_fn(mut self, f: impl FnMut(&[u8]) -> Vec<u8> + 'static) -> Self {
+        self.state.set_sign_fn(f);
+        self
+    }
+}
+
+// --- 共通メソッド ---
+
+impl MynaReader {
     pub fn select_df(&mut self, aid: &[u8]) -> std::result::Result<(), APDUError> {
         log::debug!("SELECT DF aid={}", utils::hex_encode(aid));
         let cmd = CommandAPDU::case3(0x00, 0xA4, 0x04, 0x0C, aid);
@@ -132,6 +188,7 @@ impl MynaReader {
     }
 
     pub fn read_binary_all(&mut self) -> std::result::Result<Vec<u8>, APDUError> {
+        use asn1_rs::FromBer;
         let mut head = self.read_binary(0, 7)?;
         let res = asn1_rs::Any::from_ber(&head);
         let len: u16 = match res {
@@ -210,10 +267,9 @@ impl MynaReader {
     }
 }
 
-use asn1_rs::FromBer;
-
 #[test]
 fn partial_decode() {
+    use asn1_rs::FromBer;
     let bytes = [0xff, 0x40, 0x82, 0x00, 0x9f];
     let res = asn1_rs::Any::from_ber(&bytes);
     let len = match res {
@@ -221,4 +277,186 @@ fn partial_decode() {
         _ => 0,
     };
     assert_eq!(159, len);
+}
+
+#[cfg(all(test, feature = "dummy"))]
+mod dummy_tests {
+    use super::*;
+    use dummy::JPKI_AID;
+
+    fn select_jpki(r: &mut MynaReader) {
+        let aid = utils::hex_decode(JPKI_AID).unwrap();
+        r.select_df(&aid).unwrap();
+    }
+
+    #[test]
+    fn test_select_ef_found() {
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_file(JPKI_AID, "000a", vec![1, 2, 3]);
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("000a").unwrap();
+    }
+
+    #[test]
+    fn test_select_ef_not_found() {
+        let mut r = MynaReader::new().unwrap();
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        let err = r.select_ef("ffff").unwrap_err();
+        assert_eq!(err.res.sw(), 0x6A82);
+    }
+
+    #[test]
+    fn test_read_binary() {
+        let data = vec![0x30, 0x03, 0x01, 0x02, 0x03];
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_file(JPKI_AID, "000a", data.clone());
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("000a").unwrap();
+        assert_eq!(r.read_binary(0, 5).unwrap(), data);
+    }
+
+    #[test]
+    fn test_read_binary_all() {
+        let data = vec![0x30, 0x03, 0x01, 0x02, 0x03];
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_file(JPKI_AID, "000a", data.clone());
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("000a").unwrap();
+        assert_eq!(r.read_binary_all().unwrap(), data);
+    }
+
+    #[test]
+    fn test_verify_pin_success() {
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_pin(JPKI_AID, "0018", "1234", 3);
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("0018").unwrap();
+        r.verify_pin("1234").unwrap();
+    }
+
+    #[test]
+    fn test_verify_pin_failure_decrements() {
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_pin(JPKI_AID, "0018", "1234", 3);
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("0018").unwrap();
+        let err = r.verify_pin("0000").unwrap_err();
+        assert_eq!(err.res.sw1, 0x63);
+        assert_eq!(err.res.sw2 & 0x0f, 2);
+    }
+
+    #[test]
+    fn test_read_pin() {
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_pin(JPKI_AID, "0018", "1234", 3);
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("0018").unwrap();
+        assert_eq!(r.read_pin().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_signature() {
+        let mut r = MynaReader::new().unwrap().with_sign_fn(|data| {
+            let mut sig = vec![0xAA; 256];
+            sig[..data.len().min(256)].copy_from_slice(&data[..data.len().min(256)]);
+            sig
+        });
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        let result = r.signature(&[0x01, 0x02]).unwrap();
+        assert_eq!(result.len(), 256);
+    }
+
+    #[test]
+    fn test_change_pin() {
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_pin(JPKI_AID, "0018", "1234", 3);
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("0018").unwrap();
+        r.verify_pin("1234").unwrap();
+        r.change_pin("5678").unwrap();
+        // 新しいPINで認証できること
+        r.verify_pin("5678").unwrap();
+        // 古いPINで認証できないこと
+        let err = r.verify_pin("1234").unwrap_err();
+        assert_eq!(err.res.sw1, 0x63);
+    }
+
+    #[test]
+    fn test_read_record() {
+        let mut r = MynaReader::new().unwrap().with_file(
+            dummy::UNKNOWN_AID,
+            "record_1_1",
+            vec![0x30, 0x05, 0x0C, 0x03, 0x41, 0x42, 0x43],
+        );
+        r.connect().unwrap();
+        let aid = utils::hex_decode(dummy::UNKNOWN_AID).unwrap();
+        r.select_df(&aid).unwrap();
+        let data = r.read_record(1, 1).unwrap();
+        assert_eq!(data, vec![0x30, 0x05, 0x0C, 0x03, 0x41, 0x42, 0x43]);
+    }
+
+    #[test]
+    fn test_select_df_unknown() {
+        let mut r = MynaReader::new().unwrap();
+        r.connect().unwrap();
+        // 存在する AID
+        let aid = utils::hex_decode(JPKI_AID).unwrap();
+        r.select_df(&aid).unwrap();
+    }
+
+    #[test]
+    fn test_read_binary_offset() {
+        let data = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05];
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_file(JPKI_AID, "000a", data);
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("000a").unwrap();
+        // offset 2, size 3
+        let result = r.read_binary(2, 3).unwrap();
+        assert_eq!(result, vec![0x02, 0x03, 0x04]);
+    }
+
+    #[test]
+    fn test_verify_pin_multiple_failures() {
+        let mut r = MynaReader::new()
+            .unwrap()
+            .with_pin(JPKI_AID, "0018", "1234", 3);
+        r.connect().unwrap();
+        select_jpki(&mut r);
+        r.select_ef("0018").unwrap();
+
+        // 1回目失敗: 残り2
+        let err = r.verify_pin("0000").unwrap_err();
+        assert_eq!(err.res.sw2 & 0x0f, 2);
+
+        // 2回目失敗: 残り1
+        let err = r.verify_pin("0000").unwrap_err();
+        assert_eq!(err.res.sw2 & 0x0f, 1);
+
+        // 3回目失敗: 残り0
+        let err = r.verify_pin("0000").unwrap_err();
+        assert_eq!(err.res.sw2 & 0x0f, 0);
+
+        // ロック後も0のまま (saturating)
+        let err = r.verify_pin("0000").unwrap_err();
+        assert_eq!(err.res.sw2 & 0x0f, 0);
+    }
 }

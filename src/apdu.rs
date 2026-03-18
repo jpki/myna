@@ -57,6 +57,17 @@ impl CommandAPDU {
         }
     }
 
+    #[cfg(feature = "dummy")]
+    pub fn ins(&self) -> u8 { self.ins }
+    #[cfg(feature = "dummy")]
+    pub fn p1(&self) -> u8 { self.p1 }
+    #[cfg(feature = "dummy")]
+    pub fn p2(&self) -> u8 { self.p2 }
+    #[cfg(feature = "dummy")]
+    pub fn data(&self) -> &[u8] { &self.data }
+    #[cfg(feature = "dummy")]
+    pub fn le(&self) -> Option<u16> { self.le }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(4);
         bytes.push(self.cla);

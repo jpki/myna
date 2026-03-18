@@ -235,7 +235,9 @@ impl MynaReader {
         let data = self
             .read_binary(0, 0x20)
             .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
-        let token = String::from_utf8_lossy(&data).trim_end().to_string();
+        let token = String::from_utf8_lossy(&data)
+            .trim_end_matches(|c: char| c == '\0' || c.is_ascii_whitespace())
+            .to_string();
         Ok(JPKIAP {
             reader: self,
             token,
@@ -714,4 +716,238 @@ fn run_pdf_sign(args: &PdfSignArgs) -> Result<(), Error> {
     fs::write(&args.output, &signed_pdf)?;
     println!("PDF署名を保存しました: {}", args.output);
     Ok(())
+}
+
+#[cfg(all(test, feature = "dummy"))]
+mod dummy_tests {
+    use super::*;
+    #[cfg(feature = "dummy")]
+    use crate::reader::dummy::JPKI_AID;
+
+    fn setup_reader() -> MynaReader {
+        let sign_cert = include_bytes!("../tests/fixtures/sign_cert.der");
+        let sign_ca_cert = include_bytes!("../tests/fixtures/sign_ca_cert.der");
+        let auth_cert = include_bytes!("../tests/fixtures/auth_cert.der");
+        let auth_ca_cert = include_bytes!("../tests/fixtures/auth_ca_cert.der");
+        let sign_key_pem = include_bytes!("../tests/fixtures/sign_key.pem");
+        let rsa = openssl::rsa::Rsa::private_key_from_pem(sign_key_pem).unwrap();
+
+        MynaReader::new()
+            .unwrap()
+            .with_file(
+                JPKI_AID,
+                "0006",
+                b"JPKIAPICCTOKEN\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec(),
+            )
+            .with_file(JPKI_AID, "0001", sign_cert.to_vec())
+            .with_file(JPKI_AID, "0002", sign_ca_cert.to_vec())
+            .with_file(JPKI_AID, "000a", auth_cert.to_vec())
+            .with_file(JPKI_AID, "000b", auth_ca_cert.to_vec())
+            .with_file(JPKI_AID, "0017", vec![]) // 認証用鍵EF (placeholder)
+            .with_file(JPKI_AID, "001a", vec![]) // 署名用鍵EF (placeholder)
+            .with_pin(JPKI_AID, "0018", "1234", 3)
+            .with_pin(JPKI_AID, "001b", "SIGNATURE", 5)
+            .with_sign_fn(move |data| {
+                let mut buf = vec![0u8; rsa.size() as usize];
+                let len = rsa
+                    .private_encrypt(data, &mut buf, openssl::rsa::Padding::PKCS1)
+                    .unwrap();
+                buf[..len].to_vec()
+            })
+    }
+
+    fn setup_gpse_reader() -> MynaReader {
+        let auth_cert = include_bytes!("../tests/fixtures/auth_cert.der");
+        MynaReader::new()
+            .unwrap()
+            .with_file(
+                JPKI_AID,
+                "0006",
+                b"JPKIAPGPSETOKEN\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec(),
+            )
+            .with_file(JPKI_AID, "000a", auth_cert.to_vec())
+            .with_pin(JPKI_AID, "0018", "1234", 3)
+    }
+
+    #[test]
+    fn test_jpki_ap_token() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let jpki = reader.jpki_ap().unwrap();
+        assert_eq!(jpki.token(), "JPKIAPICCTOKEN");
+    }
+
+    #[test]
+    fn test_jpki_ap_close() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let jpki = reader.jpki_ap().unwrap();
+        jpki.close();
+        // close 後に reader を再利用できること
+        let jpki2 = reader.jpki_ap().unwrap();
+        assert_eq!(jpki2.token(), "JPKIAPICCTOKEN");
+    }
+
+    #[test]
+    fn test_read_auth_cert() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let cert = jpki.cert_read(&CertType::Auth, &None, &None).unwrap();
+        let subject = cert
+            .subject_name()
+            .entries()
+            .next()
+            .unwrap()
+            .data()
+            .as_utf8()
+            .unwrap();
+        assert_eq!(subject.to_string(), "Test auth User");
+    }
+
+    #[test]
+    fn test_pkey_sign_sign() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let digest_info = make_digest_info(&DigestAlgorithm::Sha256, &[0u8; 32]);
+        let sig = jpki
+            .pkey_sign(&KeyType::Sign, &Some("SIGNATURE".into()), &digest_info)
+            .unwrap();
+        assert!(!sig.is_empty());
+    }
+
+    #[test]
+    fn test_cms_sign() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let content = b"Hello, World!";
+        let md = MessageDigest::sha256();
+        let pkcs7_der = jpki.cms_sign(content, "SIGNATURE", md, false).unwrap();
+
+        let pkcs7 = openssl::pkcs7::Pkcs7::from_der(&pkcs7_der).unwrap();
+        assert!(!pkcs7.to_der().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_read_sign_cert() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let cert = jpki
+            .cert_read(&CertType::Sign, &Some("SIGNATURE".into()), &None)
+            .unwrap();
+        let subject = cert
+            .subject_name()
+            .entries()
+            .next()
+            .unwrap()
+            .data()
+            .as_utf8()
+            .unwrap();
+        assert_eq!(subject.to_string(), "Test sign User");
+    }
+
+    #[test]
+    fn test_read_sign_ca_cert() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let cert = jpki
+            .cert_read(&CertType::SignCa, &None, &None)
+            .unwrap();
+        let subject = cert
+            .subject_name()
+            .entries()
+            .next()
+            .unwrap()
+            .data()
+            .as_utf8()
+            .unwrap();
+        assert_eq!(subject.to_string(), "Test sign CA");
+    }
+
+    #[test]
+    fn test_read_auth_ca_cert() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let cert = jpki
+            .cert_read(&CertType::AuthCa, &None, &None)
+            .unwrap();
+        let subject = cert
+            .subject_name()
+            .entries()
+            .next()
+            .unwrap()
+            .data()
+            .as_utf8()
+            .unwrap();
+        assert_eq!(subject.to_string(), "Test auth CA");
+    }
+
+    #[test]
+    fn test_read_auth_cert_gpse_token() {
+        let mut reader = setup_gpse_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        assert_eq!(jpki.token(), "JPKIAPGPSETOKEN");
+        let cert = jpki
+            .cert_read(&CertType::Auth, &None, &Some("1234".into()))
+            .unwrap();
+        let subject = cert
+            .subject_name()
+            .entries()
+            .next()
+            .unwrap()
+            .data()
+            .as_utf8()
+            .unwrap();
+        assert_eq!(subject.to_string(), "Test auth User");
+    }
+
+    #[test]
+    fn test_pkey_sign_auth() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let digest_info = make_digest_info(&DigestAlgorithm::Sha256, &[0u8; 32]);
+        let sig = jpki
+            .pkey_sign(&KeyType::Auth, &Some("1234".into()), &digest_info)
+            .unwrap();
+        assert!(!sig.is_empty());
+    }
+
+    #[test]
+    fn test_cms_sign_detached() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let content = b"Hello, World!";
+        let md = MessageDigest::sha256();
+        let pkcs7_der = jpki.cms_sign(content, "SIGNATURE", md, true).unwrap();
+
+        let pkcs7 = openssl::pkcs7::Pkcs7::from_der(&pkcs7_der).unwrap();
+        assert!(!pkcs7.to_der().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_cert_read_sign_without_password_fails() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let result = jpki.cert_read(&CertType::Sign, &None, &None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_pkey_sign_wrong_password_fails() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        let digest_info = make_digest_info(&DigestAlgorithm::Sha256, &[0u8; 32]);
+        let result = jpki.pkey_sign(&KeyType::Sign, &Some("WRONGPW1".into()), &digest_info);
+        assert!(result.is_err());
+    }
 }

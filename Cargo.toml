@@ -15,5 +15,8 @@ pcsc = "2.9.0"
 libc = "0.2"
 fern = "0.7.1"
 
+[features]
+dummy = []
+
 [workspace]
 members = ["mpa"]
