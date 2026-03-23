@@ -293,14 +293,14 @@ fn apdu_case4() {
 
 #[test]
 fn res_new() {
-    let res = ResponseAPDU::new(&vec![]); // invalid
+    let res = ResponseAPDU::new(&[]); // invalid
     assert_eq!(format!("{res:x}"), "0000");
-    let res = ResponseAPDU::new(&vec![1]); // invalid
+    let res = ResponseAPDU::new(&[1]); // invalid
     assert_eq!(format!("{res:x}"), "0000");
-    let res = ResponseAPDU::new(&vec![1, 2]);
+    let res = ResponseAPDU::new(&[1, 2]);
     assert_eq!(format!("{res:x}"), "0102");
-    let res = ResponseAPDU::new(&vec![1, 2, 3]);
+    let res = ResponseAPDU::new(&[1, 2, 3]);
     assert_eq!(format!("{res:x}"), "010203");
-    let res = ResponseAPDU::new(&vec![1, 2, 3, 4]);
+    let res = ResponseAPDU::new(&[1, 2, 3, 4]);
     assert_eq!(format!("{res:x}"), "01020304");
 }
