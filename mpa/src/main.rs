@@ -1,3 +1,4 @@
+use der::Encode;
 use log::{LevelFilter, info};
 use myna::jpki::{CertType, KeyType};
 use myna::reader::MynaReader;
@@ -146,7 +147,7 @@ fn auth(msg: &Value) -> io::Result<()> {
 
     let certificate = match jpki.cert_read(&CertType::Auth, &None, &pin) {
         Ok(cert) => match cert.to_der() {
-            Ok(der) => utils::base64_encode_nopad(&der),
+            Ok(der) => utils::base64_encode_nopad(der.as_slice()),
             Err(e) => return send_error_response(&format!("failed to encode certificate: {}", e)),
         },
         Err(e) => return send_error_response(&format!("failed to load certificate: {}", e)),

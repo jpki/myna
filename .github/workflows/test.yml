@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  cargo:
+  test:
     runs-on: ubuntu-latest
 
     steps:

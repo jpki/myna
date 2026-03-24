@@ -5,10 +5,11 @@ use crate::error::Error;
 use crate::jpki::PdfVerifyArgs;
 use crate::utils;
 use crate::verify;
+use cms::content_info::ContentInfo;
+use cms::signed_data::SignedData;
+use der::{Decode, Encode};
 use flate2::read::ZlibDecoder;
-use openssl::hash::MessageDigest;
-use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
-use openssl::stack::Stack;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 
@@ -703,20 +704,12 @@ pub fn write_byte_range(
 
 /// ByteRange 区間のハッシュ (SHA-256) を計算
 pub fn hash_signed_ranges(output: &[u8], contents: &ContentsRange) -> Result<Vec<u8>, Error> {
-    let md = MessageDigest::sha256();
     let range1 = &output[0..contents.angle_start];
     let range2 = &output[contents.angle_end..];
-    let mut hasher = openssl::hash::Hasher::new(md)
-        .map_err(|e| Error::with_source("ハッシュの初期化に失敗しました", e))?;
-    hasher
-        .update(range1)
-        .map_err(|e| Error::with_source("ハッシュ計算に失敗しました", e))?;
-    hasher
-        .update(range2)
-        .map_err(|e| Error::with_source("ハッシュ計算に失敗しました", e))?;
-    let hash = hasher
-        .finish()
-        .map_err(|e| Error::with_source("ハッシュ計算に失敗しました", e))?;
+    let hash = Sha256::new()
+        .chain_update(range1)
+        .chain_update(range2)
+        .finalize();
     Ok(hash.to_vec())
 }
 
@@ -766,15 +759,19 @@ pub fn pdf_verify(args: &PdfVerifyArgs) -> Result<(), Error> {
     log::debug!("PDF ByteRange: {:?}", ranges);
     let (off1, len1, off2, len2) = (ranges[0], ranges[1], ranges[2], ranges[3]);
 
-    // 署名対象データのハッシュ
-    log::info!("Recomputing detached PDF content digest");
-    let md = MessageDigest::sha256();
     let range1 = &data[off1..off1 + len1];
     let range2 = &data[off2..off2 + len2];
-    let mut hasher = openssl::hash::Hasher::new(md)?;
-    hasher.update(range1)?;
-    hasher.update(range2)?;
-    let content_hash = hasher.finish()?;
+
+    // 検証用データ（ByteRange 区間を結合）
+    let mut verify_data = Vec::new();
+    verify_data.extend_from_slice(range1);
+    verify_data.extend_from_slice(range2);
+
+    log::info!("Recomputing detached PDF content digest");
+    let content_hash = Sha256::new()
+        .chain_update(range1)
+        .chain_update(range2)
+        .finalize();
     log::trace!(
         "PDF detached content SHA-256 digest: {}",
         utils::hex_encode_upper(content_hash.as_ref())
@@ -783,26 +780,23 @@ pub fn pdf_verify(args: &PdfVerifyArgs) -> Result<(), Error> {
     // /Contents を hex デコード（DER長を読み取ってパディングを正確に除去）
     let cms_der = extract_der_from_padded_hex(&contents_hex);
 
-    let pkcs7 = Pkcs7::from_der(&cms_der)?;
+    let ci = ContentInfo::from_der(&cms_der)
+        .map_err(|e| Error::with_source("ContentInfo の DER パースに失敗しました", e))?;
+    let content_der = ci.content.to_der()
+        .map_err(|e| Error::with_source("content の DER エンコードに失敗しました", e))?;
+    let signed_data = SignedData::from_der(&content_der)
+        .map_err(|e| Error::with_source("SignedData の DER パースに失敗しました", e))?;
     log::info!("Parsed embedded PKCS#7 signature");
-    verify::log_pkcs7_signers(&pkcs7)?;
-
-    // 検証用データ（ByteRange区間を結合）
-    let mut verify_data = Vec::new();
-    verify_data.extend_from_slice(range1);
-    verify_data.extend_from_slice(range2);
+    verify::log_pkcs7_signers(&signed_data)?;
 
     log::info!("Building certificate store for PDF signature verification");
-    let (store, roots) = verify::build_sign_verifier()?;
+    let roots = verify::build_sign_verifier()?;
     verify::log_sign_trust_anchors(&roots)?;
-    verify::verify_signer_certificates(&pkcs7, &store, &roots)?;
-
-    let certs = Stack::new()?;
-    let flags = Pkcs7Flags::DETACHED;
+    verify::verify_signer_certificates(&signed_data, &roots)?;
 
     log::info!("Checking PDF content digest, CMS signature, and signer certificate chain");
-    match pkcs7.verify(&certs, &store, Some(&verify_data), None, flags) {
-        Ok(_) => println!("Verification successful"),
+    match verify::verify_cms_signature(&signed_data, Some(&verify_data), &roots) {
+        Ok(()) => println!("Verification successful"),
         Err(e) => eprintln!("Verification failed: {}", e),
     }
     Ok(())

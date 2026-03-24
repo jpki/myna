@@ -4,10 +4,8 @@ use crate::reader::MynaReader;
 use crate::utils;
 use crate::verify;
 use clap::{Args, Subcommand, ValueEnum};
-use openssl::hash::MessageDigest;
-use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
-use openssl::stack::Stack;
-use openssl::x509::X509;
+use der::{Decode, Encode, EncodePem};
+use x509_cert::Certificate;
 use std::fs;
 use std::io::Write;
 
@@ -258,7 +256,7 @@ impl<'a> JPKIAP<'a> {
         cert_type: &CertType,
         password: &Option<String>,
         pin: &Option<String>,
-    ) -> Result<X509, Error> {
+    ) -> Result<Certificate, Error> {
         match cert_type {
             CertType::Sign => {
                 let pass = validate_sign_password(password)?;
@@ -301,7 +299,7 @@ impl<'a> JPKIAP<'a> {
             .reader
             .read_binary_all()
             .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
-        X509::from_der(&cert_der)
+        Certificate::from_der(&cert_der)
             .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))
     }
 
@@ -349,7 +347,7 @@ impl<'a> JPKIAP<'a> {
         &mut self,
         content: &[u8],
         password: &str,
-        md: MessageDigest,
+        alg: pkcs7::HashAlgorithm,
         detached: bool,
     ) -> Result<Vec<u8>, Error> {
         self.reader
@@ -365,11 +363,9 @@ impl<'a> JPKIAP<'a> {
             .reader
             .read_binary_all()
             .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
-        let cert = X509::from_der(&cert_der)
-            .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))?;
 
-        let (attrs_set, attrs_digest) = pkcs7::prepare_signing(content, md);
-        let digest_info = make_digest_info_from_md(md, &attrs_digest);
+        let (attrs, attrs_digest) = pkcs7::prepare_signing(content, alg);
+        let digest_info = pkcs7::build_digest_info(alg, &attrs_digest);
 
         self.reader
             .select_ef("001a")
@@ -380,7 +376,7 @@ impl<'a> JPKIAP<'a> {
             .map_err(|e| Error::with_source("署名に失敗しました", e))?;
 
         Ok(pkcs7::build_signed_data(
-            content, &cert, &signature, md, &attrs_set, detached,
+            content, &cert_der, &signature, alg, &attrs, detached,
         ))
     }
 
@@ -399,8 +395,6 @@ impl<'a> JPKIAP<'a> {
             .reader
             .read_binary_all()
             .map_err(|e| Error::with_source("READ BINARYに失敗しました", e))?;
-        let cert = X509::from_der(&cert_der)
-            .map_err(|e| Error::with_source("証明書のパースに失敗しました", e))?;
 
         let mut output = crate::pdf::build_pdf_with_placeholder(pdf_data)?;
         let (contents_range, byte_range_placeholder) =
@@ -408,9 +402,9 @@ impl<'a> JPKIAP<'a> {
         crate::pdf::write_byte_range(&mut output, &contents_range, &byte_range_placeholder)?;
         let content_hash = crate::pdf::hash_signed_ranges(&output, &contents_range)?;
 
-        let md = MessageDigest::sha256();
-        let (attrs_set, attrs_digest) = pkcs7::prepare_signing_with_hash(&content_hash, md);
-        let digest_info = make_digest_info_from_md(md, &attrs_digest);
+        let alg = pkcs7::HashAlgorithm::Sha256;
+        let (attrs, attrs_digest) = pkcs7::prepare_signing_with_hash(&content_hash, alg);
+        let digest_info = pkcs7::build_digest_info(pkcs7::HashAlgorithm::Sha256, &attrs_digest);
 
         self.reader
             .select_ef("001a")
@@ -420,7 +414,7 @@ impl<'a> JPKIAP<'a> {
             .signature(&digest_info)
             .map_err(|e| Error::with_source("署名に失敗しました", e))?;
 
-        let pkcs7_der = pkcs7::build_signed_data_detached(&cert, &signature, md, &attrs_set);
+        let pkcs7_der = pkcs7::build_signed_data_detached(&cert_der, &signature, alg, &attrs);
         crate::pdf::embed_signature(&mut output, &contents_range, &pkcs7_der)?;
 
         Ok(output)
@@ -461,61 +455,69 @@ fn prompt_auth_pin(pin: &Option<String>) -> String {
         .expect("認証用PINが不正です")
 }
 
-pub fn to_message_digest(alg: &DigestAlgorithm) -> MessageDigest {
+/// RSA PKCS#1 type-1 public key operation: sig^e mod n → DigestInfo
+///
+/// OpenSSL の RSA_public_decrypt(PKCS1) に相当。署名値から DigestInfo を取り出す。
+fn rsa_pkcs1_public_unpad(cert: &Certificate, sig: &[u8]) -> Result<Vec<u8>, Error> {
+    use rsa::hazmat::rsa_encrypt;
+    use rsa::traits::PublicKeyParts;
+    use rsa::BigUint;
+
+    let rsa_key = crate::verify::rsa_pub_key_from_cert(cert)?;
+    let key_size = rsa_key.size();
+
+    // RSA public key operation: m = sig^e mod n
+    let c = BigUint::from_bytes_be(sig);
+    let m = rsa_encrypt(&rsa_key, &c)
+        .map_err(|e| Error::with_source("RSA 公開鍵演算に失敗しました", e))?;
+
+    // left-pad to key size
+    let mut em = m.to_bytes_be();
+    while em.len() < key_size {
+        em.insert(0, 0u8);
+    }
+
+    // PKCS#1 type 1 padding: 0x00 0x01 <0xff...> 0x00 <message>
+    if em.len() < 3 || em[0] != 0x00 || em[1] != 0x01 {
+        return Err(Error::new("PKCS#1 パディングが不正です"));
+    }
+    let ps_end = em[2..]
+        .iter()
+        .position(|&b| b == 0x00)
+        .ok_or_else(|| Error::new("PKCS#1 パディング区切りが見つかりません"))?;
+    if ps_end == 0 {
+        return Err(Error::new("PKCS#1 パディング長が不足しています"));
+    }
+    Ok(em[2 + ps_end + 1..].to_vec())
+}
+
+fn digest_alg_to_hash_alg(alg: &DigestAlgorithm) -> pkcs7::HashAlgorithm {
     match alg {
-        DigestAlgorithm::Sha1 => MessageDigest::sha1(),
-        DigestAlgorithm::Sha256 => MessageDigest::sha256(),
-        DigestAlgorithm::Sha384 => MessageDigest::sha384(),
-        DigestAlgorithm::Sha512 => MessageDigest::sha512(),
+        DigestAlgorithm::Sha1 => pkcs7::HashAlgorithm::Sha1,
+        DigestAlgorithm::Sha256 => pkcs7::HashAlgorithm::Sha256,
+        DigestAlgorithm::Sha384 => pkcs7::HashAlgorithm::Sha384,
+        DigestAlgorithm::Sha512 => pkcs7::HashAlgorithm::Sha512,
     }
 }
 
-pub fn make_digest_info(alg: &DigestAlgorithm, hash: &[u8]) -> Vec<u8> {
-    let prefix = match alg {
-        DigestAlgorithm::Sha1 => vec![
-            0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04,
-            0x14,
-        ],
-        DigestAlgorithm::Sha256 => vec![
-            0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02,
-            0x01, 0x05, 0x00, 0x04, 0x20,
-        ],
-        DigestAlgorithm::Sha384 => vec![
-            0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02,
-            0x02, 0x05, 0x00, 0x04, 0x30,
-        ],
-        DigestAlgorithm::Sha512 => vec![
-            0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02,
-            0x03, 0x05, 0x00, 0x04, 0x40,
-        ],
-    };
-    [prefix, hash.to_vec()].concat()
-}
-
-fn make_digest_info_from_md(md: MessageDigest, hash: &[u8]) -> Vec<u8> {
-    let alg = if md == MessageDigest::sha256() {
-        DigestAlgorithm::Sha256
-    } else if md == MessageDigest::sha384() {
-        DigestAlgorithm::Sha384
-    } else if md == MessageDigest::sha512() {
-        DigestAlgorithm::Sha512
-    } else {
-        DigestAlgorithm::Sha1
-    };
-    make_digest_info(&alg, hash)
-}
-
 /// 証明書を指定フォーマットで出力する共通関数
-fn output_cert(cert: &X509, format: &EnumFormat) {
+fn cert_output(cert: &Certificate, format: &EnumFormat) {
+    use der::Encode;
     match format {
         EnumFormat::Text => {
-            let text = cert.to_text().expect("証明書のテキスト変換に失敗しました");
-            let text = String::from_utf8(text).expect("証明書テキストのUTF-8変換に失敗しました");
-            print!("{}", text);
+            let tbs = &cert.tbs_certificate;
+            println!("Subject: {}", tbs.subject);
+            println!("Issuer:  {}", tbs.issuer);
+            println!("Serial:  {}", utils::hex_encode(tbs.serial_number.as_bytes()));
+            println!(
+                "Validity: {} - {}",
+                tbs.validity.not_before, tbs.validity.not_after
+            );
         }
         EnumFormat::Pem => {
-            let pem = cert.to_pem().expect("証明書のPEM変換に失敗しました");
-            let pem = String::from_utf8(pem).expect("証明書PEMのUTF-8変換に失敗しました");
+            let pem = cert
+                .to_pem(der::pem::LineEnding::LF)
+                .expect("証明書のPEM変換に失敗しました");
             print!("{}", pem);
         }
         EnumFormat::Der => {
@@ -569,7 +571,7 @@ fn run_cert(args: &CertArgs) -> Result<(), Error> {
     };
 
     let cert = jpki.cert_read(&args.cert_type, &password, &pin)?;
-    output_cert(&cert, &args.format);
+    cert_output(&cert, &args.format);
     Ok(())
 }
 
@@ -598,18 +600,12 @@ fn run_pkey_verify(args: &PkeyVerifyArgs) -> Result<(), Error> {
         KeyType::Auth => CertType::Auth,
     };
     let cert = jpki.cert_read(&cert_type, &None, &None)?;
-    let pubkey = cert.public_key()?;
-
     let sig = fs::read(&args.input)?;
-
-    let rsa = pubkey.rsa()?;
-    let mut buf = vec![0u8; rsa.size() as usize];
-    let len = rsa.public_decrypt(&sig, &mut buf, openssl::rsa::Padding::PKCS1)?;
-    let result = &buf[..len];
+    let result = rsa_pkcs1_public_unpad(&cert, &sig)?;
     if let Some(ref path) = args.output {
-        fs::write(path, result)?;
+        fs::write(path, &result)?;
     } else {
-        std::io::stdout().write_all(result)?;
+        std::io::stdout().write_all(&result)?;
     }
     Ok(())
 }
@@ -622,12 +618,12 @@ fn run_cms_sign(args: &CmsSignArgs) -> Result<(), Error> {
         pass
     };
     let content = fs::read(&args.input)?;
-    let md = to_message_digest(&args.digest);
+    let alg = digest_alg_to_hash_alg(&args.digest);
 
     let mut reader = MynaReader::new()?;
     reader.connect()?;
     let mut jpki = reader.jpki_ap()?;
-    let pkcs7_der = jpki.cms_sign(&content, &password, md, args.detached)?;
+    let pkcs7_der = jpki.cms_sign(&content, &password, alg, args.detached)?;
 
     let output_data = match args.format {
         CmsFormat::Der => pkcs7_der,
@@ -647,26 +643,39 @@ fn run_cms_sign(args: &CmsSignArgs) -> Result<(), Error> {
 }
 
 fn run_cms_verify(args: &CmsVerifyArgs) -> Result<(), Error> {
+    use cms::content_info::ContentInfo;
+    use cms::signed_data::SignedData;
+    use der::Decode;
+
     log::info!("Loading CMS signature from {}", args.signature);
     let sig_data = fs::read(&args.signature)?;
 
-    let pkcs7_der = match args.format {
+    // PEM の場合は DER に変換（PEM ラベルを剥いで base64 デコード）
+    let pkcs7_der: Vec<u8> = match args.format {
         CmsFormat::Der => sig_data,
         CmsFormat::Pem => {
             log::info!("Decoding PEM-encoded CMS signature");
-            let pkcs7 = Pkcs7::from_pem(&sig_data)?;
-            pkcs7.to_der()?
+            let pem_str = std::str::from_utf8(&sig_data)
+                .map_err(|e| Error::with_source("PEM の UTF-8 デコードに失敗しました", e))?;
+            let (_, der) = der::pem::decode_vec(pem_str.as_bytes())
+                .map_err(|e| Error::with_source("PEM のデコードに失敗しました", e))?;
+            der
         }
     };
 
-    let pkcs7 = Pkcs7::from_der(&pkcs7_der)?;
+    let ci = ContentInfo::from_der(&pkcs7_der)
+        .map_err(|e| Error::with_source("ContentInfo の DER パースに失敗しました", e))?;
+    let content_der = ci.content.to_der()
+        .map_err(|e| Error::with_source("content の DER エンコードに失敗しました", e))?;
+    let signed_data = SignedData::from_der(&content_der)
+        .map_err(|e| Error::with_source("SignedData の DER パースに失敗しました", e))?;
     log::info!("Parsed PKCS#7 SignedData");
-    verify::log_pkcs7_signers(&pkcs7)?;
+    verify::log_pkcs7_signers(&signed_data)?;
 
     log::info!("Building certificate store for CMS verification");
-    let (store, roots) = verify::build_sign_verifier()?;
+    let roots = verify::build_sign_verifier()?;
     verify::log_sign_trust_anchors(&roots)?;
-    verify::verify_signer_certificates(&pkcs7, &store, &roots)?;
+    verify::verify_signer_certificates(&signed_data, &roots)?;
 
     let content = if args.detached {
         log::info!("Detached CMS signature: loading external content");
@@ -679,21 +688,9 @@ fn run_cms_verify(args: &CmsVerifyArgs) -> Result<(), Error> {
         None
     };
 
-    let mut flags = Pkcs7Flags::empty();
-    if args.detached {
-        flags |= Pkcs7Flags::DETACHED;
-    }
-
-    let certs = Stack::new()?;
     log::info!("Checking CMS content digest, signature, and signer certificate chain");
-    let result = if let Some(ref data) = content {
-        pkcs7.verify(&certs, &store, Some(data), None, flags)
-    } else {
-        pkcs7.verify(&certs, &store, None, None, flags)
-    };
-
-    match result {
-        Ok(_) => println!("Verification successful"),
+    match verify::verify_cms_signature(&signed_data, content.as_deref(), &roots) {
+        Ok(()) => println!("Verification successful"),
         Err(e) => eprintln!("Verification failed: {}", e),
     }
     Ok(())
@@ -721,8 +718,24 @@ fn run_pdf_sign(args: &PdfSignArgs) -> Result<(), Error> {
 #[cfg(all(test, feature = "dummy"))]
 mod dummy_tests {
     use super::*;
+    use der::Encode;
+    use rsa::pkcs8::DecodePrivateKey;
     #[cfg(feature = "dummy")]
     use crate::reader::dummy::JPKI_AID;
+
+    /// 証明書の Subject の最初の ATV 値を文字列で返す
+    fn first_subject_value(cert: &Certificate) -> String {
+        let rdn = cert.tbs_certificate.subject.0.first().unwrap();
+        let atv = rdn.0.iter().next().unwrap();
+        let bytes = atv.value.to_der().unwrap();
+        if let Ok(s) = der::asn1::Utf8StringRef::from_der(&bytes) {
+            return s.as_str().to_string();
+        }
+        if let Ok(s) = der::asn1::PrintableStringRef::from_der(&bytes) {
+            return s.as_str().to_string();
+        }
+        panic!("Subject ATV value is not a string type");
+    }
 
     fn setup_reader() -> MynaReader {
         let sign_cert = include_bytes!("../tests/fixtures/sign_cert.der");
@@ -730,7 +743,8 @@ mod dummy_tests {
         let auth_cert = include_bytes!("../tests/fixtures/auth_cert.der");
         let auth_ca_cert = include_bytes!("../tests/fixtures/auth_ca_cert.der");
         let sign_key_pem = include_bytes!("../tests/fixtures/sign_key.pem");
-        let rsa = openssl::rsa::Rsa::private_key_from_pem(sign_key_pem).unwrap();
+        let pem_str = std::str::from_utf8(sign_key_pem).unwrap();
+        let priv_key = rsa::RsaPrivateKey::from_pkcs8_pem(pem_str).unwrap();
 
         MynaReader::new()
             .unwrap()
@@ -748,11 +762,25 @@ mod dummy_tests {
             .with_pin(JPKI_AID, "0018", "1234", 3)
             .with_pin(JPKI_AID, "001b", "SIGNATURE", 5)
             .with_sign_fn(move |data| {
-                let mut buf = vec![0u8; rsa.size() as usize];
-                let len = rsa
-                    .private_encrypt(data, &mut buf, openssl::rsa::Padding::PKCS1)
+                // raw PKCS#1 type-1 sign: pad data then d^priv mod n
+                use rsa::hazmat::rsa_decrypt_and_check;
+                use rsa::traits::PublicKeyParts;
+                use rsa::BigUint;
+                let key_size = priv_key.size();
+                // PKCS#1 type 1 pad: 0x00 0x01 <0xff..> 0x00 <data>
+                let ps_len = key_size - data.len() - 3;
+                let mut em = vec![0x00u8, 0x01];
+                em.extend(std::iter::repeat(0xffu8).take(ps_len));
+                em.push(0x00);
+                em.extend_from_slice(data);
+                let m = BigUint::from_bytes_be(&em);
+                let c = rsa_decrypt_and_check(&priv_key, None::<&mut rsa::rand_core::OsRng>, &m)
                     .unwrap();
-                buf[..len].to_vec()
+                let mut sig = c.to_bytes_be();
+                while sig.len() < key_size {
+                    sig.insert(0, 0u8);
+                }
+                sig
             })
     }
 
@@ -794,15 +822,7 @@ mod dummy_tests {
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
         let cert = jpki.cert_read(&CertType::Auth, &None, &None).unwrap();
-        let subject = cert
-            .subject_name()
-            .entries()
-            .next()
-            .unwrap()
-            .data()
-            .as_utf8()
-            .unwrap();
-        assert_eq!(subject.to_string(), "Test auth User");
+        assert_eq!(first_subject_value(&cert), "Test auth User");
     }
 
     #[test]
@@ -810,7 +830,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let digest_info = make_digest_info(&DigestAlgorithm::Sha256, &[0u8; 32]);
+        let digest_info = pkcs7::build_digest_info(pkcs7::HashAlgorithm::Sha256, &[0u8; 32]);
         let sig = jpki
             .pkey_sign(&KeyType::Sign, &Some("SIGNATURE".into()), &digest_info)
             .unwrap();
@@ -823,11 +843,12 @@ mod dummy_tests {
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
         let content = b"Hello, World!";
-        let md = MessageDigest::sha256();
-        let pkcs7_der = jpki.cms_sign(content, "SIGNATURE", md, false).unwrap();
+        let pkcs7_der = jpki
+            .cms_sign(content, "SIGNATURE", pkcs7::HashAlgorithm::Sha256, false)
+            .unwrap();
 
-        let pkcs7 = openssl::pkcs7::Pkcs7::from_der(&pkcs7_der).unwrap();
-        assert!(!pkcs7.to_der().unwrap().is_empty());
+        let ci = cms::content_info::ContentInfo::from_der(&pkcs7_der).unwrap();
+        assert!(!ci.to_der().unwrap().is_empty());
     }
 
     #[test]
@@ -838,15 +859,7 @@ mod dummy_tests {
         let cert = jpki
             .cert_read(&CertType::Sign, &Some("SIGNATURE".into()), &None)
             .unwrap();
-        let subject = cert
-            .subject_name()
-            .entries()
-            .next()
-            .unwrap()
-            .data()
-            .as_utf8()
-            .unwrap();
-        assert_eq!(subject.to_string(), "Test sign User");
+        assert_eq!(first_subject_value(&cert), "Test sign User");
     }
 
     #[test]
@@ -857,15 +870,7 @@ mod dummy_tests {
         let cert = jpki
             .cert_read(&CertType::SignCa, &None, &None)
             .unwrap();
-        let subject = cert
-            .subject_name()
-            .entries()
-            .next()
-            .unwrap()
-            .data()
-            .as_utf8()
-            .unwrap();
-        assert_eq!(subject.to_string(), "Test sign CA");
+        assert_eq!(first_subject_value(&cert), "Test sign CA");
     }
 
     #[test]
@@ -876,15 +881,7 @@ mod dummy_tests {
         let cert = jpki
             .cert_read(&CertType::AuthCa, &None, &None)
             .unwrap();
-        let subject = cert
-            .subject_name()
-            .entries()
-            .next()
-            .unwrap()
-            .data()
-            .as_utf8()
-            .unwrap();
-        assert_eq!(subject.to_string(), "Test auth CA");
+        assert_eq!(first_subject_value(&cert), "Test auth CA");
     }
 
     #[test]
@@ -896,15 +893,7 @@ mod dummy_tests {
         let cert = jpki
             .cert_read(&CertType::Auth, &None, &Some("1234".into()))
             .unwrap();
-        let subject = cert
-            .subject_name()
-            .entries()
-            .next()
-            .unwrap()
-            .data()
-            .as_utf8()
-            .unwrap();
-        assert_eq!(subject.to_string(), "Test auth User");
+        assert_eq!(first_subject_value(&cert), "Test auth User");
     }
 
     #[test]
@@ -912,7 +901,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let digest_info = make_digest_info(&DigestAlgorithm::Sha256, &[0u8; 32]);
+        let digest_info = pkcs7::build_digest_info(pkcs7::HashAlgorithm::Sha256, &[0u8; 32]);
         let sig = jpki
             .pkey_sign(&KeyType::Auth, &Some("1234".into()), &digest_info)
             .unwrap();
@@ -925,11 +914,12 @@ mod dummy_tests {
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
         let content = b"Hello, World!";
-        let md = MessageDigest::sha256();
-        let pkcs7_der = jpki.cms_sign(content, "SIGNATURE", md, true).unwrap();
+        let pkcs7_der = jpki
+            .cms_sign(content, "SIGNATURE", pkcs7::HashAlgorithm::Sha256, true)
+            .unwrap();
 
-        let pkcs7 = openssl::pkcs7::Pkcs7::from_der(&pkcs7_der).unwrap();
-        assert!(!pkcs7.to_der().unwrap().is_empty());
+        let ci = cms::content_info::ContentInfo::from_der(&pkcs7_der).unwrap();
+        assert!(!ci.to_der().unwrap().is_empty());
     }
 
     #[test]
@@ -946,7 +936,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let digest_info = make_digest_info(&DigestAlgorithm::Sha256, &[0u8; 32]);
+        let digest_info = pkcs7::build_digest_info(pkcs7::HashAlgorithm::Sha256, &[0u8; 32]);
         let result = jpki.pkey_sign(&KeyType::Sign, &Some("WRONGPW1".into()), &digest_info);
         assert!(result.is_err());
     }

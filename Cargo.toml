@@ -8,12 +8,19 @@ asn1-rs = "0.7.1"
 base16ct = { version = "1", features = ["alloc"] }
 base64ct = { version = "1", features = ["alloc"] }
 clap = { version = "4.5.60", features = ["cargo", "derive"] }
+cms = "0.2"
+const-oid = { version = "0.9", features = ["db"] }
+der = { version = "0.7", features = ["alloc", "derive", "pem"] }
 flate2 = "1"
 log = "0.4.29"
-openssl = { version = "0.10.75", features = ["vendored"] }
 pcsc = "2.9.0"
+rsa = { version = "0.9", features = ["sha1", "sha2", "hazmat"] }
 libc = "0.2"
 fern = "0.7.1"
+sha1 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.10", features = ["oid"] }
+spki = "0.7"
+x509-cert = "0.2"
 
 [features]
 dummy = []
