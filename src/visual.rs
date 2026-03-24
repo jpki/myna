@@ -1,5 +1,5 @@
-use asn1_rs::FromBer;
 use clap::{Args, Subcommand};
+use myna::ber;
 use myna::error::Error;
 use myna::reader::MynaReader;
 use myna::utils;
@@ -45,7 +45,7 @@ fn photo(args: &PhotoArgs) -> Result<(), Error> {
     text.reader.verify_pin(&pin)?;
     text.reader.select_ef("0001")?;
     let encoded = text.reader.read_binary(0, 17)?;
-    let (_rem, res) = asn1_rs::Any::from_ber(&encoded).map_err(ber_err)?;
+    let (_rem, res) = ber::parse_tlv(&encoded).map_err(ber_err)?;
     let mynumber = std::str::from_utf8(res.data)
         .map_err(|e| Error::new(format!("マイナンバーのUTF-8変換に失敗しました: {}", e)))?;
     let mynumber = mynumber.to_string();
@@ -61,16 +61,16 @@ fn photo(args: &PhotoArgs) -> Result<(), Error> {
     let encoded = visual.reader.read_binary_all()?;
 
     // ASN.1をパース
-    let (_rem, payload) = asn1_rs::Any::from_ber(&encoded).map_err(ber_err)?;
+    let (_rem, payload) = ber::parse_tlv(&encoded).map_err(ber_err)?;
     let mut rem = payload.data;
 
     // 構造: Header(33), Birth(34), Sex(35), PublicKey(36), Name(37), Addr(38), Photo(39), ...
     // Private tag を6回スキップして Photo(tag 39) を取得
     for _ in 0..6 {
-        let (next, _) = asn1_rs::Any::from_ber(rem).map_err(ber_err)?;
+        let (next, _) = ber::parse_tlv(rem).map_err(ber_err)?;
         rem = next;
     }
-    let (_rem, photo_data) = asn1_rs::Any::from_ber(rem).map_err(ber_err)?;
+    let (_rem, photo_data) = ber::parse_tlv(rem).map_err(ber_err)?;
 
     // 写真データを出力
     if args.output == "-" {

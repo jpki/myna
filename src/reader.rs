@@ -188,11 +188,10 @@ impl MynaReader {
     }
 
     pub fn read_binary_all(&mut self) -> std::result::Result<Vec<u8>, APDUError> {
-        use asn1_rs::FromBer;
+        use crate::ber;
         let mut head = self.read_binary(0, 7)?;
-        let res = asn1_rs::Any::from_ber(&head);
-        let len: u16 = match res {
-            Err(asn1_rs::Err::Incomplete(asn1_rs::Needed::Size(size))) => size.get() as u16,
+        let len: u16 = match ber::parse_tlv(&head) {
+            Err(ber::BerError::Incomplete(n)) => n as u16,
             _ => 0,
         };
         let data = self.read_binary(7, len)?;
@@ -269,11 +268,10 @@ impl MynaReader {
 
 #[test]
 fn partial_decode() {
-    use asn1_rs::FromBer;
+    use crate::ber;
     let bytes = [0xff, 0x40, 0x82, 0x00, 0x9f];
-    let res = asn1_rs::Any::from_ber(&bytes);
-    let len = match res {
-        Err(asn1_rs::Err::Incomplete(asn1_rs::Needed::Size(size))) => size.get(),
+    let len = match ber::parse_tlv(&bytes) {
+        Err(ber::BerError::Incomplete(n)) => n,
         _ => 0,
     };
     assert_eq!(159, len);
