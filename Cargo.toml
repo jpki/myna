@@ -8,7 +8,6 @@ base16ct = { version = "1", features = ["alloc"] }
 base64ct = { version = "1", features = ["alloc"] }
 clap = { version = "4.6.0", features = ["cargo", "derive"] }
 cms = "0.2"
-const-oid = { version = "0.10", features = ["db"] }
 der = { version = "0.7", features = ["alloc", "derive", "pem"] }
 flate2 = "1"
 log = "0.4.29"

@@ -6,8 +6,8 @@ use cms::content_info::{CmsVersion, ContentInfo};
 use cms::signed_data::{
     CertificateSet, EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo, SignerInfos,
 };
-use const_oid::db::{rfc5911, rfc5912};
-use const_oid::AssociatedOid;
+use der::oid::db::{rfc5911, rfc5912};
+use der::oid::AssociatedOid;
 use der::asn1::{Any, Null, ObjectIdentifier, OctetString, SetOfVec, UtcTime};
 use der::{DateTime, Decode, Encode, EncodeValue, Sequence, Tagged};
 use sha1::Sha1;
