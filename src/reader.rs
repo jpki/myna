@@ -421,9 +421,7 @@ mod dummy_tests {
     #[test]
     fn test_read_binary_offset() {
         let data = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05];
-        let mut r = MynaReader::new()
-            .unwrap()
-            .with_file(JPKI_AID, "000a", data);
+        let mut r = MynaReader::new().unwrap().with_file(JPKI_AID, "000a", data);
         r.connect().unwrap();
         select_jpki(&mut r);
         r.select_ef("000a").unwrap();

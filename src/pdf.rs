@@ -246,7 +246,7 @@ fn find_object_in_objstm(data: &[u8], target_obj_id: usize) -> Option<String> {
             }
         };
         let mut stream_start = stream_kw_pos + 6; // "stream" の後
-                                                  // \r\n or \n をスキップ
+        // \r\n or \n をスキップ
         if stream_start < data.len() && data[stream_start] == b'\r' {
             stream_start += 1;
         }
@@ -637,9 +637,7 @@ pub fn build_pdf_with_placeholder(original: &[u8]) -> Result<Vec<u8>, Error> {
 }
 
 /// /Contents と ByteRange プレースホルダの位置を特定する
-pub fn locate_signature_placeholders(
-    output: &[u8],
-) -> Result<(ContentsRange, Vec<u8>), Error> {
+pub fn locate_signature_placeholders(output: &[u8]) -> Result<(ContentsRange, Vec<u8>), Error> {
     // 末尾から Sig 辞書を探す: 最後の /Type /Sig を検索
     let needle = b"/Type /Sig";
     let sig_dict_pos = output
@@ -664,8 +662,7 @@ pub fn locate_signature_placeholders(
     let angle_start = contents_hex_start - 1;
     let angle_end = contents_hex_end + 1;
 
-    let byterange_placeholder =
-        format!("[{:<10} {:<10} {:<10} {:<10}]", 0, 0, 0, 0).into_bytes();
+    let byterange_placeholder = format!("[{:<10} {:<10} {:<10} {:<10}]", 0, 0, 0, 0).into_bytes();
 
     Ok((
         ContentsRange {
@@ -782,7 +779,9 @@ pub fn pdf_verify(args: &PdfVerifyArgs) -> Result<(), Error> {
 
     let ci = ContentInfo::from_der(&cms_der)
         .map_err(|e| Error::with_source("ContentInfo の DER パースに失敗しました", e))?;
-    let content_der = ci.content.to_der()
+    let content_der = ci
+        .content
+        .to_der()
         .map_err(|e| Error::with_source("content の DER エンコードに失敗しました", e))?;
     let signed_data = SignedData::from_der(&content_der)
         .map_err(|e| Error::with_source("SignedData の DER パースに失敗しました", e))?;
@@ -903,10 +902,5 @@ fn parse_byte_range(s: &str) -> Option<Vec<usize>> {
         .split_whitespace()
         .filter_map(|n| n.parse().ok())
         .collect();
-    if nums.len() == 4 {
-        Some(nums)
-    } else {
-        None
-    }
+    if nums.len() == 4 { Some(nums) } else { None }
 }
-

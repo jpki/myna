@@ -46,7 +46,10 @@ fn setup_logging() -> Result<(), fern::InitError> {
     }
 
     if let Some(log_path) = std::env::var_os("MPA_LOG") {
-        let log_file = OpenOptions::new().create(true).append(true).open(log_path)?;
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)?;
         dispatch = dispatch.chain(log_file);
     } else if !cfg!(debug_assertions) {
         return Ok(());

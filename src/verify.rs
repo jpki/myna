@@ -2,13 +2,13 @@ use crate::error::Error;
 use crate::ta::{self, EmbeddedTrustAnchor};
 use cms::cert::CertificateChoices;
 use cms::signed_data::{SignedData, SignerIdentifier, SignerInfo};
-use der::oid::db::{rfc5911, rfc5912};
-use der::oid::AssociatedOid;
 use der::asn1::{ObjectIdentifier, OctetString};
+use der::oid::AssociatedOid;
+use der::oid::db::{rfc5911, rfc5912};
 use der::{Decode, Encode};
+use rsa::RsaPublicKey;
 use rsa::pkcs1v15::{Signature as Pkcs1Sig, VerifyingKey};
 use rsa::signature::Verifier;
-use rsa::RsaPublicKey;
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use spki::DecodePublicKey;
@@ -24,7 +24,11 @@ pub(crate) fn log_sign_trust_anchors(roots: &[EmbeddedTrustAnchor]) -> Result<()
         roots.len()
     );
     for root in roots {
-        log::debug!("Trust anchor {}: {}", root.name, ta::describe_cert(&root.cert));
+        log::debug!(
+            "Trust anchor {}: {}",
+            root.name,
+            ta::describe_cert(&root.cert)
+        );
         log::trace!(
             "Trust anchor {} SHA-256 fingerprint: {}",
             root.name,
@@ -175,11 +179,12 @@ fn verify_message_digest(si: &SignerInfo, content: Option<&[u8]>) -> Result<(), 
                 .iter()
                 .next()
                 .ok_or_else(|| Error::new("messageDigest 属性の値がありません"))?;
-            let der = any
-                .to_der()
-                .map_err(|e| Error::with_source("messageDigest Any の DER 変換に失敗しました", e))?;
-            let os = OctetString::from_der(&der)
-                .map_err(|e| Error::with_source("messageDigest の OCTET STRING デコードに失敗しました", e))?;
+            let der = any.to_der().map_err(|e| {
+                Error::with_source("messageDigest Any の DER 変換に失敗しました", e)
+            })?;
+            let os = OctetString::from_der(&der).map_err(|e| {
+                Error::with_source("messageDigest の OCTET STRING デコードに失敗しました", e)
+            })?;
             expected = Some(os.as_bytes().to_vec());
             break;
         }
@@ -289,9 +294,6 @@ fn sig_alg_to_digest_oid(oid: &ObjectIdentifier) -> Result<ObjectIdentifier, Err
     } else if *oid == rfc5912::SHA_512_WITH_RSA_ENCRYPTION {
         Ok(Sha512::OID)
     } else {
-        Err(Error::new(format!(
-            "未対応の署名アルゴリズム OID: {}",
-            oid
-        )))
+        Err(Error::new(format!("未対応の署名アルゴリズム OID: {}", oid)))
     }
 }

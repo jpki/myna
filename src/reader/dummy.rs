@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use crate::apdu::{CommandAPDU, ResponseAPDU};
 use crate::utils;
+use std::collections::HashMap;
 
 pub const JPKI_AID: &str = "D392f000260100000001";
 pub const TEXT_AID: &str = "D3921000310001010408";
@@ -35,7 +35,8 @@ impl DummyCardState {
     }
 
     pub fn add_file(&mut self, df: &str, ef: &str, data: Vec<u8>) {
-        self.files.insert((df.to_lowercase(), ef.to_lowercase()), data);
+        self.files
+            .insert((df.to_lowercase(), ef.to_lowercase()), data);
     }
 
     pub fn add_pin(&mut self, df: &str, ef: &str, pin: &str, attempts: u8) {

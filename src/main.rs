@@ -1,5 +1,5 @@
-mod pin;
 mod check;
+mod pin;
 mod text;
 mod visual;
 use clap::{ArgAction, Args, Parser, Subcommand};

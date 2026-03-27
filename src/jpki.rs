@@ -5,9 +5,9 @@ use crate::utils;
 use crate::verify;
 use clap::{Args, Subcommand, ValueEnum};
 use der::{Decode, Encode, EncodePem};
-use x509_cert::Certificate;
 use std::fs;
 use std::io::Write;
+use x509_cert::Certificate;
 
 // ---------------------------------------------------------------------------
 // CLI 引数定義
@@ -459,9 +459,9 @@ fn prompt_auth_pin(pin: &Option<String>) -> String {
 ///
 /// OpenSSL の RSA_public_decrypt(PKCS1) に相当。署名値から DigestInfo を取り出す。
 fn rsa_pkcs1_public_unpad(cert: &Certificate, sig: &[u8]) -> Result<Vec<u8>, Error> {
+    use rsa::BigUint;
     use rsa::hazmat::rsa_encrypt;
     use rsa::traits::PublicKeyParts;
-    use rsa::BigUint;
 
     let rsa_key = crate::verify::rsa_pub_key_from_cert(cert)?;
     let key_size = rsa_key.size();
@@ -508,7 +508,10 @@ fn cert_output(cert: &Certificate, format: &EnumFormat) {
             let tbs = &cert.tbs_certificate;
             println!("Subject: {}", tbs.subject);
             println!("Issuer:  {}", tbs.issuer);
-            println!("Serial:  {}", utils::hex_encode(tbs.serial_number.as_bytes()));
+            println!(
+                "Serial:  {}",
+                utils::hex_encode(tbs.serial_number.as_bytes())
+            );
             println!(
                 "Validity: {} - {}",
                 tbs.validity.not_before, tbs.validity.not_after
@@ -665,7 +668,9 @@ fn run_cms_verify(args: &CmsVerifyArgs) -> Result<(), Error> {
 
     let ci = ContentInfo::from_der(&pkcs7_der)
         .map_err(|e| Error::with_source("ContentInfo の DER パースに失敗しました", e))?;
-    let content_der = ci.content.to_der()
+    let content_der = ci
+        .content
+        .to_der()
         .map_err(|e| Error::with_source("content の DER エンコードに失敗しました", e))?;
     let signed_data = SignedData::from_der(&content_der)
         .map_err(|e| Error::with_source("SignedData の DER パースに失敗しました", e))?;
@@ -718,10 +723,10 @@ fn run_pdf_sign(args: &PdfSignArgs) -> Result<(), Error> {
 #[cfg(all(test, feature = "dummy"))]
 mod dummy_tests {
     use super::*;
-    use der::Encode;
-    use rsa::pkcs8::DecodePrivateKey;
     #[cfg(feature = "dummy")]
     use crate::reader::dummy::JPKI_AID;
+    use der::Encode;
+    use rsa::pkcs8::DecodePrivateKey;
 
     /// 証明書の Subject の最初の ATV 値を文字列で返す
     fn first_subject_value(cert: &Certificate) -> String {
@@ -763,9 +768,9 @@ mod dummy_tests {
             .with_pin(JPKI_AID, "001b", "SIGNATURE", 5)
             .with_sign_fn(move |data| {
                 // raw PKCS#1 type-1 sign: pad data then d^priv mod n
+                use rsa::BigUint;
                 use rsa::hazmat::rsa_decrypt_and_check;
                 use rsa::traits::PublicKeyParts;
-                use rsa::BigUint;
                 let key_size = priv_key.size();
                 // PKCS#1 type 1 pad: 0x00 0x01 <0xff..> 0x00 <data>
                 let ps_len = key_size - data.len() - 3;
@@ -867,9 +872,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki
-            .cert_read(&CertType::SignCa, &None, &None)
-            .unwrap();
+        let cert = jpki.cert_read(&CertType::SignCa, &None, &None).unwrap();
         assert_eq!(first_subject_value(&cert), "Test sign CA");
     }
 
@@ -878,9 +881,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki
-            .cert_read(&CertType::AuthCa, &None, &None)
-            .unwrap();
+        let cert = jpki.cert_read(&CertType::AuthCa, &None, &None).unwrap();
         assert_eq!(first_subject_value(&cert), "Test auth CA");
     }
 

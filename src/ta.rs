@@ -43,16 +43,20 @@ pub(crate) fn describe_cert(cert: &Certificate) -> String {
     let tbs = &cert.tbs_certificate;
     let subject = tbs.subject.to_string();
     let issuer = tbs.issuer.to_string();
-    let serial = format!("{:X}", tbs.serial_number.as_bytes().iter().fold(0u128, |acc, &b| (acc << 8) | b as u128));
+    let serial = format!(
+        "{:X}",
+        tbs.serial_number
+            .as_bytes()
+            .iter()
+            .fold(0u128, |acc, &b| (acc << 8) | b as u128)
+    );
     format!(
         "subject=\"{}\", issuer=\"{}\", serial={}",
         subject, issuer, serial
     )
 }
 
-fn load_roots(
-    specs: &[(&'static str, &'static [u8])],
-) -> Result<Vec<EmbeddedTrustAnchor>, Error> {
+fn load_roots(specs: &[(&'static str, &'static [u8])]) -> Result<Vec<EmbeddedTrustAnchor>, Error> {
     use der::pem::PemLabel;
     specs
         .iter()

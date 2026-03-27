@@ -6,15 +6,15 @@ use cms::content_info::{CmsVersion, ContentInfo};
 use cms::signed_data::{
     CertificateSet, EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo, SignerInfos,
 };
-use der::oid::db::{rfc5911, rfc5912};
-use der::oid::AssociatedOid;
 use der::asn1::{Any, Null, ObjectIdentifier, OctetString, SetOfVec, UtcTime};
+use der::oid::AssociatedOid;
+use der::oid::db::{rfc5911, rfc5912};
 use der::{DateTime, Decode, Encode, EncodeValue, Sequence, Tagged};
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use spki::AlgorithmIdentifierOwned;
-use x509_cert::attr::Attribute;
 use x509_cert::Certificate;
+use x509_cert::attr::Attribute;
 
 // --- 公開型 ---
 
@@ -109,7 +109,6 @@ pub fn build_digest_info(alg: HashAlgorithm, hash: &[u8]) -> Vec<u8> {
     .expect("DigestInfo encoding cannot fail")
 }
 
-
 /// 署名に必要なデータを準備する
 ///
 /// Returns: (attrs_set, attrs_digest)
@@ -127,10 +126,7 @@ pub fn prepare_signing(content: &[u8], alg: HashAlgorithm) -> (AuthAttrs, Vec<u8
 /// 事前計算されたハッシュを使って署名準備する（PDF署名用）
 ///
 /// prepare_signing と同じだが、content の代わりに既にハッシュ済みの値を受け取る。
-pub fn prepare_signing_with_hash(
-    content_hash: &[u8],
-    alg: HashAlgorithm,
-) -> (AuthAttrs, Vec<u8>) {
+pub fn prepare_signing_with_hash(content_hash: &[u8], alg: HashAlgorithm) -> (AuthAttrs, Vec<u8>) {
     let signing_time = utctime_now();
     let attrs = build_auth_attrs(content_hash, signing_time);
     let attrs_der = attrs.to_der().unwrap();
@@ -188,9 +184,7 @@ pub fn build_signed_data(
     } else {
         EncapsulatedContentInfo {
             econtent_type: rfc5911::ID_DATA,
-            econtent: Some(
-                Any::encode_from(&OctetString::new(content).unwrap()).unwrap(),
-            ),
+            econtent: Some(Any::encode_from(&OctetString::new(content).unwrap()).unwrap()),
         }
     };
 
