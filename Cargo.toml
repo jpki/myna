@@ -8,7 +8,7 @@ base16ct = { version = "1", features = ["alloc"] }
 base64ct = { version = "1", features = ["alloc"] }
 clap = { version = "4.6.0", features = ["cargo", "derive"] }
 cms = "0.2"
-der = { version = "0.7", features = ["alloc", "derive", "pem"] }
+der = { version = "0.8", features = ["alloc", "derive", "pem"] }
 flate2 = "1"
 log = "0.4.29"
 pcsc = "2.9.0"
