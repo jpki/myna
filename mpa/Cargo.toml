@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.44"
-der = { version = "0.7", features = ["alloc"] }
+der = { version = "0.8", features = ["alloc"] }
 fern = "0.7.1"
 log = "0.4.29"
 myna = { path = ".." }
