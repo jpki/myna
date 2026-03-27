@@ -143,12 +143,12 @@ fn auth(msg: &Value) -> io::Result<()> {
         Ok(d) => d,
         Err(e) => return send_error_response(&format!("failed to decode digest: {}", e)),
     };
-    let signature = match jpki.pkey_sign(&KeyType::Auth, &pin, &digest) {
+    let signature = match jpki.pkey_sign(&KeyType::Auth, pin.as_deref().unwrap_or(""), &digest) {
         Ok(sig) => utils::base64_encode(&sig),
         Err(e) => return send_error_response(&format!("failed to sign digest: {}", e)),
     };
 
-    let certificate = match jpki.cert_read(&CertType::Auth, &None, &pin) {
+    let certificate = match jpki.cert_read(&CertType::Auth, None, pin.as_deref()) {
         Ok(cert) => match cert.to_der() {
             Ok(der) => utils::base64_encode_nopad(der.as_slice()),
             Err(e) => return send_error_response(&format!("failed to encode certificate: {}", e)),

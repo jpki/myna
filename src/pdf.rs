@@ -2,7 +2,6 @@
 ///
 /// マイナンバーカードのJPKI署名用鍵でPDFにインクリメンタル追記で電子署名を埋め込む。
 use crate::error::Error;
-use crate::jpki::PdfVerifyArgs;
 use crate::utils;
 use crate::verify;
 use cms::content_info::ContentInfo;
@@ -741,9 +740,9 @@ fn find_contents_hex_start(data: &[u8], search_from: usize) -> Option<usize> {
 // PDF 署名検証
 // ---------------------------------------------------------------------------
 
-pub fn pdf_verify(args: &PdfVerifyArgs) -> Result<(), Error> {
-    log::info!("Loading signed PDF from {}", args.input);
-    let data = fs::read(&args.input)?;
+pub fn pdf_verify(input: &str) -> Result<(), Error> {
+    log::info!("Loading signed PDF from {}", input);
+    let data = fs::read(input)?;
 
     // /Type /Sig を持つ署名辞書を検索
     let (byte_range, contents_hex) =

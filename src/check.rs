@@ -3,7 +3,7 @@ use pcsc::{
 };
 use std::ffi::CString;
 
-pub fn main(app: &crate::App) -> Result<(), myna::error::Error> {
+pub fn main(reader_name: Option<&str>) -> Result<(), myna::error::Error> {
     print!("SCardEstablishContext: ");
     let ctx = match Context::establish(Scope::User) {
         Ok(ctx) => {
@@ -34,7 +34,7 @@ pub fn main(app: &crate::App) -> Result<(), myna::error::Error> {
         println!("  Reader {}: {}", i, reader.to_string_lossy());
     }
 
-    let reader = match select_reader(app, &readers) {
+    let reader = match select_reader(reader_name, &readers) {
         Some(reader) => reader,
         None => {
             release_context(ctx);
@@ -63,8 +63,8 @@ fn list_readers(ctx: &Context) -> Option<Vec<CString>> {
     }
 }
 
-fn select_reader<'a>(app: &crate::App, readers: &'a [CString]) -> Option<&'a CString> {
-    match selected_reader_name(app) {
+fn select_reader<'a>(reader_name: Option<&str>, readers: &'a [CString]) -> Option<&'a CString> {
+    match reader_name {
         Some(name) => match readers
             .iter()
             .find(|reader| reader.to_string_lossy() == name)
@@ -76,13 +76,6 @@ fn select_reader<'a>(app: &crate::App, readers: &'a [CString]) -> Option<&'a CSt
             }
         },
         None => readers.first(),
-    }
-}
-
-fn selected_reader_name(app: &crate::App) -> Option<&str> {
-    match &app.command {
-        crate::Commands::Check(args) => args.name.as_deref(),
-        _ => None,
     }
 }
 
