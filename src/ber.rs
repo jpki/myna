@@ -85,7 +85,7 @@ fn read_length(input: &[u8]) -> Result<(usize, usize), BerError> {
 ///
 /// データが不足している場合は `Err(BerError::Incomplete(n))` で
 /// 追加で必要なバイト数 `n` を返す。
-pub fn parse_tlv(input: &[u8]) -> Result<(&[u8], TLV<'_>), BerError> {
+pub fn parse(input: &[u8]) -> Result<(&[u8], TLV<'_>), BerError> {
     let (tag, tag_len) = read_tag(input)?;
     let (value_len, len_len) = read_length(&input[tag_len..])?;
     let header_len = tag_len + len_len;
@@ -106,7 +106,7 @@ mod tests {
     fn short_tag_short_length() {
         // tag=0x30 (SEQUENCE), length=3, value=[0x01, 0x02, 0x03]
         let input = [0x30, 0x03, 0x01, 0x02, 0x03];
-        let (rem, tlv) = parse_tlv(&input).unwrap();
+        let (rem, tlv) = parse(&input).unwrap();
         assert_eq!(tlv.tag, 0x30);
         assert_eq!(tlv.data, &[0x01, 0x02, 0x03]);
         assert!(rem.is_empty());
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn short_tag_with_remaining() {
         let input = [0x04, 0x02, 0xAA, 0xBB, 0x05, 0x00];
-        let (rem, tlv) = parse_tlv(&input).unwrap();
+        let (rem, tlv) = parse(&input).unwrap();
         assert_eq!(tlv.tag, 0x04);
         assert_eq!(tlv.data, &[0xAA, 0xBB]);
         assert_eq!(rem, &[0x05, 0x00]);
@@ -125,7 +125,7 @@ mod tests {
     fn long_tag_long_length() {
         // tag=0xff40 (private, 2-byte), length=0x82 0x00 0x9f (159)
         let bytes = [0xff, 0x40, 0x82, 0x00, 0x9f];
-        match parse_tlv(&bytes) {
+        match parse(&bytes) {
             Err(BerError::Incomplete(n)) => assert_eq!(n, 159),
             other => panic!("expected Incomplete(159), got {:?}", other.err()),
         }
@@ -136,7 +136,7 @@ mod tests {
         // tag=0x30, length=0x81 0x80 (128)
         let mut input = vec![0x30, 0x81, 0x80];
         input.extend(vec![0x00; 128]);
-        let (rem, tlv) = parse_tlv(&input).unwrap();
+        let (rem, tlv) = parse(&input).unwrap();
         assert_eq!(tlv.tag, 0x30);
         assert_eq!(tlv.data.len(), 128);
         assert!(rem.is_empty());
@@ -144,6 +144,6 @@ mod tests {
 
     #[test]
     fn empty_input() {
-        assert!(matches!(parse_tlv(&[]), Err(BerError::Incomplete(1))));
+        assert!(matches!(parse(&[]), Err(BerError::Incomplete(1))));
     }
 }

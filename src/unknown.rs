@@ -21,7 +21,7 @@ impl<'a> UnknownAP<'a> {
 
     pub fn read_number(&mut self) -> Result<Vec<u8>, Error> {
         let data = self.reader.read_record(1, 1)?;
-        let (_, tlv) = crate::ber::parse_tlv(&data)
+        let (_, tlv) = crate::ber::parse(&data)
             .map_err(|e| Error::new(format!("BERデコードに失敗しました: {}", e)))?;
         Ok(tlv.data.to_vec())
     }

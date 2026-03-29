@@ -190,7 +190,7 @@ impl MynaReader {
     pub fn read_binary_all(&mut self) -> std::result::Result<Vec<u8>, APDUError> {
         use crate::ber;
         let mut head = self.read_binary(0, 7)?;
-        let len: u16 = match ber::parse_tlv(&head) {
+        let len: u16 = match ber::parse(&head) {
             Err(ber::BerError::Incomplete(n)) => n as u16,
             _ => 0,
         };
@@ -270,7 +270,7 @@ impl MynaReader {
 fn partial_decode() {
     use crate::ber;
     let bytes = [0xff, 0x40, 0x82, 0x00, 0x9f];
-    let len = match ber::parse_tlv(&bytes) {
+    let len = match ber::parse(&bytes) {
         Err(ber::BerError::Incomplete(n)) => n,
         _ => 0,
     };

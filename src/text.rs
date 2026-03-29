@@ -39,9 +39,9 @@ impl<'a> TextAP<'a> {
     pub fn basic_info(&mut self) -> Result<BasicInfo, Error> {
         self.reader.select_ef("0005")?;
         let encoded = self.reader.read_binary_all()?;
-        let (_rem, payload) = ber::parse_tlv(&encoded).map_err(ber_err)?;
-        let (rem, apid) = ber::parse_tlv(payload.data).map_err(ber_err)?;
-        let (_rem, pubkey_id) = ber::parse_tlv(rem).map_err(ber_err)?;
+        let (_rem, payload) = ber::parse(&encoded).map_err(ber_err)?;
+        let (rem, apid) = ber::parse(payload.data).map_err(ber_err)?;
+        let (_rem, pubkey_id) = ber::parse(rem).map_err(ber_err)?;
         Ok(BasicInfo {
             apid: utils::hex_encode(apid.data),
             pubkey_id: utils::hex_encode(pubkey_id.data),
@@ -53,7 +53,7 @@ impl<'a> TextAP<'a> {
         self.reader.verify_pin(pin)?;
         self.reader.select_ef("0001")?;
         let encoded = self.reader.read_binary(0, 17)?;
-        let (_rem, res) = ber::parse_tlv(&encoded).map_err(ber_err)?;
+        let (_rem, res) = ber::parse(&encoded).map_err(ber_err)?;
         let mynumber = std::str::from_utf8(res.data)
             .map_err(|e| Error::new(format!("個人番号のUTF-8変換に失敗しました: {}", e)))?;
         Ok(mynumber.to_string())
@@ -64,18 +64,18 @@ impl<'a> TextAP<'a> {
         self.reader.verify_pin(pin)?;
         self.reader.select_ef("0002")?;
         let encoded = self.reader.read_binary_all()?;
-        let (_rem, res) = ber::parse_tlv(&encoded).map_err(ber_err)?;
-        let (rem, _res) = ber::parse_tlv(res.data).map_err(ber_err)?;
-        let (rem, res) = ber::parse_tlv(rem).map_err(ber_err)?;
+        let (_rem, res) = ber::parse(&encoded).map_err(ber_err)?;
+        let (rem, _res) = ber::parse(res.data).map_err(ber_err)?;
+        let (rem, res) = ber::parse(rem).map_err(ber_err)?;
         let name = std::str::from_utf8(res.data)
             .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
-        let (rem, res) = ber::parse_tlv(rem).map_err(ber_err)?;
+        let (rem, res) = ber::parse(rem).map_err(ber_err)?;
         let addr = std::str::from_utf8(res.data)
             .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
-        let (rem, res) = ber::parse_tlv(rem).map_err(ber_err)?;
+        let (rem, res) = ber::parse(rem).map_err(ber_err)?;
         let birth = std::str::from_utf8(res.data)
             .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
-        let (_rem, res) = ber::parse_tlv(rem).map_err(ber_err)?;
+        let (_rem, res) = ber::parse(rem).map_err(ber_err)?;
         let sex = std::str::from_utf8(res.data)
             .map_err(|e| Error::new(format!("UTF-8変換に失敗しました: {}", e)))?;
         Ok(TextAttrs {

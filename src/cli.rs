@@ -144,51 +144,115 @@ fn run_text(cmd: &TextSubcommand) -> Result<(), Error> {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Args)]
-struct PhotoArgs {
+struct VisualOutputArgs {
     /// 暗証番号(4桁)
     #[arg(short, long)]
     pin: Option<String>,
-    /// 出力ファイル (JPEG2000)
+    /// 出力ファイル
     #[arg(short, long)]
     output: String,
 }
 
+#[derive(Debug, Args)]
+struct VisualPinArgs {
+    /// 暗証番号(4桁)
+    #[arg(short, long)]
+    pin: Option<String>,
+}
+
 #[derive(Subcommand)]
 enum VisualSubcommand {
-    /// 顔写真を取得
-    Photo(PhotoArgs),
+    /// AP基本情報を表示
+    BasicInfo,
+    /// 券面の氏名画像を取得 (PNG画像)
+    Name(VisualOutputArgs),
+    /// 券面の住所画像を取得 (PNG画像)
+    Addr(VisualOutputArgs),
+    /// 生年月日を表示
+    Birth(VisualPinArgs),
+    /// 性別を表示
+    Sex(VisualPinArgs),
+    /// 顔写真を取得 (JPEG2000)
+    Photo(VisualOutputArgs),
+}
+
+fn read_mynumber(pin: &str, reader: &mut MynaReader) -> Result<String, Error> {
+    let mut text = reader.text_ap()?;
+    let mynumber = text.mynumber(pin)?;
+    text.close();
+    Ok(mynumber)
+}
+
+fn write_binary_output(data: &[u8], output: &str, label: &str) -> Result<(), Error> {
+    if output == "-" {
+        std::io::stdout()
+            .write_all(data)
+            .map_err(|e| Error::new(format!("標準出力への書き込みに失敗しました: {}", e)))?;
+    } else {
+        fs::write(output, data)?;
+        println!("{}を保存しました: {}", label, output);
+    }
+    Ok(())
 }
 
 fn run_visual(cmd: &VisualSubcommand) -> Result<(), Error> {
     match cmd {
-        VisualSubcommand::Photo(args) => {
-            let pin = input_4digit_pin("暗証番号(4桁): ", &args.pin)?;
-
+        VisualSubcommand::BasicInfo => {
             let mut reader = MynaReader::new()?;
             reader.connect()?;
-
-            // まずマイナンバーを取得
-            let mut text = reader.text_ap()?;
-            let mynumber = text.mynumber(&pin)?;
-            text.close();
-
-            // 券面確認APから顔写真を取得
             let mut visual = reader.visual_ap()?;
-            let photo_data = visual.photo(&mynumber)?;
-
-            if args.output == "-" {
-                std::io::stdout().write_all(&photo_data).map_err(|e| {
-                    Error::new(format!("標準出力への書き込みに失敗しました: {}", e))
-                })?;
-            } else {
-                let mut file = fs::File::create(&args.output)
-                    .map_err(|e| Error::new(format!("ファイルを作成できませんでした: {}", e)))?;
-                file.write_all(&photo_data).map_err(|e| {
-                    Error::new(format!("ファイルへの書き込みに失敗しました: {}", e))
-                })?;
-                println!("写真を保存しました: {}", args.output);
-            }
+            let info = visual.basic_info()?;
+            println!("APID: {}", info.apid);
+            println!("Version: {}", info.version);
+            println!("City: {}", info.city);
             Ok(())
+        }
+        VisualSubcommand::Name(args) => {
+            let pin = input_4digit_pin("暗証番号(4桁): ", &args.pin)?;
+            let mut reader = MynaReader::new()?;
+            reader.connect()?;
+            let mynumber = read_mynumber(&pin, &mut reader)?;
+            let mut visual = reader.visual_ap()?;
+            let entries = visual.read_entries(&mynumber)?;
+            write_binary_output(&entries.name, &args.output, "氏名画像")
+        }
+        VisualSubcommand::Addr(args) => {
+            let pin = input_4digit_pin("暗証番号(4桁): ", &args.pin)?;
+            let mut reader = MynaReader::new()?;
+            reader.connect()?;
+            let mynumber = read_mynumber(&pin, &mut reader)?;
+            let mut visual = reader.visual_ap()?;
+            let entries = visual.read_entries(&mynumber)?;
+            write_binary_output(&entries.addr, &args.output, "住所画像")
+        }
+        VisualSubcommand::Birth(args) => {
+            let pin = input_4digit_pin("暗証番号(4桁): ", &args.pin)?;
+            let mut reader = MynaReader::new()?;
+            reader.connect()?;
+            let mynumber = read_mynumber(&pin, &mut reader)?;
+            let mut visual = reader.visual_ap()?;
+            let entries = visual.read_entries(&mynumber)?;
+            println!("{}", entries.birth);
+            Ok(())
+        }
+        VisualSubcommand::Sex(args) => {
+            let pin = input_4digit_pin("暗証番号(4桁): ", &args.pin)?;
+            let mut reader = MynaReader::new()?;
+            reader.connect()?;
+            let mynumber = read_mynumber(&pin, &mut reader)?;
+            let mut visual = reader.visual_ap()?;
+            let entries = visual.read_entries(&mynumber)?;
+            println!("{}", entries.sex);
+            Ok(())
+        }
+        VisualSubcommand::Photo(args) => {
+            let pin = input_4digit_pin("暗証番号(4桁): ", &args.pin)?;
+            let mut reader = MynaReader::new()?;
+            reader.connect()?;
+            let mynumber = read_mynumber(&pin, &mut reader)?;
+            let mut visual = reader.visual_ap()?;
+            let entries = visual.read_entries(&mynumber)?;
+            write_binary_output(&entries.photo, &args.output, "写真")
         }
     }
 }

@@ -98,6 +98,30 @@ $ myna text attr
 $ myna visual photo -o photo.jp2
 ~~~
 
+### 券面確認APから氏名画像を取得 (PNG画像)
+
+~~~
+$ myna visual name -o name.png
+~~~
+
+### 券面確認APから住所画像を取得 (PNG画像)
+
+~~~
+$ myna visual addr -o addr.png
+~~~
+
+### 券面確認APから生年月日を表示
+
+~~~
+$ myna visual birth
+~~~
+
+### 券面確認APから性別を表示
+
+~~~
+$ myna visual sex
+~~~
+
 ### PINのステータスを確認
 
 ~~~
