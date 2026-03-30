@@ -7,7 +7,6 @@ use cms::signed_data::{
     CertificateSet, EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo, SignerInfos,
 };
 use der::asn1::{Any, Null, ObjectIdentifier, OctetString, SetOfVec, UtcTime};
-use der::oid::AssociatedOid;
 use der::oid::db::{rfc5911, rfc5912};
 use der::{DateTime, Decode, Encode, EncodeValue, Sequence, Tagged};
 use sha1::Sha1;
@@ -45,10 +44,10 @@ fn null_any() -> Any {
 
 fn digest_alg_id(alg: HashAlgorithm) -> AlgorithmIdentifierOwned {
     let oid = match alg {
-        HashAlgorithm::Sha1 => Sha1::OID,
-        HashAlgorithm::Sha256 => Sha256::OID,
-        HashAlgorithm::Sha384 => Sha384::OID,
-        HashAlgorithm::Sha512 => Sha512::OID,
+        HashAlgorithm::Sha1 => rfc5912::ID_SHA_1,
+        HashAlgorithm::Sha256 => rfc5912::ID_SHA_256,
+        HashAlgorithm::Sha384 => rfc5912::ID_SHA_384,
+        HashAlgorithm::Sha512 => rfc5912::ID_SHA_512,
     };
     AlgorithmIdentifierOwned {
         oid,
@@ -256,7 +255,7 @@ mod tests {
     #[test]
     fn test_digest_alg_id_sha256() {
         let alg = digest_alg_id(HashAlgorithm::Sha256);
-        assert_eq!(alg.oid, Sha256::OID);
+        assert_eq!(alg.oid, rfc5912::ID_SHA_256);
         assert!(alg.parameters.is_some());
     }
 

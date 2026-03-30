@@ -3,7 +3,6 @@ use crate::ta::{self, EmbeddedTrustAnchor};
 use cms::cert::CertificateChoices;
 use cms::signed_data::{SignedData, SignerIdentifier, SignerInfo};
 use der::asn1::{ObjectIdentifier, OctetString};
-use der::oid::AssociatedOid;
 use der::oid::db::{rfc5911, rfc5912};
 use der::{Decode, Encode};
 use rsa::RsaPublicKey;
@@ -203,13 +202,13 @@ fn verify_message_digest(si: &SignerInfo, content: Option<&[u8]>) -> Result<(), 
 
 /// OID に対応するアルゴリズムでデータをハッシュする
 fn hash_with_oid(oid: &ObjectIdentifier, data: &[u8]) -> Result<Vec<u8>, Error> {
-    if *oid == Sha1::OID {
+    if *oid == rfc5912::ID_SHA_1 {
         Ok(Sha1::digest(data).to_vec())
-    } else if *oid == Sha256::OID {
+    } else if *oid == rfc5912::ID_SHA_256 {
         Ok(Sha256::digest(data).to_vec())
-    } else if *oid == Sha384::OID {
+    } else if *oid == rfc5912::ID_SHA_384 {
         Ok(Sha384::digest(data).to_vec())
-    } else if *oid == Sha512::OID {
+    } else if *oid == rfc5912::ID_SHA_512 {
         Ok(Sha512::digest(data).to_vec())
     } else {
         Err(Error::new(format!(
@@ -241,13 +240,13 @@ fn verify_rsa_pkcs1v15(
     let sig = Pkcs1Sig::try_from(sig_bytes)
         .map_err(|e| Error::with_source("署名値のデコードに失敗しました", e))?;
 
-    let result = if *digest_oid == Sha1::OID {
+    let result = if *digest_oid == rfc5912::ID_SHA_1 {
         VerifyingKey::<Sha1>::new(rsa_key).verify(msg, &sig)
-    } else if *digest_oid == Sha256::OID {
+    } else if *digest_oid == rfc5912::ID_SHA_256 {
         VerifyingKey::<Sha256>::new(rsa_key).verify(msg, &sig)
-    } else if *digest_oid == Sha384::OID {
+    } else if *digest_oid == rfc5912::ID_SHA_384 {
         VerifyingKey::<Sha384>::new(rsa_key).verify(msg, &sig)
-    } else if *digest_oid == Sha512::OID {
+    } else if *digest_oid == rfc5912::ID_SHA_512 {
         VerifyingKey::<Sha512>::new(rsa_key).verify(msg, &sig)
     } else {
         return Err(Error::new(format!(
@@ -286,13 +285,13 @@ fn verify_cert_chain<'a>(
 /// sha*WithRSAEncryption OID からダイジェスト OID を返す
 fn sig_alg_to_digest_oid(oid: &ObjectIdentifier) -> Result<ObjectIdentifier, Error> {
     if *oid == rfc5912::SHA_1_WITH_RSA_ENCRYPTION {
-        Ok(Sha1::OID)
+        Ok(rfc5912::ID_SHA_1)
     } else if *oid == rfc5912::SHA_256_WITH_RSA_ENCRYPTION {
-        Ok(Sha256::OID)
+        Ok(rfc5912::ID_SHA_256)
     } else if *oid == rfc5912::SHA_384_WITH_RSA_ENCRYPTION {
-        Ok(Sha384::OID)
+        Ok(rfc5912::ID_SHA_384)
     } else if *oid == rfc5912::SHA_512_WITH_RSA_ENCRYPTION {
-        Ok(Sha512::OID)
+        Ok(rfc5912::ID_SHA_512)
     } else {
         Err(Error::new(format!("未対応の署名アルゴリズム OID: {}", oid)))
     }
