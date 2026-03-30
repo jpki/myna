@@ -4,6 +4,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: der
+      - dependency-name: sha1
+      - dependency-name: sha2
+      - dependency-name: libc
   - package-ecosystem: github-actions
     directory: /
     schedule:
