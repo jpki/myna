@@ -8,6 +8,7 @@ fn main() {
     init_logger(app.log_level()).expect("failed to initialize logger");
     if let Err(e) = app.run() {
         eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
 }
 

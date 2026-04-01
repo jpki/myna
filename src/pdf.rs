@@ -795,7 +795,7 @@ pub fn pdf_verify(input: &str) -> Result<(), Error> {
     log::info!("Checking PDF content digest, CMS signature, and signer certificate chain");
     match verify::verify_cms_signature(&signed_data, Some(&verify_data), &roots) {
         Ok(()) => println!("Verification successful"),
-        Err(e) => eprintln!("Verification failed: {}", e),
+        Err(e) => return Err(e),
     }
     Ok(())
 }
