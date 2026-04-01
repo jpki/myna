@@ -960,3 +960,74 @@ fn parse_byte_range(s: &str) -> Option<Vec<usize>> {
         .collect();
     if nums.len() == 4 { Some(nums) } else { None }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- get_xref_dict_text: ネストされた辞書を持つ xref stream ---
+
+    #[test]
+    fn test_xref_stream_nested_dict() {
+        // DecodeParms にネストされた << >> を含む xref stream
+        let data = b"6725 0 obj\r<</DecodeParms<</Columns 5/Predictor 12>>/Filter/FlateDecode/Root 42 0 R/Size 100/Type/XRef>>stream\r\nbinary";
+        let dict = get_xref_dict_text(data, 0).unwrap();
+        assert!(dict.contains("/Root 42 0 R"), "dict = {}", dict);
+        assert!(dict.contains("/Size 100"), "dict = {}", dict);
+    }
+
+    #[test]
+    fn test_xref_stream_nested_dict_root_ref() {
+        let data = b"1 0 obj\r<</DecodeParms<</Columns 5/Predictor 12>>/Root 99 0 R/Size 200/Type/XRef>>stream";
+        assert_eq!(find_root_ref(data, 0), Some(99));
+    }
+
+    #[test]
+    fn test_xref_stream_no_nesting() {
+        let data = b"1 0 obj <</Root 7 0 R/Size 50/Type/XRef>>stream";
+        let dict = get_xref_dict_text(data, 0).unwrap();
+        assert!(dict.contains("/Root 7 0 R"));
+    }
+
+    // --- find_object_content: 改行区切りのオブジェクトヘッダー ---
+
+    #[test]
+    fn test_find_object_content_newline_separated() {
+        // "4\n0\nobj\n<<...>>\nendobj" 形式
+        let data = b"4\n0\nobj\n<< /Type /Catalog /Pages 1 0 R >>\nendobj\n";
+        let content = find_object_content(data, 4).unwrap();
+        assert!(content.contains("/Type /Catalog"), "content = {}", content);
+    }
+
+    #[test]
+    fn test_find_object_content_cr_lf_separated() {
+        let data = b"10\r\n0\r\nobj\r\n<< /Type /Catalog >>\r\nendobj\r\n";
+        let content = find_object_content(data, 10).unwrap();
+        assert!(content.contains("/Type /Catalog"), "content = {}", content);
+    }
+
+    #[test]
+    fn test_find_object_content_space_separated() {
+        let data = b"7 0 obj\n<< /Type /Page >>\nendobj\n";
+        let content = find_object_content(data, 7).unwrap();
+        assert!(content.contains("/Type /Page"), "content = {}", content);
+    }
+
+    #[test]
+    fn test_find_object_content_not_found() {
+        let data = b"5 0 obj\n<< /Type /Page >>\nendobj\n";
+        assert!(find_object_content(data, 99).is_none());
+    }
+
+    // --- traditional trailer ---
+
+    #[test]
+    fn test_traditional_trailer_newline_values() {
+        // a.pdf のような改行区切りの trailer
+        let data =
+            b"xref\n0 10\ntrailer\n<<\n/Size\n174\n/Root\n4\n0\nR\n>>\nstartxref\n0\n%%EOF\n";
+        let dict = get_xref_dict_text(data, 0).unwrap();
+        assert!(dict.contains("/Root"), "dict = {}", dict);
+        assert_eq!(find_root_ref(data, 0), Some(4));
+    }
+}
