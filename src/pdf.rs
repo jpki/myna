@@ -178,22 +178,64 @@ fn find_info_ref(data: &[u8], xref_offset: usize) -> Option<usize> {
 }
 
 /// 指定オブジェクトIDの内容を検索して返す（非圧縮オブジェクト）
+///
+/// PDF ではトークン間にスペース・改行(\n)・CR(\r) が使われるため、
+/// "N 0 obj" だけでなく "N\n0\nobj" 等にも対応する。
 fn find_object_content(data: &[u8], obj_id: usize) -> Option<String> {
-    let needle = format!("{} 0 obj", obj_id);
-    let needle_bytes = needle.as_bytes();
-    for i in 0..data.len().saturating_sub(needle_bytes.len()) {
-        if &data[i..i + needle_bytes.len()] == needle_bytes
-            && (i == 0 || data[i - 1] == b'\n' || data[i - 1] == b'\r')
+    let id_bytes = obj_id.to_string().into_bytes();
+    let mut i = 0;
+    while i + id_bytes.len() < data.len() {
+        // オブジェクト ID 部分が一致するか
+        if &data[i..i + id_bytes.len()] == id_bytes.as_slice()
+            && (i == 0 || matches!(data[i - 1], b'\n' | b'\r' | b' '))
         {
-            let start = i + needle_bytes.len();
-            let rest = &data[start..];
-            if let Some(end_pos) = rest.windows(6).position(|w| w == b"endobj") {
-                let content = &data[start..start + end_pos];
-                return Some(String::from_utf8_lossy(content).to_string());
+            // ID の後に空白+ "0" +空白+ "obj" が続くか
+            let rest = &data[i + id_bytes.len()..];
+            if let Some(obj_start) = match_obj_header(rest) {
+                let content_start = i + id_bytes.len() + obj_start;
+                let content = &data[content_start..];
+                if let Some(end_pos) = content.windows(6).position(|w| w == b"endobj") {
+                    return Some(
+                        String::from_utf8_lossy(&data[content_start..content_start + end_pos])
+                            .to_string(),
+                    );
+                }
             }
         }
+        i += 1;
     }
     None
+}
+
+/// " 0 obj" のようなヘッダー部分をマッチし、"obj" の直後のオフセットを返す。
+/// 空白は 0x20, 0x0A, 0x0D のいずれか。
+fn match_obj_header(data: &[u8]) -> Option<usize> {
+    let mut pos = 0;
+    // 1つ以上の空白
+    if pos >= data.len() || !matches!(data[pos], b' ' | b'\n' | b'\r') {
+        return None;
+    }
+    while pos < data.len() && matches!(data[pos], b' ' | b'\n' | b'\r') {
+        pos += 1;
+    }
+    // "0"
+    if pos >= data.len() || data[pos] != b'0' {
+        return None;
+    }
+    pos += 1;
+    // 1つ以上の空白
+    if pos >= data.len() || !matches!(data[pos], b' ' | b'\n' | b'\r') {
+        return None;
+    }
+    while pos < data.len() && matches!(data[pos], b' ' | b'\n' | b'\r') {
+        pos += 1;
+    }
+    // "obj"
+    if pos + 3 > data.len() || &data[pos..pos + 3] != b"obj" {
+        return None;
+    }
+    pos += 3;
+    Some(pos)
 }
 
 /// 圧縮オブジェクトストリームから指定オブジェクトの内容を取得
