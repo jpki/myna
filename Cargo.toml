@@ -16,7 +16,7 @@ rsa = { version = "0.9", features = ["sha1", "sha2", "hazmat"] }
 libc = "0.2"
 fern = "0.7.1"
 sha1 = { version = "0.10", features = ["oid"] }
-sha2 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.11", features = ["oid"] }
 spki = "0.7"
 x509-cert = "0.2"
 
