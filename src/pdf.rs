@@ -137,11 +137,26 @@ fn get_xref_dict_text(data: &[u8], xref_offset: usize) -> Option<String> {
     }
 
     // xref stream: "N 0 obj\n<< ... >>\nstream" の辞書部分を取得
+    // ネストされた << >> を考慮して対応する >> を探す
     let dict_start = slice.windows(2).position(|w| w == b"<<")?;
-    let inner = &slice[dict_start + 2..];
-    let dict_end_rel = inner.windows(2).position(|w| w == b">>")?;
-    let dict_end = dict_start + 2 + dict_end_rel + 2;
-    Some(String::from_utf8_lossy(&slice[dict_start..dict_end]).to_string())
+    let mut depth = 0;
+    let mut i = dict_start;
+    while i + 1 < slice.len() {
+        if slice[i] == b'<' && slice[i + 1] == b'<' {
+            depth += 1;
+            i += 2;
+        } else if slice[i] == b'>' && slice[i + 1] == b'>' {
+            depth -= 1;
+            if depth == 0 {
+                let dict_end = i + 2;
+                return Some(String::from_utf8_lossy(&slice[dict_start..dict_end]).to_string());
+            }
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    None
 }
 
 /// /Root 参照を取得
