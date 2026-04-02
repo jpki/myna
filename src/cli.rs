@@ -740,9 +740,8 @@ fn run_unknown(cmd: &UnknownSubcommand) -> Result<(), Error> {
             println!("{}", String::from_utf8_lossy(&data));
         }
         UnknownSubcommand::Manufacture => {
-            let data = unknown.read_number()?;
-            let s = String::from_utf8_lossy(&data);
-            print!("{}", &s[2..15]);
+            let manufacture = unknown.read_manufacture()?;
+            print!("{}", manufacture);
         }
     }
     Ok(())

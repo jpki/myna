@@ -87,7 +87,8 @@ pub(crate) fn verify_signer_certificates(
 
 /// CMS 署名全体を検証する（messageDigest・RSA署名・証明書チェーン）
 ///
-/// - content: detached 署名の場合は署名対象データ。embedded の場合は None。
+/// - content: detached 署名の場合は署名対象データ。embedded の場合は None
+///   （EncapsulatedContentInfo から自動取得）。
 pub(crate) fn verify_cms_signature(
     signed_data: &SignedData,
     content: Option<&[u8]>,
@@ -97,12 +98,24 @@ pub(crate) fn verify_cms_signature(
         return Err(Error::new("SignedData に署名者情報がありません"));
     }
 
+    // embedded の場合は EncapsulatedContentInfo からコンテンツを取り出す
+    let embedded_content = match content {
+        Some(_) => None,
+        None => extract_econtent(signed_data)?,
+    };
+    let content_data = match content {
+        Some(d) => d,
+        None => embedded_content
+            .as_deref()
+            .ok_or_else(|| Error::new("署名対象コンテンツが見つかりません"))?,
+    };
+
     for (i, si) in signed_data.signer_infos.0.iter().enumerate() {
         let cert = find_cert_for_signer(signed_data, si)?
             .ok_or_else(|| Error::new("署名者証明書が SignedData 内に見つかりません"))?;
 
         // 1. messageDigest 検証
-        verify_message_digest(si, content)?;
+        verify_message_digest(si, content_data)?;
         log::debug!("Signer {}: messageDigest OK", i + 1);
 
         // 2. RSA 署名検証（signed attrs SET OF DER に対して）
@@ -130,6 +143,20 @@ pub(crate) fn verify_cms_signature(
 }
 
 // --- 内部ヘルパー ---
+
+/// EncapsulatedContentInfo から embedded コンテンツを取り出す
+fn extract_econtent(signed_data: &SignedData) -> Result<Option<Vec<u8>>, Error> {
+    let econtent = match &signed_data.encap_content_info.econtent {
+        Some(any) => any,
+        None => return Ok(None),
+    };
+    let der = econtent
+        .to_der()
+        .map_err(|e| Error::with_source("econtent の DER エンコードに失敗しました", e))?;
+    let os = OctetString::from_der(&der)
+        .map_err(|e| Error::with_source("econtent の OCTET STRING デコードに失敗しました", e))?;
+    Ok(Some(os.as_bytes().to_vec()))
+}
 
 /// SignerInfo.sid に対応する証明書を SignedData.certificates から探す
 fn find_cert_for_signer<'a>(
@@ -159,11 +186,7 @@ fn find_cert_for_signer<'a>(
 }
 
 /// messageDigest 認証属性とコンテンツのハッシュを照合する
-fn verify_message_digest(si: &SignerInfo, content: Option<&[u8]>) -> Result<(), Error> {
-    let content_data = match content {
-        Some(d) => d,
-        None => return Ok(()), // embedded の場合はスキップ（EncapsulatedContentInfo 内）
-    };
+fn verify_message_digest(si: &SignerInfo, content_data: &[u8]) -> Result<(), Error> {
     let signed_attrs = si
         .signed_attrs
         .as_ref()
@@ -294,5 +317,141 @@ fn sig_alg_to_digest_oid(oid: &ObjectIdentifier) -> Result<ObjectIdentifier, Err
         Ok(rfc5912::ID_SHA_512)
     } else {
         Err(Error::new(format!("未対応の署名アルゴリズム OID: {}", oid)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pkcs7;
+    use cms::content_info::ContentInfo;
+    use rsa::pkcs8::DecodePrivateKey;
+    use rsa::RsaPrivateKey;
+
+    /// テスト用の署名値を生成する（PKCS#1 v1.5 パディング付き）
+    fn test_sign(priv_key: &RsaPrivateKey, data: &[u8]) -> Vec<u8> {
+        use rsa::BigUint;
+        use rsa::hazmat::rsa_decrypt_and_check;
+        use rsa::traits::PublicKeyParts;
+        let key_size = priv_key.size();
+        let ps_len = key_size - data.len() - 3;
+        let mut em = vec![0x00u8, 0x01];
+        em.extend(std::iter::repeat(0xffu8).take(ps_len));
+        em.push(0x00);
+        em.extend_from_slice(data);
+        let m = BigUint::from_bytes_be(&em);
+        let c =
+            rsa_decrypt_and_check(priv_key, None::<&mut rsa::rand_core::OsRng>, &m).unwrap();
+        let mut sig = c.to_bytes_be();
+        while sig.len() < key_size {
+            sig.insert(0, 0u8);
+        }
+        sig
+    }
+
+    /// テスト用 embedded SignedData DER を構築する
+    fn build_test_signed_data(content: &[u8], detached: bool) -> Vec<u8> {
+        let cert_der = include_bytes!("../tests/fixtures/sign_cert.der");
+        let sign_key_pem = include_bytes!("../tests/fixtures/sign_key.pem");
+        let pem_str = std::str::from_utf8(sign_key_pem).unwrap();
+        let priv_key = RsaPrivateKey::from_pkcs8_pem(pem_str).unwrap();
+
+        let alg = pkcs7::HashAlgorithm::Sha256;
+        let (attrs, attrs_digest) = pkcs7::prepare_signing(content, alg);
+        let digest_info = pkcs7::build_digest_info(alg, &attrs_digest);
+        let signature = test_sign(&priv_key, &digest_info);
+
+        pkcs7::build_signed_data(content, cert_der, &signature, alg, &attrs, detached)
+    }
+
+    fn parse_signed_data(pkcs7_der: &[u8]) -> SignedData {
+        let ci = ContentInfo::from_der(pkcs7_der).unwrap();
+        let content_der = ci.content.to_der().unwrap();
+        SignedData::from_der(&content_der).unwrap()
+    }
+
+    #[test]
+    fn test_extract_econtent_embedded() {
+        let content = b"Hello, embedded CMS!";
+        let pkcs7_der = build_test_signed_data(content, false);
+        let signed_data = parse_signed_data(&pkcs7_der);
+
+        let extracted = extract_econtent(&signed_data).unwrap();
+        assert_eq!(extracted.as_deref(), Some(content.as_slice()));
+    }
+
+    #[test]
+    fn test_extract_econtent_detached() {
+        let content = b"Hello, detached CMS!";
+        let pkcs7_der = build_test_signed_data(content, true);
+        let signed_data = parse_signed_data(&pkcs7_der);
+
+        let extracted = extract_econtent(&signed_data).unwrap();
+        assert!(extracted.is_none());
+    }
+
+    #[test]
+    fn test_verify_message_digest_embedded_ok() {
+        let content = b"Hello, embedded CMS!";
+        let pkcs7_der = build_test_signed_data(content, false);
+        let signed_data = parse_signed_data(&pkcs7_der);
+
+        let si = signed_data.signer_infos.0.iter().next().unwrap();
+        // embedded コンテンツを取り出して検証
+        let econtent = extract_econtent(&signed_data).unwrap().unwrap();
+        assert!(verify_message_digest(si, &econtent).is_ok());
+    }
+
+    #[test]
+    fn test_verify_message_digest_embedded_tampered() {
+        let content = b"Hello, embedded CMS!";
+        let pkcs7_der = build_test_signed_data(content, false);
+        let signed_data = parse_signed_data(&pkcs7_der);
+
+        let si = signed_data.signer_infos.0.iter().next().unwrap();
+        // 改ざんされたコンテンツで検証 → 失敗するべき
+        let tampered = b"Tampered content!!!!";
+        let result = verify_message_digest(si, tampered);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("一致しません"), "msg = {}", msg);
+    }
+
+    #[test]
+    fn test_verify_message_digest_detached_ok() {
+        let content = b"Hello, detached CMS!";
+        let pkcs7_der = build_test_signed_data(content, true);
+        let signed_data = parse_signed_data(&pkcs7_der);
+
+        let si = signed_data.signer_infos.0.iter().next().unwrap();
+        assert!(verify_message_digest(si, content).is_ok());
+    }
+
+    #[test]
+    fn test_verify_cms_signature_embedded_content_used() {
+        // embedded 署名で content=None を渡した場合、
+        // EncapsulatedContentInfo から自動取得して messageDigest を検証する。
+        // 信頼アンカーがないと証明書チェーン検証で失敗するが、
+        // messageDigest/RSA署名検証まで到達することを確認する。
+        let content = b"Test embedded content";
+        let pkcs7_der = build_test_signed_data(content, false);
+        let signed_data = parse_signed_data(&pkcs7_der);
+
+        let result = verify_cms_signature(&signed_data, None, &[]);
+        // 信頼アンカーなしなので証明書チェーンで失敗するが、
+        // "署名対象コンテンツが見つかりません" エラーにはならない
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            !msg.contains("署名対象コンテンツが見つかりません"),
+            "embedded コンテンツが取得できていない: {}",
+            msg
+        );
+        // messageDigest は通過し、RSA署名 or 証明書チェーンで失敗
+        assert!(
+            msg.contains("信頼アンカー") || msg.contains("RSA"),
+            "想定外のエラー: {}",
+            msg
+        );
     }
 }
