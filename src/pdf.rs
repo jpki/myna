@@ -38,8 +38,12 @@ fn find_startxref(data: &[u8]) -> Option<usize> {
 fn find_max_obj_id(data: &[u8], xref_offset: usize) -> usize {
     let mut max_id: usize = 0;
     let mut offset = xref_offset;
+    let mut visited = std::collections::HashSet::new();
 
     loop {
+        if !visited.insert(offset) {
+            break;
+        }
         let slice = &data[offset..];
         if slice.starts_with(b"xref") {
             // 通常の xref テーブル — "trailer" までをテキスト解析
@@ -125,8 +129,10 @@ fn extract_ref_value(text: &str, key: &str) -> Option<usize> {
 fn get_xref_dict_text(data: &[u8], xref_offset: usize) -> Option<String> {
     let slice = &data[xref_offset..];
 
-    // バイナリセーフに "trailer" を検索
-    if let Some(pos) = slice.windows(7).position(|w| w == b"trailer") {
+    // 通常の xref テーブルの場合のみ "trailer" を検索
+    if slice.starts_with(b"xref")
+        && let Some(pos) = slice.windows(7).position(|w| w == b"trailer")
+    {
         let trailer_slice = &slice[pos..];
         let end = trailer_slice
             .windows(2)
