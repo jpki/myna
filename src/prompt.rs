@@ -119,7 +119,7 @@ mod windows {
     use std::io::{self, Write as _};
 
     // Windows console API FFI
-    extern "system" {
+    unsafe extern "system" {
         fn GetStdHandle(nStdHandle: u32) -> *mut core::ffi::c_void;
         fn GetConsoleMode(hConsoleHandle: *mut core::ffi::c_void, lpMode: *mut u32) -> i32;
         fn SetConsoleMode(hConsoleHandle: *mut core::ffi::c_void, dwMode: u32) -> i32;
