@@ -215,14 +215,29 @@ impl fmt::Debug for ResponseAPDU {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
-pub struct APDUError {
-    pub res: ResponseAPDU,
+pub enum APDUError {
+    /// カードからの応答がエラーステータス
+    Status(ResponseAPDU),
+    /// カードとの通信自体に失敗
+    Transport(String),
+}
+
+impl APDUError {
+    /// 後方互換: ステータスエラーの ResponseAPDU を取得
+    pub fn res(&self) -> Option<&ResponseAPDU> {
+        match self {
+            APDUError::Status(res) => Some(res),
+            APDUError::Transport(_) => None,
+        }
+    }
 }
 
 impl fmt::Display for APDUError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            APDUError::Status(res) => write!(f, "APDU error: SW={:04X}", res.sw()),
+            APDUError::Transport(msg) => write!(f, "Transport error: {}", msg),
+        }
     }
 }
 
@@ -313,4 +328,20 @@ fn res_new() {
     assert_eq!(format!("{res:x}"), "010203");
     let res = ResponseAPDU::new(&[1, 2, 3, 4]);
     assert_eq!(format!("{res:x}"), "01020304");
+}
+
+#[test]
+fn apdu_error_status_display() {
+    let res = ResponseAPDU::new(&[0x6A, 0x82]);
+    let err = APDUError::Status(res);
+    assert_eq!(format!("{}", err), "APDU error: SW=6A82");
+    assert!(err.res().is_some());
+    assert_eq!(err.res().unwrap().sw(), 0x6A82);
+}
+
+#[test]
+fn apdu_error_transport_display() {
+    let err = APDUError::Transport("Not connected to card".to_string());
+    assert_eq!(format!("{}", err), "Transport error: Not connected to card");
+    assert!(err.res().is_none());
 }

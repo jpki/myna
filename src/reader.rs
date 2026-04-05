@@ -84,14 +84,17 @@ impl MynaReader {
         }
     }
 
-    fn transmit(&mut self, cmd: CommandAPDU) -> ResponseAPDU {
-        let card = self.card.as_ref().expect("Not connected to card");
+    fn transmit(&mut self, cmd: CommandAPDU) -> std::result::Result<ResponseAPDU, APDUError> {
+        let card = self
+            .card
+            .as_ref()
+            .ok_or_else(|| APDUError::Transport("Not connected to card".to_string()))?;
         let capdu = cmd.to_bytes();
         let mut rbuf = [0; 4096];
         let rapdu = card
             .transmit(&capdu, &mut rbuf)
-            .expect("Failed to transmit APDU command to card");
-        ResponseAPDU::new(rapdu)
+            .map_err(|e| APDUError::Transport(format!("Failed to transmit APDU: {}", e)))?;
+        Ok(ResponseAPDU::new(rapdu))
     }
 }
 
@@ -110,8 +113,8 @@ impl MynaReader {
         Ok(())
     }
 
-    fn transmit(&mut self, cmd: CommandAPDU) -> ResponseAPDU {
-        self.state.process(cmd)
+    fn transmit(&mut self, cmd: CommandAPDU) -> std::result::Result<ResponseAPDU, APDUError> {
+        Ok(self.state.process(cmd))
     }
 
     pub fn with_file(mut self, df: &str, ef: &str, data: Vec<u8>) -> Self {
@@ -137,12 +140,12 @@ impl MynaReader {
         log::debug!("SELECT DF aid={}", utils::hex_encode(aid));
         let cmd = CommandAPDU::case3(0x00, 0xA4, 0x04, 0x0C, aid);
         log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
+        let res = self.transmit(cmd)?;
         log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(())
         } else {
-            Err(APDUError { res })
+            Err(APDUError::Status(res))
         }
     }
 
@@ -151,12 +154,12 @@ impl MynaReader {
         log::debug!("SELECT EF fid={}", fid);
         let cmd = CommandAPDU::case3(0x00, 0xA4, 0x02, 0x0C, &bid);
         log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
+        let res = self.transmit(cmd)?;
         log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(())
         } else {
-            Err(APDUError { res })
+            Err(APDUError::Status(res))
         }
     }
 
@@ -172,10 +175,10 @@ impl MynaReader {
             let p2: u8 = (pos & 0xff) as u8;
             let cmd = CommandAPDU::case2(0x00, 0xB0, p1, p2, le);
             log::trace!("< {}", cmd);
-            let res = self.transmit(cmd);
+            let res = self.transmit(cmd)?;
             log::trace!("> {}", res);
             if res.sw() != 0x9000 {
-                return Err(APDUError { res });
+                return Err(APDUError::Status(res));
             }
             let n = res.data.len() as u16;
             if n == 0 {
@@ -203,12 +206,12 @@ impl MynaReader {
         log::debug!("READ PIN");
         let cmd = CommandAPDU::case1(0x00, 0x20, 0x00, 0x80);
         log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
+        let res = self.transmit(cmd)?;
         log::trace!("> {}", res);
         if res.sw1 == 0x63 {
             Ok(res.sw2 & 0x0f)
         } else {
-            Err(APDUError { res })
+            Err(APDUError::Status(res))
         }
     }
 
@@ -216,12 +219,12 @@ impl MynaReader {
         log::debug!("VERIFY PIN");
         let cmd = CommandAPDU::case3(0x00, 0x20, 0x00, 0x80, pin.as_bytes());
         log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
+        let res = self.transmit(cmd)?;
         log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(())
         } else {
-            Err(APDUError { res })
+            Err(APDUError::Status(res))
         }
     }
 
@@ -229,12 +232,12 @@ impl MynaReader {
         log::debug!("CHANGE PIN");
         let cmd = CommandAPDU::case3(0x00, 0x24, 0x01, 0x80, newpin.as_bytes());
         log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
+        let res = self.transmit(cmd)?;
         log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(())
         } else {
-            Err(APDUError { res })
+            Err(APDUError::Status(res))
         }
     }
 
@@ -243,12 +246,12 @@ impl MynaReader {
         let p2 = (sfi << 3) | 0x04;
         let cmd = CommandAPDU::case2(0x00, 0xB2, record, p2, 0);
         log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
+        let res = self.transmit(cmd)?;
         log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(res.data)
         } else {
-            Err(APDUError { res })
+            Err(APDUError::Status(res))
         }
     }
 
@@ -256,12 +259,12 @@ impl MynaReader {
         log::debug!("SIGNATURE data_len={}", data.len());
         let cmd = CommandAPDU::case4(0x80, 0x2A, 0x00, 0x80, data, 0);
         log::trace!("< {}", cmd);
-        let res = self.transmit(cmd);
+        let res = self.transmit(cmd)?;
         log::trace!("> {}", res);
         if res.sw() == 0x9000 {
             Ok(res.data)
         } else {
-            Err(APDUError { res })
+            Err(APDUError::Status(res))
         }
     }
 }
@@ -303,7 +306,7 @@ mod dummy_tests {
         r.connect().unwrap();
         select_jpki(&mut r);
         let err = r.select_ef("ffff").unwrap_err();
-        assert_eq!(err.res.sw(), 0x6A82);
+        assert_eq!(err.res().unwrap().sw(), 0x6A82);
     }
 
     #[test]
@@ -350,8 +353,8 @@ mod dummy_tests {
         select_jpki(&mut r);
         r.select_ef("0018").unwrap();
         let err = r.verify_pin("0000").unwrap_err();
-        assert_eq!(err.res.sw1, 0x63);
-        assert_eq!(err.res.sw2 & 0x0f, 2);
+        assert_eq!(err.res().unwrap().sw1, 0x63);
+        assert_eq!(err.res().unwrap().sw2 & 0x0f, 2);
     }
 
     #[test]
@@ -392,7 +395,7 @@ mod dummy_tests {
         r.verify_pin("5678").unwrap();
         // 古いPINで認証できないこと
         let err = r.verify_pin("1234").unwrap_err();
-        assert_eq!(err.res.sw1, 0x63);
+        assert_eq!(err.res().unwrap().sw1, 0x63);
     }
 
     #[test]
@@ -441,18 +444,18 @@ mod dummy_tests {
 
         // 1回目失敗: 残り2
         let err = r.verify_pin("0000").unwrap_err();
-        assert_eq!(err.res.sw2 & 0x0f, 2);
+        assert_eq!(err.res().unwrap().sw2 & 0x0f, 2);
 
         // 2回目失敗: 残り1
         let err = r.verify_pin("0000").unwrap_err();
-        assert_eq!(err.res.sw2 & 0x0f, 1);
+        assert_eq!(err.res().unwrap().sw2 & 0x0f, 1);
 
         // 3回目失敗: 残り0
         let err = r.verify_pin("0000").unwrap_err();
-        assert_eq!(err.res.sw2 & 0x0f, 0);
+        assert_eq!(err.res().unwrap().sw2 & 0x0f, 0);
 
         // ロック後も0のまま (saturating)
         let err = r.verify_pin("0000").unwrap_err();
-        assert_eq!(err.res.sw2 & 0x0f, 0);
+        assert_eq!(err.res().unwrap().sw2 & 0x0f, 0);
     }
 }
