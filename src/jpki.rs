@@ -75,17 +75,18 @@ impl<'a> JPKIAP<'a> {
     pub fn cert_read(
         &mut self,
         cert_type: &CertType,
-        password: Option<&str>,
-        pin: Option<&str>,
+        credential: Option<&str>,
     ) -> Result<Certificate, Error> {
         match cert_type {
             CertType::Sign => {
-                let pass = password.ok_or_else(|| Error::from("署名用パスワードが必要です"))?;
+                let cred = credential
+                    .ok_or_else(|| Error::from("署名用パスワードが必要です"))?
+                    .to_uppercase();
                 self.reader
                     .select_ef("001b")
                     .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
                 self.reader
-                    .verify_pin(pass)
+                    .verify_pin(&cred)
                     .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
                 self.reader
                     .select_ef("0001")
@@ -98,12 +99,14 @@ impl<'a> JPKIAP<'a> {
             }
             CertType::Auth => {
                 if self.token == "JPKIAPGPSETOKEN" {
-                    let p = pin.ok_or_else(|| Error::from("認証用PINが必要です"))?;
+                    let cred = credential
+                        .ok_or_else(|| Error::from("認証用PINが必要です"))?
+                        .to_uppercase();
                     self.reader
                         .select_ef("0018")
                         .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
                     self.reader
-                        .verify_pin(p)
+                        .verify_pin(&cred)
                         .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
                 }
                 self.reader
@@ -131,13 +134,14 @@ impl<'a> JPKIAP<'a> {
         credential: &str,
         data: &[u8],
     ) -> Result<Vec<u8>, Error> {
+        let credential = credential.to_uppercase();
         match key_type {
             KeyType::Sign => {
                 self.reader
                     .select_ef("001b")
                     .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
                 self.reader
-                    .verify_pin(credential)
+                    .verify_pin(&credential)
                     .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
             }
             KeyType::Auth => {
@@ -145,7 +149,7 @@ impl<'a> JPKIAP<'a> {
                     .select_ef("0018")
                     .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
                 self.reader
-                    .verify_pin(credential)
+                    .verify_pin(&credential)
                     .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
             }
         }
@@ -167,7 +171,7 @@ impl<'a> JPKIAP<'a> {
             KeyType::Sign => CertType::Sign,
             KeyType::Auth => CertType::Auth,
         };
-        let cert = self.cert_read(&cert_type, None, None)?;
+        let cert = self.cert_read(&cert_type, None)?;
         rsa_pkcs1_public_unpad(&cert, sig)
     }
 
@@ -417,7 +421,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki.cert_read(&CertType::Auth, None, None).unwrap();
+        let cert = jpki.cert_read(&CertType::Auth, None).unwrap();
         assert_eq!(first_subject_value(&cert), "Test auth User");
     }
 
@@ -452,9 +456,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki
-            .cert_read(&CertType::Sign, Some("SIGNATURE"), None)
-            .unwrap();
+        let cert = jpki.cert_read(&CertType::Sign, Some("SIGNATURE")).unwrap();
         assert_eq!(first_subject_value(&cert), "Test sign User");
     }
 
@@ -463,7 +465,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki.cert_read(&CertType::SignCa, None, None).unwrap();
+        let cert = jpki.cert_read(&CertType::SignCa, None).unwrap();
         assert_eq!(first_subject_value(&cert), "Test sign CA");
     }
 
@@ -472,7 +474,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki.cert_read(&CertType::AuthCa, None, None).unwrap();
+        let cert = jpki.cert_read(&CertType::AuthCa, None).unwrap();
         assert_eq!(first_subject_value(&cert), "Test auth CA");
     }
 
@@ -482,7 +484,7 @@ mod dummy_tests {
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
         assert_eq!(jpki.token(), "JPKIAPGPSETOKEN");
-        let cert = jpki.cert_read(&CertType::Auth, None, Some("1234")).unwrap();
+        let cert = jpki.cert_read(&CertType::Auth, Some("1234")).unwrap();
         assert_eq!(first_subject_value(&cert), "Test auth User");
     }
 
@@ -517,7 +519,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let result = jpki.cert_read(&CertType::Sign, None, None);
+        let result = jpki.cert_read(&CertType::Sign, None);
         assert!(result.is_err());
     }
 

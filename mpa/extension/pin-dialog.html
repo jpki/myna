@@ -27,11 +27,11 @@
   </head>
   <body>
     <main class="app">
-      <h1>暗証番号入力</h1>
-      <p class="lead">ログインのため、公的個人認証の認証用暗証番号(4桁)を入力してください。</p>
+      <h1 id="dialog-title"></h1>
+      <p id="dialog-lead" class="lead"></p>
       <form id="pin-form">
-        <label for="pin">暗証番号(4桁)</label>
-        <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="\d{4}" required autofocus>
+        <label id="pin-label" for="pin"></label>
+        <input id="pin" name="pin" type="password" autocomplete="off" required autofocus>
 
         <div class="actions">
           <button type="submit">OK</button>

@@ -325,8 +325,8 @@ mod tests {
     use super::*;
     use crate::pkcs7;
     use cms::content_info::ContentInfo;
-    use rsa::pkcs8::DecodePrivateKey;
     use rsa::RsaPrivateKey;
+    use rsa::pkcs8::DecodePrivateKey;
 
     /// テスト用の署名値を生成する（PKCS#1 v1.5 パディング付き）
     fn test_sign(priv_key: &RsaPrivateKey, data: &[u8]) -> Vec<u8> {
@@ -336,12 +336,11 @@ mod tests {
         let key_size = priv_key.size();
         let ps_len = key_size - data.len() - 3;
         let mut em = vec![0x00u8, 0x01];
-        em.extend(std::iter::repeat(0xffu8).take(ps_len));
+        em.extend(std::iter::repeat_n(0xffu8, ps_len));
         em.push(0x00);
         em.extend_from_slice(data);
         let m = BigUint::from_bytes_be(&em);
-        let c =
-            rsa_decrypt_and_check(priv_key, None::<&mut rsa::rand_core::OsRng>, &m).unwrap();
+        let c = rsa_decrypt_and_check(priv_key, None::<&mut rsa::rand_core::OsRng>, &m).unwrap();
         let mut sig = c.to_bytes_be();
         while sig.len() < key_size {
             sig.insert(0, 0u8);

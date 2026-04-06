@@ -452,22 +452,19 @@ fn run_jpki(cmd: &JpkiSubcommand) -> Result<(), Error> {
 }
 
 fn run_jpki_cert(args: &CertArgs) -> Result<(), Error> {
-    let password = match args.cert_type {
-        CertType::Sign => Some(prompt_sign_password(&args.password)),
-        _ => args.password.clone(),
-    };
     let mut reader = MynaReader::new()?;
     reader.connect()?;
     let mut jpki = reader.jpki_ap()?;
 
-    let pin = match args.cert_type {
+    let credential = match args.cert_type {
+        CertType::Sign => Some(prompt_sign_password(&args.password)),
         CertType::Auth if args.pin.is_none() && jpki.token() == "JPKIAPGPSETOKEN" => {
             Some(prompt_auth_pin(&args.pin))
         }
-        _ => args.pin.clone(),
+        _ => None,
     };
 
-    let cert = jpki.cert_read(&args.cert_type, password.as_deref(), pin.as_deref())?;
+    let cert = jpki.cert_read(&args.cert_type, credential.as_deref())?;
     cert_output(&cert, &args.format);
     Ok(())
 }

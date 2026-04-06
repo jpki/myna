@@ -3,6 +3,11 @@ use serde_json::json;
 use std::io;
 
 pub fn check() -> io::Result<()> {
+    let config = crate::load_config()?;
+    let uuid = config["uuid"]
+        .as_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "uuid not found in config"))?;
+
     let mut reader = match MynaReader::new() {
         Ok(r) => r,
         Err(e) => {
@@ -34,6 +39,7 @@ pub fn check() -> io::Result<()> {
         "result": "0",
         "version": env!("CARGO_PKG_VERSION"),
         "app": "mpa",
+        "uuid": uuid,
         "pid": std::process::id(), // そのうち消す
         "check": [
             ["pid", std::process::id()],

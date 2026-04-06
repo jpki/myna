@@ -45,6 +45,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     log("Host Version: " + res.version);
+    log("Host UUID: " + res.uuid);
     log("Host PID: " + res.pid);
   } catch (error) {
     log({

@@ -42,8 +42,8 @@ impl<'a> UnknownAP<'a> {
 
 #[cfg(all(test, feature = "dummy"))]
 mod tests {
-    use crate::reader::dummy::UNKNOWN_AID;
     use crate::reader::MynaReader;
+    use crate::reader::dummy::UNKNOWN_AID;
 
     fn setup_unknown_reader(data: Vec<u8>) -> MynaReader {
         // read_record(1, 1) で返されるデータはBER TLVでラップされている

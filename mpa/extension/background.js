@@ -1,6 +1,15 @@
 const HOST_NAME = "com.github.jpki.mpa";
 let pinDialog = null;
 
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === "install") {
+    const { installId } = await chrome.storage.local.get("installId");
+    if (!installId) {
+      await chrome.storage.local.set({ installId: crypto.randomUUID() });
+    }
+  }
+});
+
 chrome.windows.onRemoved.addListener((windowId) => {
   if (pinDialog && pinDialog.windowId === windowId) {
     pinDialog.resolve(null);
@@ -34,7 +43,8 @@ async function handleLaunch(msg, callback) {
     callback(null);
     return;
   }
-  const pin = await inputPin();
+  const mode = msg.mode || "01";
+  const pin = await inputPin(mode);
   if (pin === null) {
     callback(null);
     return;
@@ -54,14 +64,14 @@ function sendNative(msg, callback) {
   });
 }
 
-async function inputPin() {
+async function inputPin(mode) {
   const popupWidth = 420;
   const popupHeight = 280;
   const currentWindow = await chrome.windows.getCurrent();
   const left = Math.round(currentWindow.left + (currentWindow.width - popupWidth) / 2);
   const top = Math.round(currentWindow.top + (currentWindow.height - popupHeight) / 2);
   const createdWindow = await chrome.windows.create({
-    url: chrome.runtime.getURL("pin-dialog.html"),
+    url: chrome.runtime.getURL(`pin-dialog.html?mode=${mode}`),
     type: "popup",
     width: popupWidth,
     height: popupHeight,
