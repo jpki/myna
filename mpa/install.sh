@@ -6,7 +6,6 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-#HOST_PATH="$SCRIPT_DIR/../target/debug/mpa"
 HOST_PATH="$HOME/.cargo/bin/mpa"
 HOST_NAME="com.github.jpki.mpa"
 HOST_DESC="MPA for Linux"
@@ -93,6 +92,20 @@ fi
 
 # Firefox
 install_firefox "$HOME/.mozilla/native-messaging-hosts"
+
+# --- config.json ---
+CONFIG_DIR="$HOME/.config/mpa"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+if [ ! -f "$CONFIG_FILE" ]; then
+    UUID=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" <<CONFIG
+{"uuid": "$UUID"}
+CONFIG
+    echo "Created: $CONFIG_FILE"
+else
+    echo "Already exists: $CONFIG_FILE"
+fi
 
 echo ""
 echo "Done!"
