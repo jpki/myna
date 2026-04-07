@@ -60,7 +60,28 @@ function sendNative(msg, callback) {
       callback(null);
       return;
     }
+    if (response && response.result !== "0") {
+      showError(response.message || "不明なエラーが発生しました");
+    }
     callback(response);
+  });
+}
+
+function showError(message) {
+  const popupWidth = 420;
+  const popupHeight = 200;
+  chrome.windows.getCurrent().then((currentWindow) => {
+    const left = Math.round(currentWindow.left + (currentWindow.width - popupWidth) / 2);
+    const top = Math.round(currentWindow.top + (currentWindow.height - popupHeight) / 2);
+    chrome.windows.create({
+      url: chrome.runtime.getURL(`error-dialog.html?message=${encodeURIComponent(message)}`),
+      type: "popup",
+      width: popupWidth,
+      height: popupHeight,
+      left: left,
+      top: top,
+      focused: true,
+    });
   });
 }
 
