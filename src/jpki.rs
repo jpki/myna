@@ -71,54 +71,41 @@ impl<'a> JPKIAP<'a> {
         &self.token
     }
 
-    /// 証明書読み取り
-    pub fn cert_read(
-        &mut self,
-        cert_type: &CertType,
-        credential: Option<&str>,
-    ) -> Result<Certificate, Error> {
-        match cert_type {
-            CertType::Sign => {
-                let cred = credential
-                    .ok_or_else(|| Error::from("署名用パスワードが必要です"))?
-                    .to_uppercase();
+    /// PIN認証
+    pub fn verify(&mut self, key_type: &KeyType, credential: &str) -> Result<(), Error> {
+        let credential = credential.to_uppercase();
+        match key_type {
+            KeyType::Sign => {
                 self.reader
                     .select_ef("001b")
                     .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
-                self.reader
-                    .verify_pin(&cred)
-                    .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
-                self.reader
-                    .select_ef("0001")
-                    .map_err(|e| Error::with_source("署名用証明書EFの選択に失敗しました", e))?;
+                self.reader.verify_pin(&credential).map_err(|e| {
+                    Error::with_source("パスワードが間違っているか、ロックされています。", e)
+                })?;
             }
-            CertType::SignCa => {
+            KeyType::Auth => {
                 self.reader
-                    .select_ef("0002")
-                    .map_err(|e| Error::with_source("署名用CA証明書EFの選択に失敗しました", e))?;
-            }
-            CertType::Auth => {
-                if self.token == "JPKIAPGPSETOKEN" {
-                    let cred = credential
-                        .ok_or_else(|| Error::from("認証用PINが必要です"))?
-                        .to_uppercase();
-                    self.reader
-                        .select_ef("0018")
-                        .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
-                    self.reader
-                        .verify_pin(&cred)
-                        .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
-                }
-                self.reader
-                    .select_ef("000a")
-                    .map_err(|e| Error::with_source("認証用証明書EFの選択に失敗しました", e))?;
-            }
-            CertType::AuthCa => {
-                self.reader
-                    .select_ef("000b")
-                    .map_err(|e| Error::with_source("認証用CA証明書EFの選択に失敗しました", e))?;
+                    .select_ef("0018")
+                    .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
+                self.reader.verify_pin(&credential).map_err(|e| {
+                    Error::with_source("暗証番号が間違っているか、ロックされています。", e)
+                })?;
             }
         }
+        Ok(())
+    }
+
+    /// 証明書読み取り
+    pub fn cert_read(&mut self, cert_type: &CertType) -> Result<Certificate, Error> {
+        let ef = match cert_type {
+            CertType::Sign => "0001",
+            CertType::SignCa => "0002",
+            CertType::Auth => "000a",
+            CertType::AuthCa => "000b",
+        };
+        self.reader
+            .select_ef(ef)
+            .map_err(|e| Error::with_source("証明書EFの選択に失敗しました", e))?;
         let cert_der = self
             .reader
             .read_binary_all()
@@ -128,31 +115,7 @@ impl<'a> JPKIAP<'a> {
     }
 
     /// 低レベルRSA署名
-    pub fn pkey_sign(
-        &mut self,
-        key_type: &KeyType,
-        credential: &str,
-        data: &[u8],
-    ) -> Result<Vec<u8>, Error> {
-        let credential = credential.to_uppercase();
-        match key_type {
-            KeyType::Sign => {
-                self.reader
-                    .select_ef("001b")
-                    .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
-                self.reader
-                    .verify_pin(&credential)
-                    .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
-            }
-            KeyType::Auth => {
-                self.reader
-                    .select_ef("0018")
-                    .map_err(|e| Error::with_source("認証用PIN EFの選択に失敗しました", e))?;
-                self.reader
-                    .verify_pin(&credential)
-                    .map_err(|e| Error::with_source("PIN認証に失敗しました", e))?;
-            }
-        }
+    pub fn pkey_sign(&mut self, key_type: &KeyType, data: &[u8]) -> Result<Vec<u8>, Error> {
         let key_ef = match key_type {
             KeyType::Sign => "001a",
             KeyType::Auth => "0017",
@@ -171,7 +134,7 @@ impl<'a> JPKIAP<'a> {
             KeyType::Sign => CertType::Sign,
             KeyType::Auth => CertType::Auth,
         };
-        let cert = self.cert_read(&cert_type, None)?;
+        let cert = self.cert_read(&cert_type)?;
         rsa_pkcs1_public_unpad(&cert, sig)
     }
 
@@ -179,16 +142,9 @@ impl<'a> JPKIAP<'a> {
     pub fn cms_sign(
         &mut self,
         content: &[u8],
-        password: &str,
         alg: pkcs7::HashAlgorithm,
         detached: bool,
     ) -> Result<Vec<u8>, Error> {
-        self.reader
-            .select_ef("001b")
-            .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
-        self.reader
-            .verify_pin(password)
-            .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
         self.reader
             .select_ef("0001")
             .map_err(|e| Error::with_source("署名用証明書EFの選択に失敗しました", e))?;
@@ -214,13 +170,7 @@ impl<'a> JPKIAP<'a> {
     }
 
     /// PDF電子署名: 署名済みPDFバイト列を返す
-    pub fn pdf_sign(&mut self, pdf_data: &[u8], password: &str) -> Result<Vec<u8>, Error> {
-        self.reader
-            .select_ef("001b")
-            .map_err(|e| Error::with_source("署名用PIN EFの選択に失敗しました", e))?;
-        self.reader
-            .verify_pin(password)
-            .map_err(|e| Error::with_source("パスワード認証に失敗しました", e))?;
+    pub fn pdf_sign(&mut self, pdf_data: &[u8]) -> Result<Vec<u8>, Error> {
         self.reader
             .select_ef("0001")
             .map_err(|e| Error::with_source("署名用証明書EFの選択に失敗しました", e))?;
@@ -421,7 +371,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki.cert_read(&CertType::Auth, None).unwrap();
+        let cert = jpki.cert_read(&CertType::Auth).unwrap();
         assert_eq!(first_subject_value(&cert), "Test auth User");
     }
 
@@ -430,10 +380,9 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
+        jpki.verify(&KeyType::Sign, "SIGNATURE").unwrap();
         let digest_info = pkcs7::build_digest_info(pkcs7::HashAlgorithm::Sha256, &[0u8; 32]);
-        let sig = jpki
-            .pkey_sign(&KeyType::Sign, "SIGNATURE", &digest_info)
-            .unwrap();
+        let sig = jpki.pkey_sign(&KeyType::Sign, &digest_info).unwrap();
         assert!(!sig.is_empty());
     }
 
@@ -442,9 +391,10 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
+        jpki.verify(&KeyType::Sign, "SIGNATURE").unwrap();
         let content = b"Hello, World!";
         let pkcs7_der = jpki
-            .cms_sign(content, "SIGNATURE", pkcs7::HashAlgorithm::Sha256, false)
+            .cms_sign(content, pkcs7::HashAlgorithm::Sha256, false)
             .unwrap();
 
         let ci = cms::content_info::ContentInfo::from_der(&pkcs7_der).unwrap();
@@ -456,7 +406,8 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki.cert_read(&CertType::Sign, Some("SIGNATURE")).unwrap();
+        jpki.verify(&KeyType::Sign, "SIGNATURE").unwrap();
+        let cert = jpki.cert_read(&CertType::Sign).unwrap();
         assert_eq!(first_subject_value(&cert), "Test sign User");
     }
 
@@ -465,7 +416,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki.cert_read(&CertType::SignCa, None).unwrap();
+        let cert = jpki.cert_read(&CertType::SignCa).unwrap();
         assert_eq!(first_subject_value(&cert), "Test sign CA");
     }
 
@@ -474,7 +425,7 @@ mod dummy_tests {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let cert = jpki.cert_read(&CertType::AuthCa, None).unwrap();
+        let cert = jpki.cert_read(&CertType::AuthCa).unwrap();
         assert_eq!(first_subject_value(&cert), "Test auth CA");
     }
 
@@ -484,7 +435,8 @@ mod dummy_tests {
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
         assert_eq!(jpki.token(), "JPKIAPGPSETOKEN");
-        let cert = jpki.cert_read(&CertType::Auth, Some("1234")).unwrap();
+        jpki.verify(&KeyType::Auth, "1234").unwrap();
+        let cert = jpki.cert_read(&CertType::Auth).unwrap();
         assert_eq!(first_subject_value(&cert), "Test auth User");
     }
 
@@ -494,9 +446,8 @@ mod dummy_tests {
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
         let digest_info = pkcs7::build_digest_info(pkcs7::HashAlgorithm::Sha256, &[0u8; 32]);
-        let sig = jpki
-            .pkey_sign(&KeyType::Auth, "1234", &digest_info)
-            .unwrap();
+        jpki.verify(&KeyType::Auth, "1234").unwrap();
+        let sig = jpki.pkey_sign(&KeyType::Auth, &digest_info).unwrap();
         assert!(!sig.is_empty());
     }
 
@@ -507,7 +458,7 @@ mod dummy_tests {
         let mut jpki = reader.jpki_ap().unwrap();
         let content = b"Hello, World!";
         let pkcs7_der = jpki
-            .cms_sign(content, "SIGNATURE", pkcs7::HashAlgorithm::Sha256, true)
+            .cms_sign(content, pkcs7::HashAlgorithm::Sha256, true)
             .unwrap();
 
         let ci = cms::content_info::ContentInfo::from_der(&pkcs7_der).unwrap();
@@ -515,21 +466,11 @@ mod dummy_tests {
     }
 
     #[test]
-    fn test_cert_read_sign_without_password_fails() {
+    fn test_verify_wrong_password_fails() {
         let mut reader = setup_reader();
         reader.connect().unwrap();
         let mut jpki = reader.jpki_ap().unwrap();
-        let result = jpki.cert_read(&CertType::Sign, None);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_pkey_sign_wrong_password_fails() {
-        let mut reader = setup_reader();
-        reader.connect().unwrap();
-        let mut jpki = reader.jpki_ap().unwrap();
-        let digest_info = pkcs7::build_digest_info(pkcs7::HashAlgorithm::Sha256, &[0u8; 32]);
-        let result = jpki.pkey_sign(&KeyType::Sign, "WRONGPW1", &digest_info);
+        let result = jpki.verify(&KeyType::Sign, "WRONGPW1");
         assert!(result.is_err());
     }
 }

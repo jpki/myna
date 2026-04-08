@@ -46,7 +46,8 @@ struct TextSuccessResponse {
 
 #[derive(Serialize)]
 struct ErrorResponse {
-    result: &'static str,
+    result: String,
+    message: String,
 }
 
 fn generate_combination_code(manufacture_number: &str, uuid_hex: &str) -> io::Result<String> {
@@ -143,9 +144,12 @@ pub(crate) fn send_message<T: Serialize>(msg: &T) -> io::Result<()> {
     stdout.flush()
 }
 
-fn send_error_response(message: &str) -> io::Result<()> {
+fn send_error(message: String) -> io::Result<()> {
     log::error!("{}", message);
-    send_message(&ErrorResponse { result: "1" })
+    send_message(&ErrorResponse {
+        result: "1".to_string(),
+        message,
+    })
 }
 
 fn auth_pin(msg: &Value) -> Option<String> {
@@ -165,12 +169,12 @@ fn auth(msg: &Value) -> io::Result<()> {
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
     if service_id != Some("01") {
-        return send_error_response("Unsupported service_id");
+        return send_error("Unsupported service_id".to_string());
     }
 
     let digest_b64 = match msg.get("digest").and_then(|v| v.as_str()) {
         Some(digest) => digest,
-        None => return send_error_response("digest is required"),
+        None => return send_error("digest is required".to_string()),
     };
 
     let pin = auth_pin(msg);
@@ -181,33 +185,36 @@ fn auth(msg: &Value) -> io::Result<()> {
         Ok(r)
     }) {
         Ok(r) => r,
-        Err(e) => return send_error_response(&format!("failed to connect: {}", e)),
+        Err(e) => return send_error(format!("failed to connect: {}", e)),
     };
     let mut jpki = match reader.jpki_ap() {
         Ok(j) => j,
-        Err(e) => return send_error_response(&format!("failed to select JPKI AP: {}", e)),
+        Err(e) => return send_error(format!("failed to select JPKI AP: {}", e)),
     };
 
     let digest = match utils::base64_decode(digest_b64) {
         Ok(d) => d,
-        Err(e) => return send_error_response(&format!("failed to decode digest: {}", e)),
+        Err(e) => return send_error(format!("failed to decode digest: {}", e)),
     };
-    let signature = match jpki.pkey_sign(&KeyType::Auth, pin.as_deref().unwrap_or(""), &digest) {
+    if let Err(e) = jpki.verify(&KeyType::Auth, pin.as_deref().unwrap_or("")) {
+        return send_error(e.to_string());
+    }
+    let signature = match jpki.pkey_sign(&KeyType::Auth, &digest) {
         Ok(sig) => utils::base64_encode(&sig),
-        Err(e) => return send_error_response(&format!("failed to sign digest: {}", e)),
+        Err(e) => return send_error(format!("failed to sign digest: {}", e)),
     };
 
-    let certificate = match jpki.cert_read(&CertType::Auth, pin.as_deref()) {
+    let certificate = match jpki.cert_read(&CertType::Auth) {
         Ok(cert) => match cert.to_der() {
             Ok(der) => utils::base64_encode_nopad(der.as_slice()),
-            Err(e) => return send_error_response(&format!("failed to encode certificate: {}", e)),
+            Err(e) => return send_error(format!("failed to encode certificate: {}", e)),
         },
-        Err(e) => return send_error_response(&format!("failed to load certificate: {}", e)),
+        Err(e) => return send_error(format!("failed to load certificate: {}", e)),
     };
 
     let manufacture_number = match reader.unknown_ap().and_then(|mut u| u.read_manufacture()) {
         Ok(m) => m,
-        Err(e) => return send_error_response(&format!("failed to read manufacture number: {}", e)),
+        Err(e) => return send_error(format!("failed to read manufacture number: {}", e)),
     };
     let combination_code = generate_combination_code(&manufacture_number, uuid)?;
 
@@ -231,19 +238,19 @@ fn sign(msg: &Value) -> io::Result<()> {
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
     if service_id != Some("01") {
-        return send_error_response("Unsupported service_id");
+        return send_error("Unsupported service_id".to_string());
     }
 
     let digests_b64: Vec<&str> = match msg.get("digest") {
         Some(Value::Array(arr)) => {
             let v: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
             if v.is_empty() {
-                return send_error_response("digest array is empty");
+                return send_error("digest array is empty".to_string());
             }
             v
         }
         Some(Value::String(s)) => vec![s.as_str()],
-        _ => return send_error_response("digest is required"),
+        _ => return send_error("digest is required".to_string()),
     };
 
     let pin = auth_pin(msg);
@@ -254,37 +261,40 @@ fn sign(msg: &Value) -> io::Result<()> {
         Ok(r)
     }) {
         Ok(r) => r,
-        Err(e) => return send_error_response(&format!("failed to connect: {}", e)),
+        Err(e) => return send_error(format!("failed to connect: {}", e)),
     };
     let mut jpki = match reader.jpki_ap() {
         Ok(j) => j,
-        Err(e) => return send_error_response(&format!("failed to select JPKI AP: {}", e)),
+        Err(e) => return send_error(format!("failed to select JPKI AP: {}", e)),
     };
 
+    if let Err(e) = jpki.verify(&KeyType::Sign, pin.as_deref().unwrap_or("")) {
+        return send_error(e.to_string());
+    }
     let mut signatures = Vec::new();
     for digest_b64 in &digests_b64 {
         let digest = match utils::base64_decode(digest_b64) {
             Ok(d) => d,
-            Err(e) => return send_error_response(&format!("failed to decode digest: {}", e)),
+            Err(e) => return send_error(format!("failed to decode digest: {}", e)),
         };
-        let sig = match jpki.pkey_sign(&KeyType::Sign, pin.as_deref().unwrap_or(""), &digest) {
+        let sig = match jpki.pkey_sign(&KeyType::Sign, &digest) {
             Ok(sig) => utils::base64_encode(&sig),
-            Err(e) => return send_error_response(&format!("failed to sign digest: {}", e)),
+            Err(e) => return send_error(format!("failed to sign digest: {}", e)),
         };
         signatures.push(sig);
     }
 
-    let certificate = match jpki.cert_read(&CertType::Sign, pin.as_deref()) {
+    let certificate = match jpki.cert_read(&CertType::Sign) {
         Ok(cert) => match cert.to_der() {
             Ok(der) => utils::base64_encode_nopad(der.as_slice()),
-            Err(e) => return send_error_response(&format!("failed to encode certificate: {}", e)),
+            Err(e) => return send_error(format!("failed to encode certificate: {}", e)),
         },
-        Err(e) => return send_error_response(&format!("failed to load certificate: {}", e)),
+        Err(e) => return send_error(format!("failed to load certificate: {}", e)),
     };
 
     let manufacture_number = match reader.unknown_ap().and_then(|mut u| u.read_manufacture()) {
         Ok(m) => m,
-        Err(e) => return send_error_response(&format!("failed to read manufacture number: {}", e)),
+        Err(e) => return send_error(format!("failed to read manufacture number: {}", e)),
     };
     let combination_code = generate_combination_code(&manufacture_number, uuid)?;
 
@@ -308,7 +318,7 @@ fn text(msg: &Value) -> io::Result<()> {
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
     if service_id != Some("01") {
-        return send_error_response("Unsupported service_id");
+        return send_error("Unsupported service_id".to_string());
     }
 
     let pin = auth_pin(msg);
@@ -319,22 +329,22 @@ fn text(msg: &Value) -> io::Result<()> {
         Ok(r)
     }) {
         Ok(r) => r,
-        Err(e) => return send_error_response(&format!("failed to connect: {}", e)),
+        Err(e) => return send_error(format!("failed to connect: {}", e)),
     };
 
     let mut text = match reader.text_ap() {
         Ok(j) => j,
-        Err(e) => return send_error_response(&format!("failed to select Text AP: {}", e)),
+        Err(e) => return send_error(format!("failed to select Text AP: {}", e)),
     };
 
     let attrs = match text.attrs(pin.as_deref().unwrap_or("")) {
         Ok(a) => a,
-        Err(e) => return send_error_response(&format!("failed to read attrs: {}", e)),
+        Err(e) => return send_error(format!("failed to read attrs: {}", e)),
     };
 
     let manufacture_number = match reader.unknown_ap().and_then(|mut u| u.read_manufacture()) {
         Ok(m) => m,
-        Err(e) => return send_error_response(&format!("failed to read manufacture number: {}", e)),
+        Err(e) => return send_error(format!("failed to read manufacture number: {}", e)),
     };
     let combination_code = generate_combination_code(&manufacture_number, uuid)?;
 
@@ -375,7 +385,7 @@ fn main() -> io::Result<()> {
                 log::info!("received close request");
                 break;
             }
-            _ => send_error_response(&format!("Unsupported mode {:?}", mode))?,
+            _ => send_error(format!("Unsupported mode {:?}", mode))?,
         }
     }
     Ok(())

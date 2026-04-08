@@ -456,15 +456,17 @@ fn run_jpki_cert(args: &CertArgs) -> Result<(), Error> {
     reader.connect()?;
     let mut jpki = reader.jpki_ap()?;
 
-    let credential = match args.cert_type {
-        CertType::Sign => Some(prompt_sign_password(&args.password)),
-        CertType::Auth if args.pin.is_none() && jpki.token() == "JPKIAPGPSETOKEN" => {
-            Some(prompt_auth_pin(&args.pin))
+    match args.cert_type {
+        CertType::Sign => {
+            jpki.verify(&KeyType::Sign, &prompt_sign_password(&args.password))?;
         }
-        _ => None,
+        CertType::Auth if args.pin.is_none() && jpki.token() == "JPKIAPGPSETOKEN" => {
+            jpki.verify(&KeyType::Auth, &prompt_auth_pin(&args.pin))?;
+        }
+        _ => {}
     };
 
-    let cert = jpki.cert_read(&args.cert_type, credential.as_deref())?;
+    let cert = jpki.cert_read(&args.cert_type)?;
     cert_output(&cert, &args.format);
     Ok(())
 }
@@ -478,7 +480,8 @@ fn run_jpki_pkey_sign(args: &PkeySignArgs) -> Result<(), Error> {
     let mut reader = MynaReader::new()?;
     reader.connect()?;
     let mut jpki = reader.jpki_ap()?;
-    let signature = jpki.pkey_sign(&args.key_type, &credential, &content)?;
+    jpki.verify(&args.key_type, &credential)?;
+    let signature = jpki.pkey_sign(&args.key_type, &content)?;
     fs::write(&args.output, &signature)?;
     println!("署名を保存しました: {}", args.output);
     Ok(())
@@ -511,7 +514,8 @@ fn run_jpki_cms_sign(args: &CmsSignArgs) -> Result<(), Error> {
     let mut reader = MynaReader::new()?;
     reader.connect()?;
     let mut jpki = reader.jpki_ap()?;
-    let pkcs7_der = jpki.cms_sign(&content, &password, alg, args.detached)?;
+    jpki.verify(&KeyType::Sign, &password)?;
+    let pkcs7_der = jpki.cms_sign(&content, alg, args.detached)?;
 
     let output_data = match args.format {
         CmsFormat::Der => pkcs7_der,
@@ -576,7 +580,8 @@ fn run_jpki_pdf_sign(args: &PdfSignArgs) -> Result<(), Error> {
     let mut reader = MynaReader::new()?;
     reader.connect()?;
     let mut jpki = reader.jpki_ap()?;
-    let signed_pdf = jpki.pdf_sign(&pdf_data, &password)?;
+    jpki.verify(&KeyType::Sign, &password)?;
+    let signed_pdf = jpki.pdf_sign(&pdf_data)?;
 
     fs::write(&args.output, &signed_pdf)?;
     println!("PDF署名を保存しました: {}", args.output);
