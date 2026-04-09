@@ -3,7 +3,11 @@
   "name": "MPA for Linux",
   "version": "24.0.1",
   "description": "Linuxユーザーでも様々なオンライン行政サービスを利用するためのアプリケーションです。非公式ですので自己責任でご利用ください。",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAywd+m1SVuSCNxVe0m+fw62swuqDpZqTM1yMuqsBHVjMKY0d2gSqLwIIMU9oy0ez5mSRyfL7NXAZID+agntq77pauPrROsrc4H37SI2sXLfA3sCmlLzn7VUkarh9Tg4FMmZA/jxTSm5d+qKVpByB4zIDfCxugS7DUd1wKG7UTsXXaZrYGF0TsQMB1xmuqGQlY3aiiWg+iwKL/3XFA7Gr6iv8ZbU63pb9Zux9lJvRTBi+/4trzihDQ1+ObPzbCO/QopKRDOfgCO8X5MPNrh+md2WtgQ4iQ4BDm1l+Sy3avHLkc2Nyp9ifuWw5iRrEwQqjuRd7D8aDYgx8QIHU0QLg+dQIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvZX9M0vlU7dmh+qgBj2sxycptRKo5BnfkN6d6WNlRTVPop9gxLroHZ3+FwhIT3fCwDe3WueHJvDsNNYae++OhKgwbzi7P5HWPVg67eMT0cGZvybYKJNGL+iSjbXpzAzQw6UPxXeW7eX/7CG/nqYrNQz8kkxyJwNYJagsmEbMNsnquPG1TQxUYgmpwDP71oxVQ5TWKB1M11kzFJWR6hvMxWcPef6vXMIK+Fs1TWd7tCW6NUpHUa03RxG47B49CyAs0hMk/ymJcZ5oYn8uixnDzff0z5Qfoq2XTq9rA1l1e8QjEx/Ncg/0SQn4+n3ffI5/GPaDKGCIdV09VYRBVpyk2wIDAQAB",
+  "icons": {
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": [
     "nativeMessaging",
     "storage"
