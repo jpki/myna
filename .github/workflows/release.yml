@@ -52,8 +52,38 @@ jobs:
           name: myna-${{ matrix.target }}
           path: myna-${{ github.ref_name }}-${{ matrix.target }}.zip
 
+  build-mpa:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build mpa
+        run: cargo build --release -p mpa
+
+      - name: Package mpa
+        run: |
+          mkdir -p mpa-${{ github.ref_name }}-linux
+          cp target/release/mpa mpa-${{ github.ref_name }}-linux/
+          cp mpa/README.md mpa-${{ github.ref_name }}-linux/
+          cp mpa/install.sh mpa-${{ github.ref_name }}-linux/
+          cp -r mpa/extension mpa-${{ github.ref_name }}-linux/
+          tar czf mpa-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz mpa-${{ github.ref_name }}-linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mpa-linux
+          path: mpa-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
+
   release:
-    needs: build
+    needs: [build, build-mpa]
     runs-on: ubuntu-latest
 
     steps:
@@ -68,3 +98,4 @@ jobs:
           generate_release_notes: true
           files: |
             myna-*
+            mpa-*

@@ -3,15 +3,20 @@
 # Native Messaging Hostのインストールスクリプト
 # Chrome / Chromium / Firefox に対応
 #
+# インストールスクリプトで行うこと
+# 1. ホストアプリケーションmpaの配置
+# 2. manifest.jsonの配置
+# 3. config.jsonの配置(UUID生成)
+
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HOST_PATH="$HOME/.cargo/bin/mpa"
+HOST_PATH="$HOME/.local/bin/mpa"
 HOST_NAME="com.github.jpki.mpa"
 HOST_DESC="MPA for Linux"
 
 # Chrome拡張ID (manifest.jsonのkeyフィールドから算出された固定ID)
-CHROME_EXTENSION_ID="jpejagnopiamoombofcidkoakjkpadog"
+CHROME_EXTENSION_ID="mpaohblnoacafmpfmimdpnngljefbhmf"
 CHROME_USER_DATA_DIR=""
 
 usage() {
@@ -75,9 +80,16 @@ MANIFEST
     echo "Installed: $dir/$HOST_NAME.json"
 }
 
-echo "=== Installing Native Messaging Host manifests ==="
-echo "Host path: $HOST_PATH"
-echo ""
+echo "=== Installing MPA for Linux ==="
+
+# --- mpa バイナリのインストール ---
+if [ -f "$SCRIPT_DIR/mpa" ]; then
+    mkdir -p "$(dirname "$HOST_PATH")"
+    install -m 755 "$SCRIPT_DIR/mpa" "$HOST_PATH"
+    echo "Installed: $HOST_PATH"
+else
+    echo "Warning: $SCRIPT_DIR/mpa not found, skipping binary install"
+fi
 
 # --user-data-dir が指定された場合はそこにインストール
 if [ -n "$CHROME_USER_DATA_DIR" ]; then
