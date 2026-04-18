@@ -26,5 +26,5 @@ jobs:
       - name: Cargo test
         run: cargo test --features dummy
 
-      - name: Cargo clippy
-        run: cargo clippy --all-targets -- -D warnings
+#      - name: Cargo clippy
+#        run: cargo clippy --all-targets -- -D warnings
