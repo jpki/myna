@@ -12,25 +12,31 @@
 
 ## 認証シーケンス
 
+allowCredentials指定ありの最もシンプルなケース
+
 ```mermaid
 sequenceDiagram
     autonumber
     participant User as ユーザー
-    participant Auth as 認証器 (Authenticator)
-    participant Client as ブラウザ (WebAuthn API)
-    participant RP as サーバー (Relying Party)
+    participant Card as カード
+    participant Ext as ブラウザ拡張
+    participant RP as サーバー (RP)
 
-    User->>RP: ログイン開始リクエスト
-    RP->>RP: チャレンジコード生成
-    RP->>Client: 認証オプション (Challenge, AllowCredentials)
+    User->>RP: ログイン操作
+    RP-->>Ext: 認証オプション<br/>(challenge, allowCredentials)
+    Note over Ext: credentialId 照合 → userId 特定
 
-    Client->>Auth: 署名要求 (navigator.credentials.get)
-    Note over Auth: ユーザーの存在確認<br/>(生体認証など)
-    Auth->>Auth: 秘密鍵でチャレンジに署名
-    Auth->>Client: 署名済みデータ (Signature, AuthenticatorData)
+    Ext->>User: PIN 入力要求
+    User->>Ext: PIN 入力 (UV)
 
-    Client->>RP: 認証応答 (Credential ID, Signature, ClientDataJSON)
-    RP->>RP: 保存されている公開鍵を取得
-    RP->>RP: 署名の検証 & チャレンジの確認
+    Note over Ext: Ed25519鍵の導出開始
+
+    Ext->>Card: RSA署名(PIN, rpId, userId)
+    Card-->>Ext: RSA署名値
+
+    Note over Ext: Ed25519鍵を導出、authenticatorDataに署名
+
+    Ext->>RP: 認証応答
+    Note over RP: Ed25519公開鍵で署名検証
     RP->>User: 認証成功・ログイン完了
 ```
