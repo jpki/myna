@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FIDO2 認証確認</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      width: 360px;
+      padding: 24px;
+      margin: 0;
+      background: #fafafa;
+      color: #333;
+    }
+    h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+      color: #1a1a1a;
+    }
+    .info {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+    .info-label {
+      color: #666;
+      font-size: 13px;
+    }
+    .info-value {
+      font-weight: 600;
+      font-size: 13px;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pin-section {
+      margin-bottom: 16px;
+    }
+    .pin-label {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    #pin {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      font-size: 18px;
+      letter-spacing: 8px;
+      text-align: center;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-family: monospace;
+    }
+    #pin:focus {
+      outline: none;
+      border-color: #1a73e8;
+    }
+    .error {
+      color: #d93025;
+      font-size: 12px;
+      min-height: 16px;
+      margin-top: 4px;
+    }
+    .buttons {
+      display: flex;
+      gap: 12px;
+    }
+    button {
+      flex: 1;
+      padding: 10px 0;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #approve {
+      background: #1a73e8;
+      color: #fff;
+    }
+    #approve:hover:not(:disabled) {
+      background: #1557b0;
+    }
+    #reject {
+      background: #e8eaed;
+      color: #333;
+    }
+    #reject:hover {
+      background: #d2d5d9;
+    }
+  </style>
+</head>
+<body>
+  <h2>FIDO2 操作確認</h2>
+  <div class="info">
+    <div class="info-row">
+      <span class="info-label">操作</span>
+      <span class="info-value" id="operation">-</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">RP</span>
+      <span class="info-value" id="rpId">-</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">ユーザー</span>
+      <span class="info-value" id="userName">-</span>
+    </div>
+  </div>
+  <div class="pin-section">
+    <div class="pin-label">利用者証明用パスワード（4桁）</div>
+    <input id="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" autofocus>
+    <div class="error" id="error"></div>
+  </div>
+  <div class="buttons">
+    <button id="reject">拒否</button>
+    <button id="approve" disabled>確定</button>
+  </div>
+  <script src="approval.js"></script>
+</body>
+</html>

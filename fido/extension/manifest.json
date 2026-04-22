@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Myna FIDO",
+  "version": "1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4m3xzC+siHlGtIZ5GP3VhC085FUoMRTg84W457HNBiYC0GB1td63plD6ZOivf9JPN7s9GHZk7/ijtX8YZPXa5szusMeS0DHD+4MKP1mlHMSAgER1YkvWO62E1SRxyhZ+44qIafr1u3H2ClMfIm4juthgwHmmEOF9GVrWDZwcJ/A06KxyMRDxRSCmke9RajHOSO7m0FNp7dOEE7f6+amIFVC+FvUpzwWJmsz5tAaRcmXxKSGH+ClH6LJk0Wk8xiLrdB3XAQW58/B+zp2DsmGQTM8yuj+Gvf41YFUxQ10L8L3vH6JVk2arXBiDQnjMp33EiUXCa4DOBd5Ohb/tNUelJwIDAQAB",
+  "permissions": ["webAuthenticationProxy", "storage", "windows", "nativeMessaging"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
