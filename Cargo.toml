@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 base16ct = { version = "1", features = ["alloc"] }
 base64ct = { version = "1", features = ["alloc"] }
-clap = { version = "4.6.0", features = ["cargo", "derive"] }
+clap = { version = "4.6.1", features = ["cargo", "derive"] }
 cms = "0.2"
 der = { version = "0.7", features = ["alloc", "derive", "pem"] }
 flate2 = "1"
