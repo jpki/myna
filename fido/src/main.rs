@@ -5,20 +5,48 @@ use log::{LevelFilter, info};
 use myna::jpki::KeyType;
 use myna::reader::MynaReader;
 use myna::utils;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
+use std::time::Duration;
 
 const SHA256_DIGEST_INFO_PREFIX: [u8; 19] = [
     0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05,
     0x00, 0x04, 0x20,
 ];
 
+const RESULT_OK: &str = "0";
+const RESULT_ERR: &str = "1";
+
+// ============================================================
+// Request / Response 型
+// ============================================================
+
+#[derive(Deserialize)]
+struct DeriveReq {
+    pin: String,
+    #[serde(rename = "rpId")]
+    rp_id: String,
+    #[serde(rename = "userId")]
+    user_id_b64: String,
+}
+
+#[derive(Deserialize)]
+struct SignReq {
+    pin: String,
+    #[serde(rename = "rpId")]
+    rp_id: String,
+    #[serde(rename = "userId")]
+    user_id_b64: String,
+    #[serde(rename = "message")]
+    message_b64: String,
+}
+
 #[derive(Serialize)]
 struct DeriveResponse {
-    result: String,
+    result: &'static str,
     #[serde(rename = "publicKey")]
     public_key: String,
     #[serde(rename = "credentialId")]
@@ -27,7 +55,7 @@ struct DeriveResponse {
 
 #[derive(Serialize)]
 struct SignResponse {
-    result: String,
+    result: &'static str,
     #[serde(rename = "publicKey")]
     public_key: String,
     #[serde(rename = "credentialId")]
@@ -37,38 +65,13 @@ struct SignResponse {
 
 #[derive(Serialize)]
 struct ErrorResponse {
-    result: String,
+    result: &'static str,
     message: String,
 }
 
-fn setup_logging() -> Result<(), fern::InitError> {
-    let mut dispatch = Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "[{}][{}][{}] {}",
-                Local::now().format("%Y-%m-%d %H:%M:%S"),
-                record.target(),
-                record.level(),
-                message
-            ))
-        })
-        .level(LevelFilter::Info);
-
-    if let Some(log_path) = std::env::var_os("MYNA_FIDO_LOG") {
-        let log_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_path)?;
-        dispatch = dispatch.chain(log_file);
-    } else if !cfg!(debug_assertions) {
-        return Ok(());
-    } else {
-        dispatch = dispatch.chain(io::stderr());
-    }
-
-    dispatch.apply()?;
-    Ok(())
-}
+// ============================================================
+// Native Messaging I/O
+// ============================================================
 
 fn recv_message() -> io::Result<Value> {
     let mut len_buf = [0u8; 4];
@@ -80,7 +83,6 @@ fn recv_message() -> io::Result<Value> {
 
     let raw =
         String::from_utf8(msg_buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
     let val: Value =
         serde_json::from_str(&raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
@@ -88,19 +90,14 @@ fn recv_message() -> io::Result<Value> {
     if let Some(obj) = masked.as_object_mut() {
         obj.remove("pin");
     }
-    let masked_raw = serde_json::to_string(&masked)
-        .unwrap_or_else(|_| raw.trim_end_matches(['\r', '\n']).to_string());
-    info!("recv: {}", masked_raw);
+    info!("recv: {}", masked);
 
     Ok(val)
 }
 
 fn send_message<T: Serialize>(msg: &T) -> io::Result<()> {
     let data = serde_json::to_vec(msg)?;
-
-    if let Ok(raw) = String::from_utf8(data.clone()) {
-        info!("send: {}", raw);
-    }
+    info!("send: {}", String::from_utf8_lossy(&data));
 
     let len = (data.len() as u32).to_le_bytes();
     let mut stdout = io::stdout().lock();
@@ -109,13 +106,18 @@ fn send_message<T: Serialize>(msg: &T) -> io::Result<()> {
     stdout.flush()
 }
 
-fn send_error(message: String) -> io::Result<()> {
+fn send_error(message: impl Into<String>) -> io::Result<()> {
+    let message = message.into();
     log::error!("{}", message);
     send_message(&ErrorResponse {
-        result: "1".to_string(),
+        result: RESULT_ERR,
         message,
     })
 }
+
+// ============================================================
+// DER エンコード (KeyDerivationInput)
+// ============================================================
 
 fn der_encode_length(len: usize, buf: &mut Vec<u8>) {
     if len < 0x80 {
@@ -155,20 +157,17 @@ fn build_digest_info(message: &[u8]) -> Vec<u8> {
     out
 }
 
+// ============================================================
+// 鍵導出
+// ============================================================
+
 /// (rpId, userId) → Ed25519 鍵ペア
-/// 1. input = DER(rpId, userId)
-/// 2. digest_info = SHA-256 DigestInfo of SHA-256(input)
-/// 3. rsa_sig = pkey_sign(Auth, digest_info)
-/// 4. seed = SHA-256(rsa_sig)
-/// 5. Ed25519 keypair from seed
 fn derive_signing_key(pin: &str, rp_id: &str, user_id: &[u8]) -> Result<SigningKey, String> {
-    let mut reader = MynaReader::new()
-        .and_then(|mut r| {
-            r.timeout = Some(std::time::Duration::from_secs(5));
-            r.connect()?;
-            Ok(r)
-        })
-        .map_err(|e| format!("ICカードの接続に失敗しました: {}", e))?;
+    let connect_err = |e| format!("ICカードの接続に失敗しました: {}", e);
+
+    let mut reader = MynaReader::new().map_err(connect_err)?;
+    reader.timeout = Some(Duration::from_secs(5));
+    reader.connect().map_err(connect_err)?;
 
     let mut jpki = reader
         .jpki_ap()
@@ -188,83 +187,97 @@ fn derive_signing_key(pin: &str, rp_id: &str, user_id: &[u8]) -> Result<SigningK
     Ok(SigningKey::from_bytes(&seed))
 }
 
-fn read_pin(msg: &Value) -> Option<String> {
-    msg.get("pin")
-        .and_then(|v| v.as_str())
-        .map(ToOwned::to_owned)
+// ============================================================
+// ハンドラ
+// ============================================================
+
+fn parse_req<T: for<'de> Deserialize<'de>>(msg: &Value) -> Result<T, String> {
+    serde_json::from_value(msg.clone())
+        .map_err(|e| format!("リクエストの解析に失敗しました: {}", e))
 }
 
-fn read_str_field<'a>(msg: &'a Value, key: &str) -> Option<&'a str> {
-    msg.get(key).and_then(|v| v.as_str())
+fn decode_b64(field: &str, b64: &str) -> Result<Vec<u8>, String> {
+    utils::base64_decode(b64).map_err(|e| format!("{}のbase64デコードに失敗しました: {}", field, e))
 }
 
-fn decode_b64_field(msg: &Value, key: &str) -> Result<Vec<u8>, String> {
-    let s = read_str_field(msg, key).ok_or_else(|| format!("{}が指定されていません", key))?;
-    utils::base64_decode(s).map_err(|e| format!("{}のbase64デコードに失敗しました: {}", key, e))
-}
+fn process_derive(msg: &Value) -> Result<DeriveResponse, String> {
+    let req: DeriveReq = parse_req(msg)?;
+    let user_id = decode_b64("userId", &req.user_id_b64)?;
 
-fn handle_derive(msg: &Value) -> io::Result<()> {
-    let pin = match read_pin(msg) {
-        Some(p) => p,
-        None => return send_error("pinが指定されていません".to_string()),
-    };
-    let rp_id = match read_str_field(msg, "rpId") {
-        Some(s) => s,
-        None => return send_error("rpIdが指定されていません".to_string()),
-    };
-    let user_id = match decode_b64_field(msg, "userId") {
-        Ok(v) => v,
-        Err(e) => return send_error(e),
-    };
-
-    let signing_key = match derive_signing_key(&pin, rp_id, &user_id) {
-        Ok(k) => k,
-        Err(e) => return send_error(e),
-    };
-
+    let signing_key = derive_signing_key(&req.pin, &req.rp_id, &user_id)?;
     let public_key = signing_key.verifying_key().to_bytes();
     let credential_id: [u8; 32] = Sha256::digest(public_key).into();
 
-    send_message(&DeriveResponse {
-        result: "0".to_string(),
+    Ok(DeriveResponse {
+        result: RESULT_OK,
         public_key: utils::base64_encode(&public_key),
         credential_id: utils::base64_encode(&credential_id),
     })
 }
 
-fn handle_sign(msg: &Value) -> io::Result<()> {
-    let pin = match read_pin(msg) {
-        Some(p) => p,
-        None => return send_error("pinが指定されていません".to_string()),
-    };
-    let rp_id = match read_str_field(msg, "rpId") {
-        Some(s) => s,
-        None => return send_error("rpIdが指定されていません".to_string()),
-    };
-    let user_id = match decode_b64_field(msg, "userId") {
-        Ok(v) => v,
-        Err(e) => return send_error(e),
-    };
-    let message = match decode_b64_field(msg, "message") {
-        Ok(v) => v,
-        Err(e) => return send_error(e),
-    };
+fn process_sign(msg: &Value) -> Result<SignResponse, String> {
+    let req: SignReq = parse_req(msg)?;
+    let user_id = decode_b64("userId", &req.user_id_b64)?;
+    let message = decode_b64("message", &req.message_b64)?;
 
-    let signing_key = match derive_signing_key(&pin, rp_id, &user_id) {
-        Ok(k) => k,
-        Err(e) => return send_error(e),
-    };
-
+    let signing_key = derive_signing_key(&req.pin, &req.rp_id, &user_id)?;
     let public_key = signing_key.verifying_key().to_bytes();
     let credential_id: [u8; 32] = Sha256::digest(public_key).into();
     let signature = signing_key.sign(&message).to_bytes();
 
-    send_message(&SignResponse {
-        result: "0".to_string(),
+    Ok(SignResponse {
+        result: RESULT_OK,
         public_key: utils::base64_encode(&public_key),
         credential_id: utils::base64_encode(&credential_id),
         signature: utils::base64_encode(&signature),
     })
+}
+
+fn handle_derive(msg: &Value) -> io::Result<()> {
+    match process_derive(msg) {
+        Ok(res) => send_message(&res),
+        Err(e) => send_error(e),
+    }
+}
+
+fn handle_sign(msg: &Value) -> io::Result<()> {
+    match process_sign(msg) {
+        Ok(res) => send_message(&res),
+        Err(e) => send_error(e),
+    }
+}
+
+// ============================================================
+// ロギング
+// ============================================================
+
+fn setup_logging() -> Result<(), fern::InitError> {
+    let mut dispatch = Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{}][{}][{}] {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(LevelFilter::Info);
+
+    if let Some(log_path) = std::env::var_os("MYNA_FIDO_LOG") {
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)?;
+        dispatch = dispatch.chain(log_file);
+    } else if !cfg!(debug_assertions) {
+        return Ok(());
+    } else {
+        dispatch = dispatch.chain(io::stderr());
+    }
+
+    dispatch.apply()?;
+    Ok(())
 }
 
 fn main() -> io::Result<()> {
