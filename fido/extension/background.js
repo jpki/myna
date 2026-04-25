@@ -6,18 +6,47 @@
 
 const NATIVE_HOST = "com.github.jpki.fido2";
 
+const POPUP_APPROVAL = "approval";
+const POPUP_ACCOUNT_SELECT = "account-select";
+
+const POPUP_TIMEOUT_MS = 60000;
+
 // --- 排他制御 ---
 let activeRequestId = null;
+let activeRequestCanceled = false;
 
-// --- ポップアップ通信用の一時データ ---
-let pendingApproval = null;
-let pendingAccountSelect = null;
-let pendingApprovalData = null;
-let pendingAccountListData = null;
+// --- ポップアップ制御 ---
+// kind => { resolve, reject, windowId, timeoutId, data }
+const popups = new Map();
+
+// ============================================================
+// エラー型
+// ============================================================
+
+/// プロキシリクエスト処理用のエラー。
+/// errorName: WebAuthn 側に返す DOMException 名（"NotAllowedError" など）
+/// silent:    true の場合 error popup を表示しない（期待されたエラー）
+class ProxyError extends Error {
+  constructor(message, { errorName = "NotAllowedError", silent = false } = {}) {
+    super(message);
+    this.errorName = errorName;
+    this.silent = silent;
+  }
+}
+
+/// ユーザーがポップアップを閉じた／拒否した／タイムアウトした
+class UserCancelledError extends ProxyError {
+  constructor(message) {
+    super(message, { silent: true });
+  }
+}
 
 // ============================================================
 // Base64 / Base64URL
 // ============================================================
+//
+// Native Messaging プロトコル: 標準 base64 (mpa の慣習に揃える)
+// WebAuthn API:                base64url (仕様)
 
 function bytesToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -74,27 +103,38 @@ function cborEncodeText(str) {
   return [...cborEncodeUint(3, bytes.length), ...bytes];
 }
 
+function cborEncodeIntKey(key) {
+  return key < 0 ? cborEncodeNegInt(key) : cborEncodeUint(0, key);
+}
+
+function cborEncodeValue(value) {
+  if (value instanceof Uint8Array) return cborEncodeBytes(value);
+  if (typeof value === "string") return cborEncodeText(value);
+  if (typeof value === "number") return value < 0 ? cborEncodeNegInt(value) : cborEncodeUint(0, value);
+  throw new Error("Unsupported CBOR value type");
+}
+
+/// 整数キーのCBORマップ。entries: [[key, value], ...]
+function cborEncodeIntMap(entries) {
+  const out = [...cborEncodeUint(5, entries.length)];
+  for (const [key, value] of entries) {
+    out.push(...cborEncodeIntKey(key));
+    out.push(...cborEncodeValue(value));
+  }
+  return new Uint8Array(out);
+}
+
 // ============================================================
 // COSE 公開鍵 (Ed25519)
 // ============================================================
 
 function encodeCoseEd25519PublicKey(publicKey) {
-  // Map (5 entries → here only 4):
-  //   1: 1 (kty: OKP), 3: -8 (alg: EdDSA), -1: 6 (crv: Ed25519), -2: <pubkey>
-  const result = [...cborEncodeUint(5, 4)];
-  // 1 → 1
-  result.push(...cborEncodeUint(0, 1));
-  result.push(...cborEncodeUint(0, 1));
-  // 3 → -8
-  result.push(...cborEncodeUint(0, 3));
-  result.push(...cborEncodeNegInt(-8));
-  // -1 → 6
-  result.push(...cborEncodeNegInt(-1));
-  result.push(...cborEncodeUint(0, 6));
-  // -2 → publicKey
-  result.push(...cborEncodeNegInt(-2));
-  result.push(...cborEncodeBytes(publicKey));
-  return new Uint8Array(result);
+  return cborEncodeIntMap([
+    [1, 1],          // kty: OKP
+    [3, -8],         // alg: EdDSA
+    [-1, 6],         // crv: Ed25519
+    [-2, publicKey], // x
+  ]);
 }
 
 // ============================================================
@@ -116,46 +156,59 @@ function buildEd25519Spki(publicKey) {
 // Authenticator データ構築
 // ============================================================
 
-async function buildAuthenticatorData(rpId, credentialId, publicKey, isRegistration) {
-  const rpIdHash = new Uint8Array(
+async function rpIdHash(rpId) {
+  return new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rpId))
   );
+}
 
-  if (isRegistration) {
-    const flags = 0x45; // UP=1, UV=1, AT=1
-    const signCount = new Uint8Array([0, 0, 0, 0]);
-    const aaguid = new Uint8Array(16);
-    const credIdLen = new Uint8Array([(credentialId.length >> 8) & 0xff, credentialId.length & 0xff]);
-    const coseKey = encodeCoseEd25519PublicKey(publicKey);
+/// 登録時 (AT=1)
+async function buildAttestedAuthenticatorData(rpId, credentialId, publicKey) {
+  const hash = await rpIdHash(rpId);
+  const flags = 0x45; // UP=1, UV=1, AT=1
+  const aaguid = new Uint8Array(16); // nil UUID
+  const credIdLen = new Uint8Array([
+    (credentialId.length >> 8) & 0xff,
+    credentialId.length & 0xff,
+  ]);
+  const coseKey = encodeCoseEd25519PublicKey(publicKey);
 
-    const totalLen = 32 + 1 + 4 + 16 + 2 + credentialId.length + coseKey.length;
-    const authData = new Uint8Array(totalLen);
-    let offset = 0;
-    authData.set(rpIdHash, offset); offset += 32;
-    authData[offset] = flags; offset += 1;
-    authData.set(signCount, offset); offset += 4;
-    authData.set(aaguid, offset); offset += 16;
-    authData.set(credIdLen, offset); offset += 2;
-    authData.set(credentialId, offset); offset += credentialId.length;
-    authData.set(coseKey, offset);
-    return authData;
-  } else {
-    const flags = 0x05; // UP=1, UV=1, AT=0
-    const authData = new Uint8Array(37);
-    authData.set(rpIdHash, 0);
-    authData[32] = flags;
-    return authData;
-  }
+  const totalLen = 32 + 1 + 4 + 16 + 2 + credentialId.length + coseKey.length;
+  const authData = new Uint8Array(totalLen);
+  let offset = 0;
+  authData.set(hash, offset); offset += 32;
+  authData[offset] = flags; offset += 1;
+  // signCount (4B) は 0 のまま
+  offset += 4;
+  authData.set(aaguid, offset); offset += 16;
+  authData.set(credIdLen, offset); offset += 2;
+  authData.set(credentialId, offset); offset += credentialId.length;
+  authData.set(coseKey, offset);
+  return authData;
+}
+
+/// 認証時 (AT=0)
+async function buildAssertionAuthenticatorData(rpId) {
+  const hash = await rpIdHash(rpId);
+  const authData = new Uint8Array(37);
+  authData.set(hash, 0);
+  authData[32] = 0x05; // UP=1, UV=1, AT=0
+  // signCount (4B) は 0 のまま
+  return authData;
 }
 
 // ============================================================
-// clientDataJSON 構築
+// clientDataJSON
 // ============================================================
 
+/// Chrome は requestDetailsJson の extensions.remoteDesktopClientOverride に
+/// 呼び出し元 origin を注入する。Web ページ側からは設定不可（信頼できる）。
 function extractCallerContext(options) {
   const override = options.extensions?.remoteDesktopClientOverride;
   if (!override || typeof override.origin !== "string") {
-    throw new Error("remoteDesktopClientOverride.origin missing in requestDetailsJson");
+    throw new ProxyError(
+      "remoteDesktopClientOverride.origin missing in requestDetailsJson"
+    );
   }
   return {
     origin: override.origin,
@@ -168,19 +221,19 @@ function buildClientDataJSON(type, challenge, origin, crossOrigin) {
 }
 
 // ============================================================
-// attestationObject 構築
+// attestationObject
 // ============================================================
 
 function buildAttestationObject(authData) {
-  const encoded = [];
-  encoded.push(...cborEncodeUint(5, 3));
-  encoded.push(...cborEncodeText("fmt"));
-  encoded.push(...cborEncodeText("none"));
-  encoded.push(...cborEncodeText("attStmt"));
-  encoded.push(...cborEncodeUint(5, 0));
-  encoded.push(...cborEncodeText("authData"));
-  encoded.push(...cborEncodeBytes(authData));
-  return new Uint8Array(encoded);
+  const out = [];
+  out.push(...cborEncodeUint(5, 3));
+  out.push(...cborEncodeText("fmt"));
+  out.push(...cborEncodeText("none"));
+  out.push(...cborEncodeText("attStmt"));
+  out.push(...cborEncodeUint(5, 0)); // empty map
+  out.push(...cborEncodeText("authData"));
+  out.push(...cborEncodeBytes(authData));
+  return new Uint8Array(out);
 }
 
 // ============================================================
@@ -191,15 +244,15 @@ function sendNative(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendNativeMessage(NATIVE_HOST, message, (response) => {
       if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message || "Native messaging failed"));
+        reject(new ProxyError(chrome.runtime.lastError.message || "Native messaging failed"));
         return;
       }
       if (!response) {
-        reject(new Error("Native host returned no response"));
+        reject(new ProxyError("Native host returned no response"));
         return;
       }
       if (response.result !== "0") {
-        reject(new Error(response.message || "Native host error"));
+        reject(new ProxyError(response.message || "Native host error"));
         return;
       }
       resolve(response);
@@ -207,12 +260,12 @@ function sendNative(message) {
   });
 }
 
-async function nativeDerive(pin, rpId, userIdBytes) {
+async function nativeDerive(pin, rpId, userId) {
   const res = await sendNative({
     mode: "derive",
     pin,
     rpId,
-    userId: bytesToBase64(userIdBytes),
+    userId: bytesToBase64(userId),
   });
   return {
     publicKey: base64ToBytes(res.publicKey),
@@ -220,12 +273,12 @@ async function nativeDerive(pin, rpId, userIdBytes) {
   };
 }
 
-async function nativeSign(pin, rpId, userIdBytes, message) {
+async function nativeSign(pin, rpId, userId, message) {
   const res = await sendNative({
     mode: "sign",
     pin,
     rpId,
-    userId: bytesToBase64(userIdBytes),
+    userId: bytesToBase64(userId),
     message: bytesToBase64(message),
   });
   return {
@@ -246,9 +299,7 @@ async function loadCredentials() {
 
 async function saveCredential(rpId, userId, userDisplayName, credentialId) {
   const credentials = await loadCredentials();
-  if (!credentials[rpId]) {
-    credentials[rpId] = [];
-  }
+  if (!credentials[rpId]) credentials[rpId] = [];
 
   const userIdB64 = base64urlEncode(userId);
   const credIdB64 = base64urlEncode(credentialId);
@@ -258,7 +309,6 @@ async function saveCredential(rpId, userId, userDisplayName, credentialId) {
       ? userDisplayName
       : userIdB64.substring(0, 8);
 
-  const idx = credentials[rpId].findIndex((c) => c.userId === userIdB64);
   const entry = {
     userId: userIdB64,
     userDisplayName: displayName,
@@ -266,6 +316,8 @@ async function saveCredential(rpId, userId, userDisplayName, credentialId) {
     createdAt: Math.floor(Date.now() / 1000),
   };
 
+  // 同一 (rpId, userId) は上書き、なければ追加
+  const idx = credentials[rpId].findIndex((c) => c.userId === userIdB64);
   if (idx >= 0) {
     credentials[rpId][idx] = entry;
   } else {
@@ -280,22 +332,16 @@ async function findCredentialsByRpId(rpId) {
   return credentials[rpId] || [];
 }
 
-async function findCredentialByCredentialId(credentialIdB64) {
-  const credentials = await loadCredentials();
-  for (const rpId of Object.keys(credentials)) {
-    const entry = credentials[rpId].find((c) => c.credentialId === credentialIdB64);
-    if (entry) {
-      return { rpId, ...entry };
-    }
-  }
-  return null;
+async function findCredentialInRp(rpId, credentialIdB64) {
+  const entries = await findCredentialsByRpId(rpId);
+  return entries.find((c) => c.credentialId === credentialIdB64) || null;
 }
 
 // ============================================================
-// ポップアップ表示
+// ポップアップ制御
 // ============================================================
 
-function showPopup(url, setupFn, { width = 420, height = 420 } = {}) {
+function openPopup(kind, url, data, { width = 420, height = 420 } = {}) {
   return new Promise((resolve, reject) => {
     chrome.windows.create(
       {
@@ -308,36 +354,56 @@ function showPopup(url, setupFn, { width = 420, height = 420 } = {}) {
       (win) => {
         const windowId = win.id;
         const timeoutId = setTimeout(() => {
-          chrome.windows.remove(windowId).catch(() => {});
-          reject(new Error("Timeout"));
-        }, 60000);
+          rejectPopup(kind, new UserCancelledError("Timeout"));
+        }, POPUP_TIMEOUT_MS);
 
-        setupFn({ resolve, reject, windowId, timeoutId });
-
-        const onRemoved = (removedWindowId) => {
-          if (removedWindowId === windowId) {
-            chrome.windows.onRemoved.removeListener(onRemoved);
-            clearTimeout(timeoutId);
-            reject(new Error("Window closed"));
-          }
+        const onRemoved = (removedId) => {
+          if (removedId !== windowId) return;
+          chrome.windows.onRemoved.removeListener(onRemoved);
+          rejectPopup(kind, new UserCancelledError("Window closed"));
         };
         chrome.windows.onRemoved.addListener(onRemoved);
+
+        popups.set(kind, { resolve, reject, windowId, timeoutId, data });
       }
     );
   });
 }
 
-async function showApprovalPopup(rpId, userDisplayName, operationType) {
-  pendingApprovalData = { rpId, userDisplayName, operationType };
-  return showPopup("approval/approval.html", (ctx) => {
-    pendingApproval = ctx;
+function resolvePopup(kind, value) {
+  const p = popups.get(kind);
+  if (!p) return;
+  popups.delete(kind);
+  clearTimeout(p.timeoutId);
+  chrome.windows.remove(p.windowId).catch(() => {});
+  p.resolve(value);
+}
+
+function rejectPopup(kind, error) {
+  const p = popups.get(kind);
+  if (!p) return;
+  popups.delete(kind);
+  clearTimeout(p.timeoutId);
+  chrome.windows.remove(p.windowId).catch(() => {});
+  p.reject(error);
+}
+
+function getPopupData(kind) {
+  return popups.get(kind)?.data;
+}
+
+function showApprovalPopup(rpId, userDisplayName, operationType) {
+  return openPopup(POPUP_APPROVAL, "approval/approval.html", {
+    rpId,
+    userDisplayName,
+    operationType,
   });
 }
 
-async function showAccountSelectPopup(rpId, accounts) {
-  pendingAccountListData = { rpId, accounts };
-  return showPopup("account-select/account-select.html", (ctx) => {
-    pendingAccountSelect = ctx;
+function showAccountSelectPopup(rpId, accounts) {
+  return openPopup(POPUP_ACCOUNT_SELECT, "account-select/account-select.html", {
+    rpId,
+    accounts,
   });
 }
 
@@ -353,15 +419,44 @@ function showErrorPopup(message) {
 }
 
 // ============================================================
-// リクエスト完了ヘルパー
+// プロキシリクエスト共通処理
 // ============================================================
 
-function resetActiveRequest() {
-  activeRequestId = null;
-  pendingApproval = null;
-  pendingAccountSelect = null;
-  pendingApprovalData = null;
-  pendingAccountListData = null;
+/// 排他ロック・エラーハンドリング・complete*Request の呼び出しをまとめる。
+/// body は responseJson 文字列を返す。失敗時は例外（ProxyError 推奨）を投げる。
+async function handleProxyRequest(request, completeFn, body) {
+  if (activeRequestId !== null) {
+    completeFn({
+      requestId: request.requestId,
+      error: { name: "InvalidStateError", message: "Authenticator is busy" },
+    });
+    return;
+  }
+
+  activeRequestId = request.requestId;
+  activeRequestCanceled = false;
+
+  try {
+    const responseJson = await body();
+    if (!activeRequestCanceled) {
+      completeFn({ requestId: request.requestId, responseJson });
+    }
+  } catch (e) {
+    if (activeRequestCanceled) return; // Chrome 側がキャンセル済み
+    console.error("proxy request error:", e);
+    if (!e.silent && e.message) {
+      showErrorPopup(e.message);
+    }
+    completeFn({
+      requestId: request.requestId,
+      error: {
+        name: e.errorName || "NotAllowedError",
+        message: e.message || "User rejected",
+      },
+    });
+  } finally {
+    activeRequestId = null;
+  }
 }
 
 // ============================================================
@@ -369,204 +464,134 @@ function resetActiveRequest() {
 // ============================================================
 
 async function handleCreateRequest(request) {
-  if (activeRequestId !== null) {
-    chrome.webAuthenticationProxy.completeCreateRequest({
-      requestId: request.requestId,
-      error: { name: "InvalidStateError", message: "Authenticator is busy" },
-    });
-    return;
-  }
+  await handleProxyRequest(
+    request,
+    chrome.webAuthenticationProxy.completeCreateRequest,
+    async () => {
+      const options = JSON.parse(request.requestDetailsJson);
 
-  activeRequestId = request.requestId;
+      if (!options.pubKeyCredParams.some((p) => p.alg === -8)) {
+        throw new ProxyError("Only EdDSA (Ed25519) is supported", {
+          errorName: "NotSupportedError",
+          silent: true,
+        });
+      }
 
-  try {
-    const options = JSON.parse(request.requestDetailsJson);
+      const rpId = options.rp.id || options.rpId;
+      const userId = base64urlDecode(options.user.id);
+      const userDisplayName = options.user.displayName || options.user.name || "";
+      const challenge = options.challenge;
+      const { origin, crossOrigin } = extractCallerContext(options);
 
-    const supportsEdDSA = options.pubKeyCredParams.some((p) => p.alg === -8);
-    if (!supportsEdDSA) {
-      chrome.webAuthenticationProxy.completeCreateRequest({
-        requestId: request.requestId,
-        error: { name: "NotSupportedError", message: "Only EdDSA (Ed25519) is supported" },
+      const pin = await showApprovalPopup(
+        rpId,
+        userDisplayName || base64urlEncode(userId).substring(0, 8),
+        "create"
+      );
+
+      const { publicKey, credentialId } = await nativeDerive(pin, rpId, userId);
+
+      await saveCredential(rpId, userId, userDisplayName, credentialId);
+
+      const authData = await buildAttestedAuthenticatorData(rpId, credentialId, publicKey);
+      const clientDataJSON = buildClientDataJSON("webauthn.create", challenge, origin, crossOrigin);
+      const attestationObject = buildAttestationObject(authData);
+      const spki = buildEd25519Spki(publicKey);
+
+      return JSON.stringify({
+        id: base64urlEncode(credentialId),
+        rawId: base64urlEncode(credentialId),
+        type: "public-key",
+        response: {
+          attestationObject: base64urlEncode(attestationObject),
+          clientDataJSON: base64urlEncode(new TextEncoder().encode(clientDataJSON)),
+          authenticatorData: base64urlEncode(authData),
+          publicKey: base64urlEncode(spki),
+          publicKeyAlgorithm: -8,
+          transports: [],
+        },
+        authenticatorAttachment: "platform",
+        clientExtensionResults: {},
       });
-      resetActiveRequest();
-      return;
     }
-
-    const rpId = options.rp.id || options.rpId;
-    const userId = base64urlDecode(options.user.id);
-    const userDisplayName = options.user.displayName || options.user.name || "";
-    const challenge = options.challenge;
-    const { origin, crossOrigin } = extractCallerContext(options);
-
-    const pin = await showApprovalPopup(
-      rpId,
-      userDisplayName || base64urlEncode(userId).substring(0, 8),
-      "create"
-    );
-
-    const { publicKey, credentialId } = await nativeDerive(pin, rpId, userId);
-
-    await saveCredential(rpId, userId, userDisplayName, credentialId);
-
-    const authData = await buildAuthenticatorData(rpId, credentialId, publicKey, true);
-    const clientDataJSON = buildClientDataJSON("webauthn.create", challenge, origin, crossOrigin);
-    const attestationObject = buildAttestationObject(authData);
-    const spki = buildEd25519Spki(publicKey);
-
-    const responseJson = JSON.stringify({
-      id: base64urlEncode(credentialId),
-      rawId: base64urlEncode(credentialId),
-      type: "public-key",
-      response: {
-        attestationObject: base64urlEncode(attestationObject),
-        clientDataJSON: base64urlEncode(new TextEncoder().encode(clientDataJSON)),
-        authenticatorData: base64urlEncode(authData),
-        publicKey: base64urlEncode(spki),
-        publicKeyAlgorithm: -8,
-        transports: [],
-      },
-      authenticatorAttachment: "platform",
-      clientExtensionResults: {},
-    });
-
-    chrome.webAuthenticationProxy.completeCreateRequest({
-      requestId: request.requestId,
-      responseJson,
-    });
-  } catch (e) {
-    console.error("handleCreateRequest error:", e);
-    if (e.message && e.message !== "User rejected" && e.message !== "Window closed") {
-      showErrorPopup(e.message);
-    }
-    chrome.webAuthenticationProxy.completeCreateRequest({
-      requestId: request.requestId,
-      error: { name: "NotAllowedError", message: e.message || "User rejected" },
-    });
-  } finally {
-    resetActiveRequest();
-  }
+  );
 }
 
 // ============================================================
 // 認証リクエスト処理 (onGetRequest)
 // ============================================================
 
+async function resolveCredentialForGet(rpId, allowCredentials) {
+  if (allowCredentials.length > 0) {
+    for (const cred of allowCredentials) {
+      const entry = await findCredentialInRp(rpId, cred.id);
+      if (entry) return entry;
+    }
+    throw new ProxyError("No matching credential found", { silent: true });
+  }
+
+  const entries = await findCredentialsByRpId(rpId);
+  if (entries.length === 0) {
+    throw new ProxyError("No credentials found for this RP", { silent: true });
+  }
+  if (entries.length === 1) {
+    return entries[0];
+  }
+
+  const accounts = entries.map((e) => ({
+    userId: e.userId,
+    userDisplayName: e.userDisplayName,
+    credentialId: e.credentialId,
+  }));
+  const selectedUserId = await showAccountSelectPopup(rpId, accounts);
+  return entries.find((e) => e.userId === selectedUserId);
+}
+
 async function handleGetRequest(request) {
-  if (activeRequestId !== null) {
-    chrome.webAuthenticationProxy.completeGetRequest({
-      requestId: request.requestId,
-      error: { name: "InvalidStateError", message: "Authenticator is busy" },
-    });
-    return;
-  }
+  await handleProxyRequest(
+    request,
+    chrome.webAuthenticationProxy.completeGetRequest,
+    async () => {
+      const options = JSON.parse(request.requestDetailsJson);
+      const rpId = options.rpId;
+      const challenge = options.challenge;
+      const { origin, crossOrigin } = extractCallerContext(options);
+      const allowCredentials = options.allowCredentials || [];
 
-  activeRequestId = request.requestId;
+      const entry = await resolveCredentialForGet(rpId, allowCredentials);
+      const userId = base64urlDecode(entry.userId);
 
-  try {
-    const options = JSON.parse(request.requestDetailsJson);
-    const rpId = options.rpId;
-    const challenge = options.challenge;
-    const { origin, crossOrigin } = extractCallerContext(options);
-    const allowCredentials = options.allowCredentials || [];
+      const pin = await showApprovalPopup(rpId, entry.userDisplayName, "get");
 
-    let userId;
-    let userDisplayName;
+      const authData = await buildAssertionAuthenticatorData(rpId);
+      const clientDataJSON = buildClientDataJSON("webauthn.get", challenge, origin, crossOrigin);
+      const clientDataJSONBytes = new TextEncoder().encode(clientDataJSON);
+      const clientDataHash = new Uint8Array(
+        await crypto.subtle.digest("SHA-256", clientDataJSONBytes)
+      );
 
-    if (allowCredentials.length > 0) {
-      let found = null;
-      for (const cred of allowCredentials) {
-        const entry = await findCredentialByCredentialId(cred.id);
-        if (entry) {
-          found = entry;
-          break;
-        }
-      }
+      // 署名対象 = authenticatorData || SHA-256(clientDataJSON)
+      const signedData = new Uint8Array(authData.length + clientDataHash.length);
+      signedData.set(authData, 0);
+      signedData.set(clientDataHash, authData.length);
 
-      if (!found) {
-        chrome.webAuthenticationProxy.completeGetRequest({
-          requestId: request.requestId,
-          error: { name: "NotAllowedError", message: "No matching credential found" },
-        });
-        resetActiveRequest();
-        return;
-      }
+      const { credentialId, signature } = await nativeSign(pin, rpId, userId, signedData);
 
-      userId = base64urlDecode(found.userId);
-      userDisplayName = found.userDisplayName;
-    } else {
-      const entries = await findCredentialsByRpId(rpId);
-
-      if (entries.length === 0) {
-        chrome.webAuthenticationProxy.completeGetRequest({
-          requestId: request.requestId,
-          error: { name: "NotAllowedError", message: "No credentials found for this RP" },
-        });
-        resetActiveRequest();
-        return;
-      }
-
-      if (entries.length === 1) {
-        userId = base64urlDecode(entries[0].userId);
-        userDisplayName = entries[0].userDisplayName;
-      } else {
-        const accounts = entries.map((e) => ({
-          userId: e.userId,
-          userDisplayName: e.userDisplayName,
-          credentialId: e.credentialId,
-        }));
-
-        const selectedUserId = await showAccountSelectPopup(rpId, accounts);
-        const selectedEntry = entries.find((e) => e.userId === selectedUserId);
-        userId = base64urlDecode(selectedUserId);
-        userDisplayName = selectedEntry ? selectedEntry.userDisplayName : "";
-      }
+      return JSON.stringify({
+        id: base64urlEncode(credentialId),
+        rawId: base64urlEncode(credentialId),
+        type: "public-key",
+        response: {
+          authenticatorData: base64urlEncode(authData),
+          clientDataJSON: base64urlEncode(clientDataJSONBytes),
+          signature: base64urlEncode(signature),
+          userHandle: base64urlEncode(userId),
+        },
+        authenticatorAttachment: "platform",
+        clientExtensionResults: {},
+      });
     }
-
-    const pin = await showApprovalPopup(rpId, userDisplayName, "get");
-
-    // 署名対象 = authenticatorData || SHA-256(clientDataJSON)
-    const authData = await buildAuthenticatorData(rpId, null, null, false);
-    const clientDataJSON = buildClientDataJSON("webauthn.get", challenge, origin, crossOrigin);
-    const clientDataJSONBytes = new TextEncoder().encode(clientDataJSON);
-    const clientDataHash = new Uint8Array(
-      await crypto.subtle.digest("SHA-256", clientDataJSONBytes)
-    );
-    const signedData = new Uint8Array(authData.length + clientDataHash.length);
-    signedData.set(authData, 0);
-    signedData.set(clientDataHash, authData.length);
-
-    const { credentialId, signature } = await nativeSign(pin, rpId, userId, signedData);
-
-    const responseJson = JSON.stringify({
-      id: base64urlEncode(credentialId),
-      rawId: base64urlEncode(credentialId),
-      type: "public-key",
-      response: {
-        authenticatorData: base64urlEncode(authData),
-        clientDataJSON: base64urlEncode(clientDataJSONBytes),
-        signature: base64urlEncode(signature),
-        userHandle: base64urlEncode(userId),
-      },
-      authenticatorAttachment: "platform",
-      clientExtensionResults: {},
-    });
-
-    chrome.webAuthenticationProxy.completeGetRequest({
-      requestId: request.requestId,
-      responseJson,
-    });
-  } catch (e) {
-    console.error("handleGetRequest error:", e);
-    if (e.message && e.message !== "User rejected" && e.message !== "Window closed") {
-      showErrorPopup(e.message);
-    }
-    chrome.webAuthenticationProxy.completeGetRequest({
-      requestId: request.requestId,
-      error: { name: "NotAllowedError", message: e.message || "User rejected" },
-    });
-  } finally {
-    resetActiveRequest();
-  }
+  );
 }
 
 // ============================================================
@@ -576,36 +601,21 @@ async function handleGetRequest(request) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case "get-approval-data":
-      sendResponse(pendingApprovalData);
-      return false;
-
+      sendResponse(getPopupData(POPUP_APPROVAL));
+      break;
     case "get-account-list":
-      sendResponse(pendingAccountListData);
-      return false;
-
+      sendResponse(getPopupData(POPUP_ACCOUNT_SELECT));
+      break;
     case "approval-result":
-      if (pendingApproval) {
-        clearTimeout(pendingApproval.timeoutId);
-        const windowId = pendingApproval.windowId;
-        if (message.result === "approved") {
-          pendingApproval.resolve(message.pin || "");
-        } else {
-          pendingApproval.reject(new Error("User rejected"));
-        }
-        pendingApproval = null;
-        chrome.windows.remove(windowId).catch(() => {});
+      if (message.result === "approved") {
+        resolvePopup(POPUP_APPROVAL, message.pin || "");
+      } else {
+        rejectPopup(POPUP_APPROVAL, new UserCancelledError("User rejected"));
       }
-      return false;
-
+      break;
     case "account-selected":
-      if (pendingAccountSelect) {
-        clearTimeout(pendingAccountSelect.timeoutId);
-        const windowId = pendingAccountSelect.windowId;
-        pendingAccountSelect.resolve(message.userId);
-        pendingAccountSelect = null;
-        chrome.windows.remove(windowId).catch(() => {});
-      }
-      return false;
+      resolvePopup(POPUP_ACCOUNT_SELECT, message.userId);
+      break;
   }
   return false;
 });
@@ -630,16 +640,10 @@ chrome.webAuthenticationProxy.onIsUvpaaRequest.addListener(({ requestId }) => {
 });
 
 chrome.webAuthenticationProxy.onRequestCanceled.addListener(({ requestId }) => {
-  if (activeRequestId === requestId) {
-    if (pendingApproval) {
-      clearTimeout(pendingApproval.timeoutId);
-      chrome.windows.remove(pendingApproval.windowId).catch(() => {});
-    }
-    if (pendingAccountSelect) {
-      clearTimeout(pendingAccountSelect.timeoutId);
-      chrome.windows.remove(pendingAccountSelect.windowId).catch(() => {});
-    }
-    resetActiveRequest();
+  if (activeRequestId !== requestId) return;
+  activeRequestCanceled = true;
+  for (const kind of [...popups.keys()]) {
+    rejectPopup(kind, new UserCancelledError("Request canceled"));
   }
 });
 

@@ -10,6 +10,35 @@
 証明書の更新やカードに穴を空けられてしまうという欠点はありますが、
 無くしたと言って(お金を支払い)保有し続けることは可能です。
 
+## 登録シーケンス
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User as ユーザー
+    participant Card as カード
+    participant Ext as ブラウザ拡張
+    participant RP as サーバー (RP)
+
+    User->>RP: 新規登録操作
+    RP-->>Ext: 登録オプション<br/>(challenge, rp.id, user.id, pubKeyCredParams)
+
+    Ext->>User: PIN 入力要求
+    User->>Ext: PIN 入力 (UV)
+
+    Note over Ext: Ed25519鍵の導出開始
+
+    Ext->>Card: RSA署名(PIN, rpId, userId)
+    Card-->>Ext: RSA署名値
+
+    Note over Ext: Ed25519鍵ペア導出<br/>credentialId = SHA-256(公開鍵)
+    Note over Ext: chrome.storage.local に<br/>(rpId, userId, credentialId) 保存
+
+    Ext->>RP: 登録応答<br/>(credentialId, Ed25519公開鍵, attestationObject)
+    Note over RP: credentialId と公開鍵を保存
+    RP->>User: 登録完了
+```
+
 ## 認証シーケンス
 
 allowCredentials指定ありの最もシンプルなケース
