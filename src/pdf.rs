@@ -808,7 +808,7 @@ pub fn pdf_verify(input: &str) -> Result<(), Error> {
     let data = fs::read(input)?;
 
     // /Type /Sig を持つ署名辞書を検索
-    let (byte_range, contents_hex) =
+    let (byte_range, contents_hex, contents_angle_start, contents_angle_end) =
         find_signature_dict(&data).ok_or_else(|| Error::from("PDF内に署名辞書が見つかりません"))?;
 
     // ByteRange を解析
@@ -816,7 +816,19 @@ pub fn pdf_verify(input: &str) -> Result<(), Error> {
         .ok_or_else(|| Error::from("ByteRange の解析に失敗しました"))?;
     log::info!("Parsed PDF signature dictionary");
     log::debug!("PDF ByteRange: {:?}", ranges);
-    let (off1, len1, off2, len2) = (ranges[0], ranges[1], ranges[2], ranges[3]);
+    let ranges_arr: [usize; 4] = [ranges[0], ranges[1], ranges[2], ranges[3]];
+
+    // PAdES の必須要件: ByteRange が文書全体をカバーしていること。
+    // これがないと末尾 Incremental Update による改ざんが検知されない。
+    verify_byte_range_covers_whole_doc(
+        &data,
+        &ranges_arr,
+        contents_angle_start,
+        contents_angle_end,
+    )?;
+    log::debug!("ByteRange covers the whole document");
+
+    let (off1, len1, off2, len2) = (ranges_arr[0], ranges_arr[1], ranges_arr[2], ranges_arr[3]);
 
     let range1 = &data[off1..off1 + len1];
     let range2 = &data[off2..off2 + len2];
@@ -891,8 +903,14 @@ fn extract_der_from_padded_hex(hex_str: &str) -> Vec<u8> {
     utils::hex_decode(&hex_str[..hex_len]).expect("DER hex デコードに失敗しました")
 }
 
-/// PDF 内から署名辞書を検索し、ByteRange と Contents を返す
-fn find_signature_dict(data: &[u8]) -> Option<(String, String)> {
+/// PDF 内から署名辞書を検索し、ByteRange と /Contents 情報を返す。
+///
+/// 返値: `(byte_range, contents_hex, contents_angle_start, contents_angle_end)`
+/// - `byte_range`: `[a b c d]` 形式の文字列
+/// - `contents_hex`: `/Contents <…>` の hex 文字列本体
+/// - `contents_angle_start`: `<` のバイト位置
+/// - `contents_angle_end`: `>` の直後のバイト位置 (排他的)
+fn find_signature_dict(data: &[u8]) -> Option<(String, String, usize, usize)> {
     let needle = b"/Type /Sig";
     let mut search_from = 0;
     while search_from < data.len() {
@@ -907,14 +925,71 @@ fn find_signature_dict(data: &[u8]) -> Option<(String, String)> {
 
         if let Some(byte_range) = extract_array_value(&dict_text, "/ByteRange") {
             // /Contents の hex は辞書外まで広がる可能性があるので data 全体から探す
-            if let Some(contents) = extract_hex_string_from(data, dict_start) {
-                return Some((byte_range, contents));
+            if let Some((contents, angle_start, angle_end)) =
+                extract_hex_string_from(data, dict_start)
+            {
+                return Some((byte_range, contents, angle_start, angle_end));
             }
         }
 
         search_from = pos + needle.len();
     }
     None
+}
+
+/// PAdES (ETSI EN 319 142) / PDF 2.0 (ISO 32000-2 §12.8) で要求される
+/// ByteRange の不変条件を検証する。
+///
+/// すなわち、ByteRange `[off1, len1, off2, len2]` が指定する 2 区間が
+/// - 文書先頭から始まる (`off1 == 0`)
+/// - `/Contents <…>` プレースホルダの `<` 直前で終わる (`off1 + len1 == angle_start`)
+/// - プレースホルダの `>` 直後から始まる (`off2 == angle_end`)
+/// - 文書末尾まで到達する (`off2 + len2 == data.len()`)
+///
+/// ことを確認する。これらのいずれかが成立しない場合、攻撃者が末尾に
+/// Incremental Update を追記するだけで署名検証をバイパスできる
+/// (Incremental Update Attack / "Incremental Saving Attack")。
+fn verify_byte_range_covers_whole_doc(
+    data: &[u8],
+    ranges: &[usize; 4],
+    angle_start: usize,
+    angle_end: usize,
+) -> Result<(), Error> {
+    let [off1, len1, off2, len2] = *ranges;
+
+    if off1 != 0 {
+        return Err(Error::from(format!(
+            "ByteRange[0] が 0 ではありません ({}); 文書先頭が署名対象に含まれていません",
+            off1
+        )));
+    }
+    let end1 = off1.checked_add(len1).ok_or_else(|| {
+        Error::from("ByteRange[0]+ByteRange[1] が usize オーバーフローしました")
+    })?;
+    if end1 != angle_start {
+        return Err(Error::from(format!(
+            "ByteRange 第 1 区間の終端 ({}) が /Contents の '<' 位置 ({}) と一致しません",
+            end1, angle_start
+        )));
+    }
+    if off2 != angle_end {
+        return Err(Error::from(format!(
+            "ByteRange 第 2 区間の開始 ({}) が /Contents の '>' 直後 ({}) と一致しません",
+            off2, angle_end
+        )));
+    }
+    let end2 = off2.checked_add(len2).ok_or_else(|| {
+        Error::from("ByteRange[2]+ByteRange[3] が usize オーバーフローしました")
+    })?;
+    if end2 != data.len() {
+        return Err(Error::from(format!(
+            "ByteRange 第 2 区間の終端 ({}) が文書末尾 ({}) と一致しません \
+             (Incremental Update による改ざんの可能性)",
+            end2,
+            data.len()
+        )));
+    }
+    Ok(())
 }
 
 /// ネスト対応の辞書終端 `>>` を検索
@@ -947,14 +1022,26 @@ fn extract_array_value(text: &str, key: &str) -> Option<String> {
     Some(after[start..=end].to_string())
 }
 
-/// /Contents <hex> の hex 文字列を抽出
-fn extract_hex_string_from(data: &[u8], search_from: usize) -> Option<String> {
+/// /Contents <hex> の hex 文字列と、`<` `>` のバイト位置を抽出する。
+///
+/// 返値の `angle_start` は `<` のバイト位置 (= hex 開始の 1 つ手前)、
+/// `angle_end` は `>` の **直後** のバイト位置 (= 排他的終端)。
+fn extract_hex_string_from(
+    data: &[u8],
+    search_from: usize,
+) -> Option<(String, usize, usize)> {
     let needle = b"/Contents <";
     let pos = find_bytes(data, needle, search_from)?;
-    let hex_start = pos + needle.len();
+    let angle_start = pos + needle.len() - 1; // `<` の位置
+    let hex_start = angle_start + 1;
     let end = data[hex_start..].iter().position(|&b| b == b'>')?;
     let hex_bytes = &data[hex_start..hex_start + end];
-    Some(String::from_utf8_lossy(hex_bytes).to_string())
+    let angle_end = hex_start + end + 1; // `>` の直後
+    Some((
+        String::from_utf8_lossy(hex_bytes).to_string(),
+        angle_start,
+        angle_end,
+    ))
 }
 
 /// ByteRange 配列 `[a b c d]` を解析
@@ -1035,5 +1122,135 @@ mod tests {
         let dict = get_xref_dict_text(data, 0).unwrap();
         assert!(dict.contains("/Root"), "dict = {}", dict);
         assert_eq!(find_root_ref(data, 0), Some(4));
+    }
+
+    // ---------------------------------------------------------------------
+    // PAdES ByteRange coverage check (Incremental Update Attack 防御)
+    // ---------------------------------------------------------------------
+
+    /// テスト用に、`/Type /Sig` 辞書を持つ buffer と、その正しい
+    /// ByteRange / `<` `>` 位置を返す。署名そのものは含めない (本検査の対象は
+    /// ByteRange の構造要件であり、CMS 検証は別経路で行うため)。
+    fn build_test_signed_buffer() -> (Vec<u8>, [usize; 4], usize, usize) {
+        let head: Vec<u8> = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\nfiller\n".to_vec();
+        let contents_hex = "00".repeat(64); // 128 hex chars (= 64 bytes)
+        let br_placeholder = format!("[{:<10} {:<10} {:<10} {:<10}]", "X", "Y", "Z", "W");
+        let sig_prefix = format!(
+            "1 0 obj\n<<\n/Type /Sig\n/Filter /Adobe.PPKLite\n/SubFilter /adbe.pkcs7.detached\n/ByteRange {}\n/Contents <",
+            br_placeholder
+        );
+        let sig_suffix = b">\n>>\nendobj\n";
+        let trailer = b"\nxref\n0 2\n0000000000 65535 f \n0000000016 00000 n \ntrailer\n<<\n/Size 2\n/Root 1 0 R\n>>\nstartxref\n16\n%%EOF\n";
+
+        let angle_start = head.len() + sig_prefix.len() - 1;
+        let angle_end = angle_start + 1 + contents_hex.len() + 1;
+
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&head);
+        buf.extend_from_slice(sig_prefix.as_bytes());
+        buf.extend_from_slice(contents_hex.as_bytes());
+        buf.extend_from_slice(sig_suffix);
+        buf.extend_from_slice(trailer);
+
+        let signed_len = buf.len();
+        let br_actual = format!(
+            "[{:<10} {:<10} {:<10} {:<10}]",
+            0,
+            angle_start,
+            angle_end,
+            signed_len - angle_end
+        );
+        let placeholder_bytes = br_placeholder.as_bytes();
+        let br_pos = buf
+            .windows(placeholder_bytes.len())
+            .position(|w| w == placeholder_bytes)
+            .unwrap();
+        buf[br_pos..br_pos + placeholder_bytes.len()].copy_from_slice(br_actual.as_bytes());
+
+        let ranges = [0, angle_start, angle_end, signed_len - angle_end];
+        (buf, ranges, angle_start, angle_end)
+    }
+
+    #[test]
+    fn test_byterange_coverage_accepts_correctly_signed_buffer() {
+        let (buf, ranges, angle_start, angle_end) = build_test_signed_buffer();
+        // 正しく ByteRange を書き出した直後の buffer は受理される。
+        verify_byte_range_covers_whole_doc(&buf, &ranges, angle_start, angle_end)
+            .expect("正規ファイルは受理されるべき");
+    }
+
+    #[test]
+    fn test_byterange_coverage_rejects_appended_incremental_update() {
+        // 攻撃者が末尾に Incremental Update を追記したケース。
+        // ByteRange は元の signed_len 時点のまま、buf だけ伸びる。
+        let (mut buf, ranges, angle_start, angle_end) = build_test_signed_buffer();
+        buf.extend_from_slice(&b"\n%%-INJECTED-INCREMENTAL-UPDATE-".repeat(100));
+        let err = verify_byte_range_covers_whole_doc(&buf, &ranges, angle_start, angle_end)
+            .expect_err("末尾追記された buffer は拒否されるべき");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("文書末尾"),
+            "想定外のエラーメッセージ: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_byterange_coverage_rejects_off1_nonzero() {
+        let (buf, _ranges, angle_start, angle_end) = build_test_signed_buffer();
+        // ByteRange[0] を 0 ではない値に変える (= 文書先頭が署名対象外)
+        let bad = [1, angle_start - 1, angle_end, buf.len() - angle_end];
+        let err = verify_byte_range_covers_whole_doc(&buf, &bad, angle_start, angle_end)
+            .expect_err("ByteRange[0] != 0 は拒否されるべき");
+        assert!(err.to_string().contains("ByteRange[0]"), "{}", err);
+    }
+
+    #[test]
+    fn test_byterange_coverage_rejects_short_first_range() {
+        let (buf, _ranges, angle_start, angle_end) = build_test_signed_buffer();
+        // 第 1 区間が `<` の手前で終わらない
+        let bad = [0, angle_start - 5, angle_end, buf.len() - angle_end];
+        let err = verify_byte_range_covers_whole_doc(&buf, &bad, angle_start, angle_end)
+            .expect_err("第 1 区間が短いケースは拒否されるべき");
+        assert!(
+            err.to_string().contains("第 1 区間"),
+            "{}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_byterange_coverage_rejects_wrong_off2() {
+        let (buf, _ranges, angle_start, angle_end) = build_test_signed_buffer();
+        // 第 2 区間が `>` の直後ではないところから始まる
+        let bad = [0, angle_start, angle_end + 3, buf.len() - angle_end - 3];
+        let err = verify_byte_range_covers_whole_doc(&buf, &bad, angle_start, angle_end)
+            .expect_err("第 2 区間の開始位置が誤っているケースは拒否されるべき");
+        assert!(
+            err.to_string().contains("第 2 区間"),
+            "{}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_byterange_coverage_end_to_end_via_find_signature_dict() {
+        // find_signature_dict が返す angle_start / angle_end と
+        // verify_byte_range_covers_whole_doc を組み合わせた end-to-end テスト。
+        // 末尾追記された buffer に対して、ByteRange パース後の検査で確実に
+        // エラーになることを確認する (pdf_verify の検証経路と同じ流れ)。
+        let (mut buf, _ranges, _, _) = build_test_signed_buffer();
+        buf.extend_from_slice(b"\n%%- attacker payload appended after signing -\n");
+
+        let (br_str, _contents, angle_start, angle_end) =
+            find_signature_dict(&buf).expect("sig dict found");
+        let parsed = parse_byte_range(&br_str).expect("ByteRange parsed");
+        let arr = [parsed[0], parsed[1], parsed[2], parsed[3]];
+
+        let err =
+            verify_byte_range_covers_whole_doc(&buf, &arr, angle_start, angle_end).expect_err(
+                "末尾追記された buffer は ByteRange カバー検査で拒否されるべき",
+            );
+        assert!(err.to_string().contains("文書末尾"), "{}", err);
     }
 }
