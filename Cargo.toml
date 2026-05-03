@@ -24,4 +24,4 @@ x509-cert = "0.2"
 dummy = []
 
 [workspace]
-members = ["mpa"]
+members = ["mpa", "fido"]
