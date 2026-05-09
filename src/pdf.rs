@@ -872,7 +872,10 @@ fn verify_one_signature(
     if is_last_signature {
         verify_byte_range_reaches_end(data, &ranges_arr)?;
     }
-    log::debug!("ByteRange invariants verified (is_last={})", is_last_signature);
+    log::debug!(
+        "ByteRange invariants verified (is_last={})",
+        is_last_signature
+    );
 
     let (off1, len1, off2, len2) = (ranges_arr[0], ranges_arr[1], ranges_arr[2], ranges_arr[3]);
 
@@ -1072,9 +1075,9 @@ fn verify_byte_range_local_invariants(
             off1
         )));
     }
-    let end1 = off1.checked_add(len1).ok_or_else(|| {
-        Error::from("ByteRange[0]+ByteRange[1] が usize オーバーフローしました")
-    })?;
+    let end1 = off1
+        .checked_add(len1)
+        .ok_or_else(|| Error::from("ByteRange[0]+ByteRange[1] が usize オーバーフローしました"))?;
     if end1 != angle_start {
         return Err(Error::from(format!(
             "ByteRange 第 1 区間の終端 ({}) が /Contents の '<' 位置 ({}) と一致しません",
@@ -1103,9 +1106,9 @@ fn verify_byte_range_local_invariants(
 /// incremental update が追記されているため、自然に文書途中で終わる。
 fn verify_byte_range_reaches_end(data: &[u8], ranges: &[usize; 4]) -> Result<(), Error> {
     let [_off1, _len1, off2, len2] = *ranges;
-    let end2 = off2.checked_add(len2).ok_or_else(|| {
-        Error::from("ByteRange[2]+ByteRange[3] が usize オーバーフローしました")
-    })?;
+    let end2 = off2
+        .checked_add(len2)
+        .ok_or_else(|| Error::from("ByteRange[2]+ByteRange[3] が usize オーバーフローしました"))?;
     if end2 != data.len() {
         return Err(Error::from(format!(
             "ByteRange 第 2 区間の終端 ({}) が文書末尾 ({}) と一致しません \
@@ -1151,10 +1154,7 @@ fn extract_array_value(text: &str, key: &str) -> Option<String> {
 ///
 /// 返値の `angle_start` は `<` のバイト位置 (= hex 開始の 1 つ手前)、
 /// `angle_end` は `>` の **直後** のバイト位置 (= 排他的終端)。
-fn extract_hex_string_from(
-    data: &[u8],
-    search_from: usize,
-) -> Option<(String, usize, usize)> {
+fn extract_hex_string_from(data: &[u8], search_from: usize) -> Option<(String, usize, usize)> {
     let needle = b"/Contents <";
     let pos = find_bytes(data, needle, search_from)?;
     let angle_start = pos + needle.len() - 1; // `<` の位置
@@ -1464,7 +1464,8 @@ mod tests {
 
     /// テスト用: sig#1 は本物の CMS 検出署名、sig#2 はゴミ /Contents (CMS パース不可)
     /// を持つ multi-sig buffer を構築。試験用 CA を信頼アンカーとして渡す前提。
-    fn build_multi_sig_buffer_for_test() -> (Vec<u8>, Vec<crate::ta::EmbeddedTrustAnchor>, Vec<u8>) {
+    fn build_multi_sig_buffer_for_test() -> (Vec<u8>, Vec<crate::ta::EmbeddedTrustAnchor>, Vec<u8>)
+    {
         use crate::pkcs7;
         use crate::ta::EmbeddedTrustAnchor;
         use rsa::RsaPrivateKey;

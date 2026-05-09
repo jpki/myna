@@ -80,13 +80,11 @@ mod unix {
                     break;
                 }
                 // Backspace (0x7F) or BS (0x08)
-                0x7F | 0x08 => {
-                    if !password.is_empty() {
-                        password.pop();
-                        let mut w = &tty;
-                        w.write_all(b"\x08 \x08")?;
-                        w.flush()?;
-                    }
+                0x7F | 0x08 if !password.is_empty() => {
+                    password.pop();
+                    let mut w = &tty;
+                    w.write_all(b"\x08 \x08")?;
+                    w.flush()?;
                 }
                 // Ctrl+C
                 0x03 => {
