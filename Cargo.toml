@@ -10,7 +10,7 @@ clap = { version = "4.6.1", features = ["cargo", "derive"] }
 cms = "0.2"
 der = { version = "0.7", features = ["alloc", "derive", "pem"] }
 flate2 = "1"
-log = "0.4.29"
+log = "0.4.30"
 pcsc = "2.9.0"
 rsa = { version = "0.9", features = ["sha1", "sha2", "hazmat"] }
 libc = "0.2"
