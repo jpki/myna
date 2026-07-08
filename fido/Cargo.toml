@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 chrono = "0.4.44"
-ed25519-dalek = "2"
+ed25519-dalek = "3"
 fern = "0.7.1"
 log = "0.4.30"
 myna = { path = ".." }
