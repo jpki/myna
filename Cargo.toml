@@ -18,7 +18,7 @@ fern = "0.7.1"
 sha1 = "0.10"
 sha2 = "0.10"
 spki = "0.7"
-x509-cert = "0.2"
+x509-cert = "0.3"
 
 [features]
 dummy = []
