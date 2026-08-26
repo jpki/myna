@@ -5,7 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>エラー</title>
     <link rel="stylesheet" href="popup.css">
-    <style>body { min-width: auto; }</style>
+    <style>
+      body { min-width: auto; }
+      /* 詳細なエラーを改行込みで表示する */
+      #error-message {
+        white-space: pre-wrap;
+        word-break: break-word;
+        text-align: left;
+        user-select: text;
+      }
+    </style>
   </head>
   <body>
     <main class="app">

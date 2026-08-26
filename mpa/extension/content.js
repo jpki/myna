@@ -17,6 +17,11 @@ document.addEventListener("launchApp", (event) => {
     if (response != null) {
       detail = JSON.stringify(response);
     } else {
+      console.error(
+        "[MPA:CS] launchApp failed:",
+        chrome.runtime.lastError ? chrome.runtime.lastError.message : "no response",
+        "(詳細は拡張機能のバックグラウンドのコンソールを確認してください)"
+      );
       message.result = "1";
       message.errcode = "EW044-C300";
       detail = JSON.stringify(message);

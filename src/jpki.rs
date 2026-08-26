@@ -95,6 +95,20 @@ impl<'a> JPKIAP<'a> {
         Ok(())
     }
 
+    /// PINの残り試行回数を読み取る。0はブロック状態。
+    pub fn read_pin(&mut self, key_type: &KeyType) -> Result<u8, Error> {
+        let ef = match key_type {
+            KeyType::Sign => "001b",
+            KeyType::Auth => "0018",
+        };
+        self.reader
+            .select_ef(ef)
+            .map_err(|e| Error::with_source("PIN EFの選択に失敗しました", e))?;
+        self.reader
+            .read_pin()
+            .map_err(|e| Error::with_source("PIN残り回数の取得に失敗しました", e))
+    }
+
     /// 証明書読み取り
     pub fn cert_read(&mut self, cert_type: &CertType) -> Result<Certificate, Error> {
         let ef = match cert_type {
@@ -364,6 +378,15 @@ mod dummy_tests {
         jpki.close();
         let jpki2 = reader.jpki_ap().unwrap();
         assert_eq!(jpki2.token(), "JPKIAPICCTOKEN");
+    }
+
+    #[test]
+    fn test_read_pin() {
+        let mut reader = setup_reader();
+        reader.connect().unwrap();
+        let mut jpki = reader.jpki_ap().unwrap();
+        assert_eq!(jpki.read_pin(&KeyType::Auth).unwrap(), 3);
+        assert_eq!(jpki.read_pin(&KeyType::Sign).unwrap(), 5);
     }
 
     #[test]
