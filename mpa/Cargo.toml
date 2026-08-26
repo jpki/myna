@@ -1,6 +1,6 @@
 [package]
 name = "mpa"
-version = "23.0.0"
+version = "24.0.2"
 edition = "2024"
 
 [dependencies]

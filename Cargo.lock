@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "mpa"
-version = "23.0.0"
+version = "24.0.1"
 dependencies = [
  "chrono",
  "der",

@@ -10,6 +10,18 @@ use std::io::{self, Read, Write};
 
 mod check;
 
+/// Native Messagingで受け付けるメッセージの最大長
+const MAX_MESSAGE_LEN: usize = 64 * 1024 * 1024;
+
+/// panicの内容をログにも残す。既定のフックはstderrにしか出力しない。
+fn setup_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log::error!("{}", info);
+        default_hook(info);
+    }));
+}
+
 #[derive(Serialize)]
 struct AuthSuccessResponse {
     mode: String,
@@ -55,8 +67,12 @@ fn generate_combination_code(manufacture_number: &str, uuid_hex: &str) -> io::Re
 
     let salt = myna::utils::hex_decode("2e71f6620bc654ced494e5ec34fe03c8")
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let uuid_bytes = myna::utils::hex_decode(uuid_hex)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let uuid_bytes = myna::utils::hex_decode(uuid_hex).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid uuid in config.json (must be hex): {}", e),
+        )
+    })?;
 
     let mut hasher = Sha256::new();
     hasher.update(&salt);
@@ -68,8 +84,30 @@ fn generate_combination_code(manufacture_number: &str, uuid_hex: &str) -> io::Re
 pub(crate) fn load_config() -> io::Result<Value> {
     let home = std::env::var("HOME").map_err(|e| io::Error::new(io::ErrorKind::NotFound, e))?;
     let path = std::path::Path::new(&home).join(".config/mpa/config.json");
-    let content = std::fs::read_to_string(&path)?;
-    serde_json::from_str(&content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| io::Error::new(e.kind(), format!("{}: {}", path.display(), e)))?;
+    serde_json::from_str(&content).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{}: {}", path.display(), e),
+        )
+    })
+}
+
+/// MPA_LOG_LEVELでログレベルを指定する(既定はinfo)
+fn log_level() -> LevelFilter {
+    match std::env::var("MPA_LOG_LEVEL")
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "error" => LevelFilter::Error,
+        "warn" => LevelFilter::Warn,
+        "debug" => LevelFilter::Debug,
+        "trace" => LevelFilter::Trace,
+        _ => LevelFilter::Info,
+    }
 }
 
 fn setup_logging() -> Result<(), fern::InitError> {
@@ -83,7 +121,7 @@ fn setup_logging() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(LevelFilter::Info);
+        .level(log_level());
 
     #[cfg(debug_assertions)]
     {
@@ -104,19 +142,29 @@ fn setup_logging() -> Result<(), fern::InitError> {
     Ok(())
 }
 
-fn recv_message() -> io::Result<Value> {
+/// stdinからメッセージを1件受信する。
+/// ブラウザーがstdinを閉じた場合(正常終了)はOk(None)を返す。
+fn recv_message() -> io::Result<Option<Value>> {
     let mut len_buf = [0u8; 4];
-    io::stdin().read_exact(&mut len_buf)?;
+    match io::stdin().read_exact(&mut len_buf) {
+        Ok(()) => {}
+        // 長さの読み込み開始時点でのEOFはブラウザーによる正常なクローズ
+        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(e) => return Err(e),
+    }
     let len = u32::from_le_bytes(len_buf) as usize;
+    if len > MAX_MESSAGE_LEN {
+        return Err(io::Error::other(format!(
+            "message too large: {} bytes",
+            len
+        )));
+    }
 
     let mut msg_buf = vec![0u8; len];
     io::stdin().read_exact(&mut msg_buf)?;
 
-    let raw =
-        String::from_utf8(msg_buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-    let val: Value =
-        serde_json::from_str(&raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let raw = String::from_utf8(msg_buf).map_err(io::Error::other)?;
+    let val: Value = serde_json::from_str(&raw).map_err(io::Error::other)?;
 
     // ログ出力のためPINを削除
     let mut masked = val.clone();
@@ -125,23 +173,26 @@ fn recv_message() -> io::Result<Value> {
     }
     let masked_raw = serde_json::to_string(&masked)
         .unwrap_or_else(|_| raw.trim_end_matches(['\r', '\n']).to_string());
-    info!("recv: {}", masked_raw);
+    info!("recv: {} ({} bytes)", masked_raw, len);
 
-    Ok(val)
+    Ok(Some(val))
 }
 
 pub(crate) fn send_message<T: Serialize>(msg: &T) -> io::Result<()> {
     let data = serde_json::to_vec(msg)?;
 
-    if let Ok(raw) = String::from_utf8(data.clone()) {
-        info!("send: {}", raw);
-    }
-
-    let len = (data.len() as u32).to_le_bytes();
     let mut stdout = io::stdout().lock();
-    stdout.write_all(&len)?;
+    stdout.write_all(&(data.len() as u32).to_le_bytes())?;
     stdout.write_all(&data)?;
-    stdout.flush()
+    stdout.flush()?;
+
+    // 書き込みとflushが成功した後に記録する
+    info!(
+        "send: {} ({} bytes)",
+        String::from_utf8_lossy(&data),
+        data.len()
+    );
+    Ok(())
 }
 
 fn send_error(message: String) -> io::Result<()> {
@@ -164,58 +215,53 @@ fn auth(msg: &Value) -> io::Result<()> {
     let config = load_config()?;
     let uuid = config["uuid"]
         .as_str()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "uuid not found in config"))?;
+        .ok_or_else(|| io::Error::other("uuid not found in config"))?;
 
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
     if service_id != Some("01") {
-        return send_error("Unsupported service_id".to_string());
+        return Err(io::Error::other("Unsupported service_id"));
     }
 
-    let digest_b64 = match msg.get("digest").and_then(|v| v.as_str()) {
-        Some(digest) => digest,
-        None => return send_error("digest is required".to_string()),
-    };
+    let digest_b64 = msg
+        .get("digest")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| io::Error::other("digest is required"))?;
 
     let pin = auth_pin(msg);
 
-    let mut reader = match MynaReader::new().and_then(|mut r| {
-        r.timeout = Some(std::time::Duration::from_secs(5));
-        r.connect()?;
-        Ok(r)
-    }) {
-        Ok(r) => r,
-        Err(e) => return send_error(format!("failed to connect: {}", e)),
-    };
-    let mut jpki = match reader.jpki_ap() {
-        Ok(j) => j,
-        Err(e) => return send_error(format!("failed to select JPKI AP: {}", e)),
-    };
+    let mut reader = MynaReader::new()
+        .and_then(|mut r| {
+            r.timeout = Some(std::time::Duration::from_secs(5));
+            r.connect()?;
+            Ok(r)
+        })
+        .map_err(|e| io::Error::other(format!("failed to connect: {}", e)))?;
+    let mut jpki = reader
+        .jpki_ap()
+        .map_err(|e| io::Error::other(format!("failed to select JPKI AP: {}", e)))?;
 
-    let digest = match utils::base64_decode(digest_b64) {
-        Ok(d) => d,
-        Err(e) => return send_error(format!("failed to decode digest: {}", e)),
-    };
-    if let Err(e) = jpki.verify(&KeyType::Auth, pin.as_deref().unwrap_or("")) {
-        return send_error(e.to_string());
-    }
-    let signature = match jpki.pkey_sign(&KeyType::Auth, &digest) {
-        Ok(sig) => utils::base64_encode(&sig),
-        Err(e) => return send_error(format!("failed to sign digest: {}", e)),
-    };
+    let digest = utils::base64_decode(digest_b64)
+        .map_err(|e| io::Error::other(format!("failed to decode digest: {}", e)))?;
+    jpki.verify(&KeyType::Auth, pin.as_deref().unwrap_or(""))
+        .map_err(|e| io::Error::other(e.to_string()))?;
+    let signature = jpki
+        .pkey_sign(&KeyType::Auth, &digest)
+        .map(|sig| utils::base64_encode(&sig))
+        .map_err(|e| io::Error::other(format!("failed to sign digest: {}", e)))?;
 
-    let certificate = match jpki.cert_read(&CertType::Auth) {
-        Ok(cert) => match cert.to_der() {
-            Ok(der) => utils::base64_encode_nopad(der.as_slice()),
-            Err(e) => return send_error(format!("failed to encode certificate: {}", e)),
-        },
-        Err(e) => return send_error(format!("failed to load certificate: {}", e)),
-    };
+    let cert = jpki
+        .cert_read(&CertType::Auth)
+        .map_err(|e| io::Error::other(format!("failed to load certificate: {}", e)))?;
+    let certificate = cert
+        .to_der()
+        .map(|der| utils::base64_encode_nopad(der.as_slice()))
+        .map_err(|e| io::Error::other(format!("failed to encode certificate: {}", e)))?;
 
-    let manufacture_number = match reader.unknown_ap().and_then(|mut u| u.read_manufacture()) {
-        Ok(m) => m,
-        Err(e) => return send_error(format!("failed to read manufacture number: {}", e)),
-    };
+    let manufacture_number = reader
+        .unknown_ap()
+        .and_then(|mut u| u.read_manufacture())
+        .map_err(|e| io::Error::other(format!("failed to read manufacture number: {}", e)))?;
     let combination_code = generate_combination_code(&manufacture_number, uuid)?;
 
     let response = AuthSuccessResponse {
@@ -233,69 +279,64 @@ fn sign(msg: &Value) -> io::Result<()> {
     let config = load_config()?;
     let uuid = config["uuid"]
         .as_str()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "uuid not found in config"))?;
+        .ok_or_else(|| io::Error::other("uuid not found in config"))?;
 
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
     if service_id != Some("01") {
-        return send_error("Unsupported service_id".to_string());
+        return Err(io::Error::other("Unsupported service_id"));
     }
 
     let digests_b64: Vec<&str> = match msg.get("digest") {
         Some(Value::Array(arr)) => {
             let v: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
             if v.is_empty() {
-                return send_error("digest array is empty".to_string());
+                return Err(io::Error::other("digest array is empty"));
             }
             v
         }
         Some(Value::String(s)) => vec![s.as_str()],
-        _ => return send_error("digest is required".to_string()),
+        _ => return Err(io::Error::other("digest is required")),
     };
 
     let pin = auth_pin(msg);
 
-    let mut reader = match MynaReader::new().and_then(|mut r| {
-        r.timeout = Some(std::time::Duration::from_secs(5));
-        r.connect()?;
-        Ok(r)
-    }) {
-        Ok(r) => r,
-        Err(e) => return send_error(format!("failed to connect: {}", e)),
-    };
-    let mut jpki = match reader.jpki_ap() {
-        Ok(j) => j,
-        Err(e) => return send_error(format!("failed to select JPKI AP: {}", e)),
-    };
+    let mut reader = MynaReader::new()
+        .and_then(|mut r| {
+            r.timeout = Some(std::time::Duration::from_secs(5));
+            r.connect()?;
+            Ok(r)
+        })
+        .map_err(|e| io::Error::other(format!("failed to connect: {}", e)))?;
+    let mut jpki = reader
+        .jpki_ap()
+        .map_err(|e| io::Error::other(format!("failed to select JPKI AP: {}", e)))?;
 
-    if let Err(e) = jpki.verify(&KeyType::Sign, pin.as_deref().unwrap_or("")) {
-        return send_error(e.to_string());
-    }
+    jpki.verify(&KeyType::Sign, pin.as_deref().unwrap_or(""))
+        .map_err(|e| io::Error::other(e.to_string()))?;
     let mut signatures = Vec::new();
     for digest_b64 in &digests_b64 {
-        let digest = match utils::base64_decode(digest_b64) {
-            Ok(d) => d,
-            Err(e) => return send_error(format!("failed to decode digest: {}", e)),
-        };
-        let sig = match jpki.pkey_sign(&KeyType::Sign, &digest) {
-            Ok(sig) => utils::base64_encode(&sig),
-            Err(e) => return send_error(format!("failed to sign digest: {}", e)),
-        };
+        let digest = utils::base64_decode(digest_b64)
+            .map_err(|e| io::Error::other(format!("failed to decode digest: {}", e)))?;
+        let sig = jpki
+            .pkey_sign(&KeyType::Sign, &digest)
+            .map(|sig| utils::base64_encode(&sig))
+            .map_err(|e| io::Error::other(format!("failed to sign digest: {}", e)))?;
         signatures.push(sig);
     }
 
-    let certificate = match jpki.cert_read(&CertType::Sign) {
-        Ok(cert) => match cert.to_der() {
-            Ok(der) => utils::base64_encode_nopad(der.as_slice()),
-            Err(e) => return send_error(format!("failed to encode certificate: {}", e)),
-        },
-        Err(e) => return send_error(format!("failed to load certificate: {}", e)),
-    };
+    let cert = jpki
+        .cert_read(&CertType::Sign)
+        .map_err(|e| io::Error::other(format!("failed to load certificate: {}", e)))?;
+    let certificate = cert
+        .to_der()
+        .map(|der| utils::base64_encode_nopad(der.as_slice()))
+        .map_err(|e| io::Error::other(format!("failed to encode certificate: {}", e)))?;
 
-    let manufacture_number = match reader.unknown_ap().and_then(|mut u| u.read_manufacture()) {
-        Ok(m) => m,
-        Err(e) => return send_error(format!("failed to read manufacture number: {}", e)),
-    };
+    let manufacture_number = reader
+        .unknown_ap()
+        .and_then(|mut u| u.read_manufacture())
+        .map_err(|e| io::Error::other(format!("failed to read manufacture number: {}", e)))?;
     let combination_code = generate_combination_code(&manufacture_number, uuid)?;
 
     let response = SignSuccessResponse {
@@ -313,39 +354,36 @@ fn text(msg: &Value) -> io::Result<()> {
     let config = load_config()?;
     let uuid = config["uuid"]
         .as_str()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "uuid not found in config"))?;
+        .ok_or_else(|| io::Error::other("uuid not found in config"))?;
 
     let service_id = msg.get("service_id").and_then(|v| v.as_str());
 
     if service_id != Some("01") {
-        return send_error("Unsupported service_id".to_string());
+        return Err(io::Error::other("Unsupported service_id"));
     }
 
     let pin = auth_pin(msg);
 
-    let mut reader = match MynaReader::new().and_then(|mut r| {
-        r.timeout = Some(std::time::Duration::from_secs(5));
-        r.connect()?;
-        Ok(r)
-    }) {
-        Ok(r) => r,
-        Err(e) => return send_error(format!("failed to connect: {}", e)),
-    };
+    let mut reader = MynaReader::new()
+        .and_then(|mut r| {
+            r.timeout = Some(std::time::Duration::from_secs(5));
+            r.connect()?;
+            Ok(r)
+        })
+        .map_err(|e| io::Error::other(format!("failed to connect: {}", e)))?;
 
-    let mut text = match reader.text_ap() {
-        Ok(j) => j,
-        Err(e) => return send_error(format!("failed to select Text AP: {}", e)),
-    };
+    let mut text = reader
+        .text_ap()
+        .map_err(|e| io::Error::other(format!("failed to select Text AP: {}", e)))?;
 
-    let attrs = match text.attrs(pin.as_deref().unwrap_or("")) {
-        Ok(a) => a,
-        Err(e) => return send_error(format!("failed to read attrs: {}", e)),
-    };
+    let attrs = text
+        .attrs(pin.as_deref().unwrap_or(""))
+        .map_err(|e| io::Error::other(format!("failed to read attrs: {}", e)))?;
 
-    let manufacture_number = match reader.unknown_ap().and_then(|mut u| u.read_manufacture()) {
-        Ok(m) => m,
-        Err(e) => return send_error(format!("failed to read manufacture number: {}", e)),
-    };
+    let manufacture_number = reader
+        .unknown_ap()
+        .and_then(|mut u| u.read_manufacture())
+        .map_err(|e| io::Error::other(format!("failed to read manufacture number: {}", e)))?;
     let combination_code = generate_combination_code(&manufacture_number, uuid)?;
 
     let response = TextSuccessResponse {
@@ -361,32 +399,69 @@ fn text(msg: &Value) -> io::Result<()> {
     send_message(&response)
 }
 
+/// 受信したメッセージを処理する。戻り値がfalseの場合はループを終了する。
+fn handle_message(msg: &Value) -> io::Result<bool> {
+    let mode = msg.get("mode").and_then(|v| v.as_str());
+
+    match mode {
+        Some("check") => check::check()?,
+        // JPKIユーザー認証
+        Some("01") => auth(msg)?,
+        // JPKIデジタル署名
+        Some("02") => sign(msg)?,
+        // 券面入力補助
+        Some("04") => text(msg)?,
+        Some("05") => {
+            log::info!("received close request");
+            return Ok(false);
+        }
+        _ => return Err(io::Error::other(format!("Unsupported mode {:?}", mode))),
+    }
+    Ok(true)
+}
+
+/// 起動時の状態をログに残す。
+/// 引数はブラウザーによって異なり、Chromeは拡張機能のorigin、
+/// Firefoxはmanifestのパスと拡張機能のIDを渡すため、呼び出し元の判別に使える。
+fn log_startup() {
+    let args: Vec<String> = std::env::args().collect();
+    info!(
+        "mpa {} started: pid={}, exe={:?}, args={:?}",
+        env!("CARGO_PKG_VERSION"),
+        std::process::id(),
+        std::env::current_exe().ok(),
+        args
+    );
+}
+
 fn main() -> io::Result<()> {
     eprintln!("Host Application started");
     setup_logging().map_err(io::Error::other)?;
+    setup_panic_hook();
+    log_startup();
+
     loop {
         let msg = match recv_message() {
-            Ok(msg) => msg,
-            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
-            Err(e) => return Err(e),
-        };
-
-        let mode = msg.get("mode").and_then(|v| v.as_str());
-
-        match mode {
-            Some("check") => check::check()?,
-            // JPKIユーザー認証
-            Some("01") => auth(&msg)?,
-            // JPKIデジタル署名
-            Some("02") => sign(&msg)?,
-            // 券面入力補助
-            Some("04") => text(&msg)?,
-            Some("05") => {
-                log::info!("received close request");
+            Ok(Some(msg)) => msg,
+            Ok(None) => {
+                info!("stdin closed, shutting down");
                 break;
             }
-            _ => send_error(format!("Unsupported mode {:?}", mode))?,
+            Err(e) => {
+                send_error(format!("failed to receive message: {}", e))?;
+                break;
+            }
+        };
+
+        // 応答を返さずにプロセスが終了するとブラウザー側では原因が分からない
+        // (Firefoxでは "An unexpected error occurred" となる) ため、
+        // エラーは必ず応答として返す
+        match handle_message(&msg) {
+            Ok(true) => {}
+            Ok(false) => break,
+            Err(e) => send_error(e.to_string())?,
         }
     }
+    info!("exit");
     Ok(())
 }
