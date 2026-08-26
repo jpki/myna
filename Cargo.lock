@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "mpa"
-version = "24.0.1"
+version = "24.0.2"
 dependencies = [
  "chrono",
  "der",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "myna"
-version = "0.6.4"
+version = "0.7.2"
 dependencies = [
  "base16ct",
  "base64ct",
