@@ -4,7 +4,7 @@ version = "24.0.2"
 edition = "2024"
 
 [dependencies]
-chrono = "0.4.44"
+chrono = "0.4.45"
 der = { version = "0.7", features = ["alloc"] }
 fern = "0.7.1"
 log = "0.4.30"
