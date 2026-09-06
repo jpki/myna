@@ -73,7 +73,7 @@ install_firefox() {
   "path": "$HOST_PATH",
   "type": "stdio",
   "allowed_extensions": [
-    "test@example.com"
+    "mpa@jpki.github.io"
   ]
 }
 MANIFEST
