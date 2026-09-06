@@ -5,9 +5,43 @@ updates:
     schedule:
       interval: weekly
     ignore:
+      # RustCryptoの0.x系はマイナー更新(例: der 0.7 -> 0.8)がAPI破壊を伴い、
+      # der/spki/x509-cert/cms/rsa/sha* を揃えて更新する必要がある。
+      # Dependabotは 0.7 -> 0.8 をsemver-minorと判定するため、
+      # majorとminorの両方を無視してAPI互換のパッチ更新のみ通知させる。
       - dependency-name: der
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: spki
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: x509-cert
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: cms
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: const-oid
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: rsa
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
       - dependency-name: sha1
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
       - dependency-name: sha2
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      # 更新が頻繁でノイズになるため全て無視
       - dependency-name: libc
   - package-ecosystem: github-actions
     directory: /
