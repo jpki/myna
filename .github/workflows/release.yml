@@ -53,6 +53,7 @@ jobs:
           path: myna-${{ github.ref_name }}-${{ matrix.target }}.zip
 
   build-mpa:
+    needs: sign-extension
     runs-on: ubuntu-latest
 
     steps:
@@ -67,6 +68,11 @@ jobs:
       - name: Build mpa
         run: cargo build --release -p mpa
 
+      - name: Download signed extension
+        uses: actions/download-artifact@v8
+        with:
+          name: mpa-extension
+
       - name: Package mpa
         run: |
           mkdir -p mpa-${{ github.ref_name }}-linux
@@ -74,6 +80,7 @@ jobs:
           cp mpa/README.md mpa-${{ github.ref_name }}-linux/
           cp mpa/install.sh mpa-${{ github.ref_name }}-linux/
           cp -r mpa/extension mpa-${{ github.ref_name }}-linux/
+          cp mpa-extension-${{ github.ref_name }}.xpi mpa-${{ github.ref_name }}-linux/
           tar czf mpa-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz mpa-${{ github.ref_name }}-linux
 
       - name: Upload artifact
@@ -82,8 +89,43 @@ jobs:
           name: mpa-linux
           path: mpa-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
 
+  sign-extension:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # AMOは同一バージョンの再アップロードを拒否するため、
+      # 拡張を変更したらmanifest.jsonのversionを上げる必要がある
+      # (拡張のバージョンはマイナポータル側の判定に合わせているためタグとは独立)
+      - name: Show extension version
+        run: node -p "require('./mpa/extension/manifest.json').version"
+
+      - name: Sign extension
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          npx --yes web-ext@8 sign \
+            --source-dir mpa/extension \
+            --channel unlisted \
+            --artifacts-dir dist
+
+      - name: Rename artifact
+        run: mv dist/*.xpi mpa-extension-${{ github.ref_name }}.xpi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mpa-extension
+          path: mpa-extension-${{ github.ref_name }}.xpi
+
   release:
-    needs: [build, build-mpa]
+    needs: [build, build-mpa, sign-extension]
     runs-on: ubuntu-latest
 
     steps:
@@ -98,4 +140,4 @@ jobs:
           generate_release_notes: true
           files: |
             myna-*
-            mpa-*
+            mpa-v*.tar.gz

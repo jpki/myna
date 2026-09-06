@@ -35,7 +35,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "test@example.com",
+      "id": "mpa@jpki.github.io",
       "strict_min_version": "50.0"
     }
   },
