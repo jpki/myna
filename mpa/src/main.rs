@@ -255,7 +255,7 @@ fn auth(msg: &Value) -> io::Result<()> {
         .map_err(|e| io::Error::other(format!("failed to load certificate: {}", e)))?;
     let certificate = cert
         .to_der()
-        .map(|der| utils::base64_encode_nopad(der.as_slice()))
+        .map(|der| utils::base64_encode(der.as_slice()))
         .map_err(|e| io::Error::other(format!("failed to encode certificate: {}", e)))?;
 
     let manufacture_number = reader
@@ -330,7 +330,7 @@ fn sign(msg: &Value) -> io::Result<()> {
         .map_err(|e| io::Error::other(format!("failed to load certificate: {}", e)))?;
     let certificate = cert
         .to_der()
-        .map(|der| utils::base64_encode_nopad(der.as_slice()))
+        .map(|der| utils::base64_encode(der.as_slice()))
         .map_err(|e| io::Error::other(format!("failed to encode certificate: {}", e)))?;
 
     let manufacture_number = reader
