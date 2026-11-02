@@ -6,6 +6,10 @@ use der::asn1::{ObjectIdentifier, OctetString};
 use der::oid::AssociatedOid;
 use der::oid::db::{rfc5911, rfc5912};
 use der::{Decode, Encode};
+use ml_dsa::{
+    EncodedSignature, EncodedVerifyingKey, MlDsa44, MlDsa65, MlDsa87, MlDsaParams,
+    Signature as MlDsaSignature, VerifyingKey as MlDsaVerifyingKey,
+};
 use rsa::RsaPublicKey;
 use rsa::pkcs1v15::{Signature as Pkcs1Sig, VerifyingKey};
 use rsa::signature::Verifier;
@@ -132,8 +136,14 @@ pub(crate) fn verify_cms_signature(
             .to_der()
             .map_err(|e| Error::with_source("signedAttrs の DER エンコードに失敗しました", e))?;
         let sig_bytes = si.signature.as_bytes();
-        verify_rsa_pkcs1v15(cert, &signed_attrs_der, sig_bytes, &si.digest_alg.oid)?;
-        log::info!("Signer certificate {}: RSA signature OK", i + 1);
+        let sig_alg = &si.signature_algorithm.oid;
+        if is_ml_dsa(sig_alg) {
+            verify_ml_dsa(cert, &signed_attrs_der, sig_bytes)?;
+            log::info!("Signer certificate {}: ML-DSA signature OK", i + 1);
+        } else {
+            verify_rsa_pkcs1v15(cert, &signed_attrs_der, sig_bytes, &si.digest_alg.oid)?;
+            log::info!("Signer certificate {}: RSA signature OK", i + 1);
+        }
 
         // 3. 証明書チェーン検証
         let root_name = verify_cert_chain(cert, roots)?
@@ -322,6 +332,59 @@ fn verify_rsa_pkcs1v15(
         )));
     };
     result.map_err(|e| Error::with_source("RSA 署名検証に失敗しました", e))
+}
+
+/// NIST ML-DSA 署名アルゴリズム OID (FIPS 204)
+const ML_DSA_44: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.3.17");
+const ML_DSA_65: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.3.18");
+const ML_DSA_87: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.3.19");
+
+fn is_ml_dsa(oid: &ObjectIdentifier) -> bool {
+    *oid == ML_DSA_44 || *oid == ML_DSA_65 || *oid == ML_DSA_87
+}
+
+/// ML-DSA 署名を検証する（純粋 ML-DSA、空コンテキスト、signed attrs SET OF DER が対象）
+fn verify_ml_dsa(cert: &Certificate, msg: &[u8], sig_bytes: &[u8]) -> Result<(), Error> {
+    let raw_pub = cert
+        .tbs_certificate
+        .subject_public_key_info
+        .subject_public_key
+        .as_bytes()
+        .ok_or_else(|| Error::new("ML-DSA 公開鍵の BitString に余剰ビットがあります"))?;
+    let alg_oid = &cert.tbs_certificate.subject_public_key_info.algorithm.oid;
+
+    if *alg_oid == ML_DSA_44 {
+        verify_ml_dsa_param::<MlDsa44>(raw_pub, msg, sig_bytes)
+    } else if *alg_oid == ML_DSA_65 {
+        verify_ml_dsa_param::<MlDsa65>(raw_pub, msg, sig_bytes)
+    } else if *alg_oid == ML_DSA_87 {
+        verify_ml_dsa_param::<MlDsa87>(raw_pub, msg, sig_bytes)
+    } else {
+        Err(Error::new(format!(
+            "未対応の公開鍵アルゴリズム: {}",
+            alg_oid
+        )))
+    }
+}
+
+fn verify_ml_dsa_param<P>(raw_pub: &[u8], msg: &[u8], sig_bytes: &[u8]) -> Result<(), Error>
+where
+    P: MlDsaParams,
+{
+    let enc_vk = EncodedVerifyingKey::<P>::try_from(raw_pub)
+        .map_err(|_| Error::new("ML-DSA 公開鍵長がパラメータセットと一致しません"))?;
+    let vk = MlDsaVerifyingKey::<P>::decode(&enc_vk);
+
+    let enc_sig = EncodedSignature::<P>::try_from(sig_bytes)
+        .map_err(|_| Error::new("ML-DSA 署名長がパラメータセットと一致しません"))?;
+    let sig = MlDsaSignature::<P>::decode(&enc_sig)
+        .ok_or_else(|| Error::new("ML-DSA 署名値のデコードに失敗しました"))?;
+
+    if vk.verify_with_context(msg, &[], &sig) {
+        Ok(())
+    } else {
+        Err(Error::new("ML-DSA 署名検証に失敗しました"))
+    }
 }
 
 /// 証明書が trust anchor のいずれかで署名されているか検証する
@@ -739,5 +802,102 @@ mod tests {
         // notAfter より後
         let after = validity.not_after.to_unix_duration().as_secs() + 1;
         assert!(check_validity(validity, after).is_err());
+    }
+}
+
+#[cfg(test)]
+mod ml_dsa_tests {
+    use super::*;
+
+    fn unhex(s: &str) -> Vec<u8> {
+        if s == "-" {
+            return Vec::new();
+        }
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).expect("invalid hex"))
+            .collect()
+    }
+
+    fn acvp_accepts<P: MlDsaParams>(pk: &[u8], msg: &[u8], ctx: &[u8], sig: &[u8]) -> bool {
+        let enc_vk = match EncodedVerifyingKey::<P>::try_from(pk) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+        let vk = MlDsaVerifyingKey::<P>::decode(&enc_vk);
+        let enc_sig = match EncodedSignature::<P>::try_from(sig) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+        let sig = match MlDsaSignature::<P>::decode(&enc_sig) {
+            Some(s) => s,
+            None => return false,
+        };
+        vk.verify_with_context(msg, ctx, &sig)
+    }
+
+    fn run_acvp<P: MlDsaParams>(data: &str) {
+        let mut n = 0usize;
+        for line in data.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let f: Vec<&str> = line.split_whitespace().collect();
+            assert_eq!(f.len(), 5, "ACVP line must have 5 fields");
+            let expected = f[0] == "1";
+            let (pk, msg, ctx, sig) = (unhex(f[1]), unhex(f[2]), unhex(f[3]), unhex(f[4]));
+            let got = acvp_accepts::<P>(&pk, &msg, &ctx, &sig);
+            assert_eq!(got, expected, "ACVP case {} verdict mismatch", n);
+            n += 1;
+        }
+        assert!(n > 0, "no ACVP cases were read");
+    }
+
+    #[test]
+    fn ml_dsa_44_matches_nist_acvp() {
+        run_acvp::<MlDsa44>(include_str!("../tests/fixtures/ml-dsa-44-acvp-sigver.txt"));
+    }
+
+    #[test]
+    fn ml_dsa_65_matches_nist_acvp() {
+        run_acvp::<MlDsa65>(include_str!("../tests/fixtures/ml-dsa-65-acvp-sigver.txt"));
+    }
+
+    #[test]
+    fn ml_dsa_87_matches_nist_acvp() {
+        run_acvp::<MlDsa87>(include_str!("../tests/fixtures/ml-dsa-87-acvp-sigver.txt"));
+    }
+
+    fn empty_ctx_case(data: &str) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        let f: Vec<&str> = data.split_whitespace().collect();
+        (unhex(f[0]), unhex(f[1]), unhex(f[2]))
+    }
+
+    fn roundtrip<P: MlDsaParams>(data: &str) {
+        let (msg, sig, pk) = empty_ctx_case(data);
+        verify_ml_dsa_param::<P>(&pk, &msg, &sig)
+            .expect("valid empty-context signature must verify");
+        let mut bad_sig = sig.clone();
+        bad_sig[0] ^= 0x01;
+        assert!(verify_ml_dsa_param::<P>(&pk, &msg, &bad_sig).is_err());
+        let mut bad_msg = msg.clone();
+        bad_msg[0] ^= 0x01;
+        assert!(verify_ml_dsa_param::<P>(&pk, &bad_msg, &sig).is_err());
+    }
+
+    #[test]
+    fn ml_dsa_44_empty_context_roundtrip() {
+        roundtrip::<MlDsa44>(include_str!("../tests/fixtures/ml-dsa-44-emptyctx.txt"));
+    }
+
+    #[test]
+    fn ml_dsa_65_empty_context_roundtrip() {
+        roundtrip::<MlDsa65>(include_str!("../tests/fixtures/ml-dsa-65-emptyctx.txt"));
+    }
+
+    #[test]
+    fn ml_dsa_87_empty_context_roundtrip() {
+        roundtrip::<MlDsa87>(include_str!("../tests/fixtures/ml-dsa-87-emptyctx.txt"));
     }
 }
