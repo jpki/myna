@@ -901,3 +901,235 @@ mod ml_dsa_tests {
         roundtrip::<MlDsa87>(include_str!("../tests/fixtures/ml-dsa-87-emptyctx.txt"));
     }
 }
+
+#[cfg(test)]
+mod ml_dsa_cms_e2e_tests {
+    use super::*;
+    use crate::pkcs7::{self, AuthAttrs, HashAlgorithm};
+    use cms::cert::{CertificateChoices, IssuerAndSerialNumber};
+    use cms::content_info::CmsVersion;
+    use cms::signed_data::{
+        CertificateSet, EncapsulatedContentInfo, SignerInfo, SignerInfos,
+    };
+    use der::asn1::{Any, BitString, GeneralizedTime, SetOfVec};
+    use ml_dsa::{B32, Keypair, MlDsa65, SigningKey};
+    use rsa::RsaPrivateKey;
+    use rsa::pkcs1v15::SigningKey as RsaSigningKey;
+    use rsa::pkcs8::{DecodePrivateKey, EncodePublicKey};
+    use rsa::signature::{SignatureEncoding, Signer};
+    use spki::{AlgorithmIdentifierOwned, SubjectPublicKeyInfoOwned};
+    use std::str::FromStr;
+    use std::time::Duration;
+    use x509_cert::certificate::{TbsCertificate, Version};
+    use x509_cert::ext::Extension;
+    use x509_cert::ext::pkix::BasicConstraints;
+    use x509_cert::name::Name;
+    use x509_cert::serial_number::SerialNumber;
+    use x509_cert::time::{Time, Validity};
+
+    const SHA256_WITH_RSA: ObjectIdentifier = rfc5912::SHA_256_WITH_RSA_ENCRYPTION;
+
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    }
+
+    fn validity_around_now() -> Validity {
+        let now = now_secs();
+        Validity {
+            not_before: Time::GeneralTime(
+                GeneralizedTime::from_unix_duration(Duration::from_secs(now - 3600)).unwrap(),
+            ),
+            not_after: Time::GeneralTime(
+                GeneralizedTime::from_unix_duration(Duration::from_secs(now + 3600)).unwrap(),
+            ),
+        }
+    }
+
+    fn ca_private_key() -> RsaPrivateKey {
+        let pem = std::str::from_utf8(include_bytes!("../tests/fixtures/sign_key.pem")).unwrap();
+        RsaPrivateKey::from_pkcs8_pem(pem).unwrap()
+    }
+
+    fn rsa_sign_tbs(ca: &RsaPrivateKey, tbs_der: &[u8]) -> BitString {
+        let sk = RsaSigningKey::<Sha256>::new(ca.clone());
+        let sig = sk.sign(tbs_der);
+        BitString::from_bytes(&sig.to_bytes()).unwrap()
+    }
+
+    fn build_ca_cert(ca: &RsaPrivateKey) -> Certificate {
+        let spki_der = RsaPublicKey::from(ca).to_public_key_der().unwrap();
+        let spki = SubjectPublicKeyInfoOwned::from_der(spki_der.as_bytes()).unwrap();
+        let name = Name::from_str("CN=myna PQ test CA").unwrap();
+        let alg = AlgorithmIdentifierOwned {
+            oid: SHA256_WITH_RSA,
+            parameters: None,
+        };
+        let bc = BasicConstraints {
+            ca: true,
+            path_len_constraint: None,
+        };
+        let ext = Extension {
+            extn_id: BasicConstraints::OID,
+            critical: true,
+            extn_value: OctetString::new(bc.to_der().unwrap()).unwrap(),
+        };
+        let tbs = TbsCertificate {
+            version: Version::V3,
+            serial_number: SerialNumber::new(&[0x01]).unwrap(),
+            signature: alg.clone(),
+            issuer: name.clone(),
+            validity: validity_around_now(),
+            subject: name,
+            subject_public_key_info: spki,
+            issuer_unique_id: None,
+            subject_unique_id: None,
+            extensions: Some(vec![ext]),
+        };
+        let sig = rsa_sign_tbs(ca, &tbs.to_der().unwrap());
+        Certificate {
+            tbs_certificate: tbs,
+            signature_algorithm: alg,
+            signature: sig,
+        }
+    }
+
+    fn build_ml_dsa_signer_cert(ca: &RsaPrivateKey, ca_subject: &Name, vk_bytes: &[u8]) -> Certificate {
+        let spki = SubjectPublicKeyInfoOwned {
+            algorithm: AlgorithmIdentifierOwned {
+                oid: ML_DSA_65,
+                parameters: None,
+            },
+            subject_public_key: BitString::from_bytes(vk_bytes).unwrap(),
+        };
+        let alg = AlgorithmIdentifierOwned {
+            oid: SHA256_WITH_RSA,
+            parameters: None,
+        };
+        let tbs = TbsCertificate {
+            version: Version::V3,
+            serial_number: SerialNumber::new(&[0x02]).unwrap(),
+            signature: alg.clone(),
+            issuer: ca_subject.clone(),
+            validity: validity_around_now(),
+            subject: Name::from_str("CN=myna PQ signer").unwrap(),
+            subject_public_key_info: spki,
+            issuer_unique_id: None,
+            subject_unique_id: None,
+            extensions: None,
+        };
+        let sig = rsa_sign_tbs(ca, &tbs.to_der().unwrap());
+        Certificate {
+            tbs_certificate: tbs,
+            signature_algorithm: alg,
+            signature: sig,
+        }
+    }
+
+    fn build_cms(
+        content: &[u8],
+        signer_cert: &Certificate,
+        attrs: &AuthAttrs,
+        ml_sig: &[u8],
+    ) -> SignedData {
+        let sid = SignerIdentifier::IssuerAndSerialNumber(IssuerAndSerialNumber {
+            issuer: signer_cert.tbs_certificate.issuer.clone(),
+            serial_number: signer_cert.tbs_certificate.serial_number.clone(),
+        });
+        let digest_alg = AlgorithmIdentifierOwned {
+            oid: rfc5912::ID_SHA_256,
+            parameters: None,
+        };
+        let ml_alg = AlgorithmIdentifierOwned {
+            oid: ML_DSA_65,
+            parameters: None,
+        };
+        let signer_info = SignerInfo {
+            version: CmsVersion::V1,
+            sid,
+            digest_alg: digest_alg.clone(),
+            signed_attrs: Some(attrs.clone()),
+            signature_algorithm: ml_alg,
+            signature: OctetString::new(ml_sig).unwrap(),
+            unsigned_attrs: None,
+        };
+        let encap = EncapsulatedContentInfo {
+            econtent_type: rfc5911::ID_DATA,
+            econtent: Some(Any::encode_from(&OctetString::new(content).unwrap()).unwrap()),
+        };
+        let mut certs: SetOfVec<CertificateChoices> = SetOfVec::new();
+        certs
+            .insert(CertificateChoices::Certificate(signer_cert.clone()))
+            .unwrap();
+        let mut digest_algs: SetOfVec<AlgorithmIdentifierOwned> = SetOfVec::new();
+        digest_algs.insert(digest_alg).unwrap();
+        let mut sinfos: SetOfVec<SignerInfo> = SetOfVec::new();
+        sinfos.insert(signer_info).unwrap();
+        SignedData {
+            version: CmsVersion::V1,
+            digest_algorithms: digest_algs,
+            encap_content_info: encap,
+            certificates: Some(CertificateSet(certs)),
+            crls: None,
+            signer_infos: SignerInfos(sinfos),
+        }
+    }
+
+    fn fixture() -> (SignedData, Vec<EmbeddedTrustAnchor>, SigningKey<MlDsa65>, Vec<u8>, AuthAttrs) {
+        let ca = ca_private_key();
+        let ca_cert = build_ca_cert(&ca);
+        let ca_subject = ca_cert.tbs_certificate.subject.clone();
+
+        let seed = B32::default();
+        let sk = SigningKey::<MlDsa65>::from_seed(&seed);
+        let vk_bytes = sk.verifying_key().encode().to_vec();
+
+        let signer_cert = build_ml_dsa_signer_cert(&ca, &ca_subject, &vk_bytes);
+
+        let content = b"myna end to end ML-DSA CMS".to_vec();
+        let (attrs, _d) = pkcs7::prepare_signing(&content, HashAlgorithm::Sha256);
+        let signed_attrs_der = attrs.to_der().unwrap();
+        let ml_sig = ml_dsa::Signer::sign(&sk, &signed_attrs_der).encode().to_vec();
+
+        let signed_data = build_cms(&content, &signer_cert, &attrs, &ml_sig);
+        let roots = vec![EmbeddedTrustAnchor {
+            name: "myna PQ test CA",
+            cert: ca_cert,
+        }];
+        (signed_data, roots, sk, ml_sig, attrs)
+    }
+
+    #[test]
+    fn ml_dsa_cms_end_to_end_verifies() {
+        let (signed_data, roots, _sk, _sig, _attrs) = fixture();
+        verify_cms_signature(&signed_data, None, &roots)
+            .expect("valid ML-DSA signed CMS must verify end to end");
+    }
+
+    #[test]
+    fn ml_dsa_cms_rejects_tampered_signature() {
+        let ca = ca_private_key();
+        let ca_cert = build_ca_cert(&ca);
+        let ca_subject = ca_cert.tbs_certificate.subject.clone();
+        let seed = B32::default();
+        let sk = SigningKey::<MlDsa65>::from_seed(&seed);
+        let vk_bytes = sk.verifying_key().encode().to_vec();
+        let signer_cert = build_ml_dsa_signer_cert(&ca, &ca_subject, &vk_bytes);
+        let content = b"myna end to end ML-DSA CMS".to_vec();
+        let (attrs, _d) = pkcs7::prepare_signing(&content, HashAlgorithm::Sha256);
+        let signed_attrs_der = attrs.to_der().unwrap();
+        let mut ml_sig = ml_dsa::Signer::sign(&sk, &signed_attrs_der).encode().to_vec();
+        ml_sig[0] ^= 0x01;
+        let signed_data = build_cms(&content, &signer_cert, &attrs, &ml_sig);
+        let roots = vec![EmbeddedTrustAnchor { name: "ca", cert: ca_cert }];
+        assert!(verify_cms_signature(&signed_data, None, &roots).is_err());
+    }
+
+    #[test]
+    fn ml_dsa_cms_rejects_untrusted_anchor() {
+        let (signed_data, _roots, _sk, _sig, _attrs) = fixture();
+        assert!(verify_cms_signature(&signed_data, None, &[]).is_err());
+    }
+}
