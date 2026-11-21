@@ -1,4 +1,4 @@
-use chrono::Local;
+use jiff::ZonedDateTime;
 use ed25519_dalek::{Signer, SigningKey};
 use fern::Dispatch;
 use log::{LevelFilter, info};
@@ -256,7 +256,7 @@ fn setup_logging() -> Result<(), fern::InitError> {
         .format(|out, message, record| {
             out.finish(format_args!(
                 "[{}][{}][{}] {}",
-                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                ZonedDateTime::now().strftime("%Y-%m-%d %H:%M:%S"),
                 record.target(),
                 record.level(),
                 message

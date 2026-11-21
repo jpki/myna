@@ -4,9 +4,9 @@ version = "24.0.3"
 edition = "2024"
 
 [dependencies]
-chrono = "0.4.45"
 der = { version = "0.7", features = ["alloc"] }
 fern = "0.7.1"
+jiff = "1.0.1"
 log = "0.4.30"
 myna = { path = ".." }
 serde = { version = "1", features = ["derive"] }
