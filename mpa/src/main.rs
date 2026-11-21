@@ -115,7 +115,7 @@ fn setup_logging() -> Result<(), fern::InitError> {
         .format(|out, message, record| {
             out.finish(format_args!(
                 "[{}][{}][{}] {}",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                jiff::ZonedDateTime::now().strftime("%Y-%m-%d %H:%M:%S"),
                 record.target(),
                 record.level(),
                 message

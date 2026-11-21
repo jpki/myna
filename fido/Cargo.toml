@@ -8,9 +8,9 @@ name = "myna-fido"
 path = "src/main.rs"
 
 [dependencies]
-chrono = "0.4.45"
 ed25519-dalek = "3"
 fern = "0.7.1"
+jiff = "1.0.1"
 log = "0.4.30"
 myna = { path = ".." }
 serde = { version = "1", features = ["derive"] }
