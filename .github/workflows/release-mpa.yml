@@ -1,0 +1,104 @@
+name: Release mpa
+
+on:
+  push:
+    tags:
+      - 'mpa-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-mpa:
+    needs: sign-extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set version
+        run: echo "VERSION=${GITHUB_REF_NAME#mpa-}" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build mpa
+        run: cargo build --release -p mpa
+
+      - name: Download signed extension
+        uses: actions/download-artifact@v8
+        with:
+          name: mpa-extension
+
+      - name: Package mpa
+        run: |
+          mkdir -p mpa-${{ env.VERSION }}-linux
+          cp target/release/mpa mpa-${{ env.VERSION }}-linux/
+          cp mpa/README.md mpa-${{ env.VERSION }}-linux/
+          cp mpa/install.sh mpa-${{ env.VERSION }}-linux/
+          cp -r mpa/extension mpa-${{ env.VERSION }}-linux/
+          cp mpa-extension-${{ env.VERSION }}.xpi mpa-${{ env.VERSION }}-linux/
+          tar czf mpa-${{ env.VERSION }}-x86_64-unknown-linux-gnu.tar.gz mpa-${{ env.VERSION }}-linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mpa-linux
+          path: mpa-${{ env.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+
+  sign-extension:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set version
+        run: echo "VERSION=${GITHUB_REF_NAME#mpa-}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      # AMOは同一バージョンの再アップロードを拒否するため、
+      # 拡張を変更したらmanifest.jsonのversionを上げる必要がある
+      # (拡張のバージョンはマイナポータル側の判定に合わせているためタグとは独立)
+      - name: Show extension version
+        run: node -p "require('./mpa/extension/manifest.json').version"
+
+      - name: Sign extension
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          npx --yes web-ext@8 sign \
+            --source-dir mpa/extension \
+            --channel unlisted \
+            --artifacts-dir dist
+
+      - name: Rename artifact
+        run: mv dist/*.xpi mpa-extension-${{ env.VERSION }}.xpi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mpa-extension
+          path: mpa-extension-${{ env.VERSION }}.xpi
+
+  release:
+    needs: [build-mpa, sign-extension]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: mpa-v*.tar.gz
