@@ -256,7 +256,7 @@ fn setup_logging() -> Result<(), fern::InitError> {
         .format(|out, message, record| {
             out.finish(format_args!(
                 "[{}][{}][{}] {}",
-                ZonedDateTime::now().strftime("%Y-%m-%d %H:%M:%S"),
+                ZonedDateTime::now().strftime("%Y-%m-%d %H:%M:%S%.3f"),
                 record.target(),
                 record.level(),
                 message
